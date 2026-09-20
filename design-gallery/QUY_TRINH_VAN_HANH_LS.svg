@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600">
+  <defs>
+    <style>
+      .title{font:700 42px Arial,sans-serif;fill:#0f172a}.sub{font:400 20px Arial,sans-serif;fill:#64748b}.cardTitle{font:700 27px Arial,sans-serif;fill:#172033}.cardText{font:400 20px Arial,sans-serif;fill:#526176}.num{font:700 28px Arial,sans-serif;fill:#fff}.small{font:400 17px Arial,sans-serif;fill:#526176}.footer{font:600 17px Arial,sans-serif;fill:#334155}.edge{stroke:#475569;stroke-width:4;fill:none;marker-end:url(#arrow)}.branch{stroke:#e11d48;stroke-width:3;fill:none;marker-end:url(#arrowRed)}
+    </style>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#0f172a" flood-opacity=".12"/></filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0 0 L12 6 L0 12 Z" fill="#475569"/></marker>
+    <marker id="arrowRed" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0 0 L12 6 L0 12 Z" fill="#e11d48"/></marker>
+  </defs>
+  <rect width="1200" height="1600" fill="#f8fafc"/>
+  <text x="600" y="78" text-anchor="middle" class="title">QUY TRÌNH VẬN HÀNH HỒ SƠ LS</text>
+  <text x="600" y="114" text-anchor="middle" class="sub">Theo một luồng chính • một điểm kiểm tra • dữ liệu không bị xóa theo tuần</text>
+  <rect x="380" y="142" width="440" height="40" rx="20" fill="#e2e8f0"/>
+  <text x="600" y="168" text-anchor="middle" class="small">Mỗi khách có thể có nhiều loại việc / WorkItem</text>
+
+  <g filter="url(#shadow)"><rect x="170" y="225" width="860" height="128" rx="20" fill="#fff" stroke="#bfdbfe" stroke-width="3"/><rect x="170" y="225" width="130" height="128" rx="20" fill="#2563eb"/><text x="235" y="300" text-anchor="middle" class="num">1</text><rect x="326" y="247" width="118" height="28" rx="14" fill="#dbeafe"/><text x="385" y="267" text-anchor="middle" style="font:700 14px Arial;fill:#1d4ed8">PHÒNG / PGD</text><text x="326" y="311" class="cardTitle">Tạo và gửi yêu cầu</text><text x="326" y="339" class="cardText">Nhập khách hàng, CIF hoặc “KH mới”, sản phẩm và ngày phát sinh.</text></g>
+  <path class="edge" d="M600 353 V402"/>
+
+  <g filter="url(#shadow)"><rect x="170" y="420" width="860" height="128" rx="20" fill="#fff" stroke="#ddd6fe" stroke-width="3"/><rect x="170" y="420" width="130" height="128" rx="20" fill="#7c3aed"/><text x="235" y="495" text-anchor="middle" class="num">2</text><rect x="326" y="442" width="130" height="28" rx="14" fill="#ede9fe"/><text x="391" y="462" text-anchor="middle" style="font:700 14px Arial;fill:#6d28d9">KIỂM SOÁT LS</text><text x="326" y="506" class="cardTitle">Rà soát thông tin</text><text x="326" y="534" class="cardText">Kiểm tra yêu cầu, liên hệ khách và loại việc cần xử lý.</text></g>
+  <path class="edge" d="M600 548 V580"/>
+  <path d="M600 580 L690 630 L600 680 L510 630 Z" fill="#fef3c7" stroke="#d97706" stroke-width="3"/>
+  <text x="600" y="625" text-anchor="middle" style="font:700 21px Arial;fill:#92400e">Đủ thông tin?</text><text x="600" y="650" text-anchor="middle" class="small">KS quyết định</text>
+  <path class="edge" d="M600 680 V720"/><text x="618" y="708" style="font:700 15px Arial;fill:#475569">ĐỦ</text>
+  <path class="branch" d="M510 630 H110 V282 H164"/><text x="120" y="602" style="font:700 15px Arial;fill:#be123c">THIẾU → trả bổ sung</text>
+
+  <g filter="url(#shadow)"><rect x="170" y="740" width="860" height="128" rx="20" fill="#fff" stroke="#ddd6fe" stroke-width="3"/><rect x="170" y="740" width="130" height="128" rx="20" fill="#7c3aed"/><text x="235" y="815" text-anchor="middle" class="num">3</text><rect x="326" y="762" width="130" height="28" rx="14" fill="#ede9fe"/><text x="391" y="782" text-anchor="middle" style="font:700 14px Arial;fill:#6d28d9">KIỂM SOÁT LS</text><text x="326" y="826" class="cardTitle">Phân công cán bộ LS</text><text x="326" y="854" class="cardText">Tạo WorkItem, chọn người xử lý, hạn xử lý và gửi thông báo.</text></g>
+  <path class="edge" d="M600 868 V917"/>
+
+  <g filter="url(#shadow)"><rect x="170" y="935" width="860" height="128" rx="20" fill="#fff" stroke="#a7f3d0" stroke-width="3"/><rect x="170" y="935" width="130" height="128" rx="20" fill="#059669"/><text x="235" y="1010" text-anchor="middle" class="num">4</text><rect x="326" y="957" width="108" height="28" rx="14" fill="#d1fae5"/><text x="380" y="977" text-anchor="middle" style="font:700 14px Arial;fill:#047857">CÁN BỘ LS</text><text x="326" y="1021" class="cardTitle">Thực hiện và soạn hồ sơ</text><text x="326" y="1049" class="cardText">Cập nhật tiến độ; xong bước soạn thì chọn “Đã soạn xong”.</text></g>
+  <path class="edge" d="M600 1063 V1112"/>
+
+  <g filter="url(#shadow)"><rect x="170" y="1130" width="860" height="128" rx="20" fill="#fff" stroke="#fed7aa" stroke-width="3"/><rect x="170" y="1130" width="130" height="128" rx="20" fill="#d97706"/><text x="235" y="1205" text-anchor="middle" class="num">5</text><rect x="326" y="1152" width="142" height="28" rx="14" fill="#ffedd5"/><text x="397" y="1172" text-anchor="middle" style="font:700 14px Arial;fill:#c2410c">KHÁCH HÀNG</text><text x="326" y="1216" class="cardTitle">Hẹn khách ký hồ sơ</text><text x="326" y="1244" class="cardText">Gọi khách hoặc gửi Email / ZBS / Bot theo kênh được phê duyệt.</text></g>
+  <path class="edge" d="M600 1258 V1307"/>
+
+  <g filter="url(#shadow)"><rect x="170" y="1325" width="860" height="128" rx="20" fill="#fff" stroke="#99f6e4" stroke-width="3"/><rect x="170" y="1325" width="130" height="128" rx="20" fill="#0f766e"/><text x="235" y="1400" text-anchor="middle" class="num">6</text><rect x="326" y="1347" width="166" height="28" rx="14" fill="#ccfbf1"/><text x="409" y="1367" text-anchor="middle" style="font:700 14px Arial;fill:#0f766e">HOÀN TẤT &amp; BÁO CÁO</text><text x="326" y="1411" class="cardTitle">KS xác nhận hoàn tất</text><text x="326" y="1439" class="cardText">Lưu nhật ký; xem báo cáo theo ngày, tuần, tháng, năm hoặc khoảng.</text></g>
+
+  <rect x="95" y="1500" width="1010" height="62" rx="16" fill="#e2e8f0"/>
+  <text x="600" y="1538" text-anchor="middle" class="footer">PGD được sửa hồ sơ đơn vị mình • KS/LS được điều chỉnh loại việc • mọi thay đổi có lý do và lịch sử</text>
+</svg>

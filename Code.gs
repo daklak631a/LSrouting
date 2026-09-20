@@ -1,0 +1,1342 @@
+/**
+ * Code.gs — API phía máy chủ.
+ *
+ * Nguyên tắc: quyền và luật chuyển trạng thái được kiểm tại đây.
+ * Giao diện ẩn nút chỉ để đỡ rối mắt, không phải là kiểm soát.
+ * Tên trường và mã trạng thái giữ đúng như js/app.js để hai bên không lệch nhau.
+ */
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index.gas')
+    .setTitle('LS-Routing — Hỗ trợ tín dụng LS')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+}
+
+var FLOW_SERVER = {
+  CHO_TIEP_NHAN: {
+    CHO_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS'],
+    DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS'],
+    CAN_BO_SUNG: ['KS_LS', 'QUAN_LY_LS'],
+    HUY: ['KS_LS', 'QUAN_LY_LS', 'PHONG_PGD']
+  },
+  CAN_BO_SUNG: {
+    CHO_TIEP_NHAN: ['PHONG_PGD', 'KS_LS'],
+    HUY: ['KS_LS', 'QUAN_LY_LS', 'PHONG_PGD']
+  },
+  CHO_PHAN_CONG: {
+    DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS'],
+    CAN_BO_SUNG: ['KS_LS', 'QUAN_LY_LS']
+  },
+  DA_PHAN_CONG: {
+    DANG_THUC_HIEN: ['CAN_BO_LS'],
+    DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS'],
+    TAM_DUNG: ['CAN_BO_LS', 'KS_LS', 'QUAN_LY_LS'],
+    HUY: ['KS_LS', 'QUAN_LY_LS']
+  },
+  DANG_THUC_HIEN: {
+    DA_SOAN_XONG: ['CAN_BO_LS'],
+    TAM_DUNG: ['CAN_BO_LS', 'KS_LS', 'QUAN_LY_LS'],
+    DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS'],
+    HUY: ['KS_LS', 'QUAN_LY_LS']
+  },
+  DA_SOAN_XONG: {
+    DANG_HEN_KH: ['CAN_BO_LS'],
+    HOAN_THANH_LS: ['CAN_BO_LS'],
+    CHO_KS_DUYET: ['CAN_BO_LS'],
+    DANG_THUC_HIEN: ['CAN_BO_LS'],
+    DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS'],
+    HUY: ['KS_LS', 'QUAN_LY_LS']
+  },
+  DANG_HEN_KH: {
+    HOAN_THANH_LS: ['CAN_BO_LS'],
+    CHO_KS_DUYET: ['CAN_BO_LS'],
+    DANG_THUC_HIEN: ['CAN_BO_LS'],
+    TAM_DUNG: ['CAN_BO_LS', 'KS_LS', 'QUAN_LY_LS'],
+    DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS'],
+    HUY: ['KS_LS', 'QUAN_LY_LS']
+  },
+  CHO_KS_DUYET: {
+    HOAN_THANH_LS: ['KS_LS', 'QUAN_LY_LS'],
+    DANG_THUC_HIEN: ['KS_LS', 'QUAN_LY_LS'],
+    HUY: ['KS_LS', 'QUAN_LY_LS']
+  },
+  TAM_DUNG: {
+    DANG_THUC_HIEN: ['CAN_BO_LS', 'KS_LS', 'QUAN_LY_LS'],
+    DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS'],
+    HUY: ['KS_LS', 'QUAN_LY_LS']
+  },
+  HOAN_THANH_LS: { DANG_THUC_HIEN: ['KS_LS', 'QUAN_LY_LS'] },
+  HUY: {}
+};
+
+var OPEN_STATUS = ['CHO_TIEP_NHAN', 'CAN_BO_SUNG', 'CHO_PHAN_CONG', 'DA_PHAN_CONG',
+  'DANG_THUC_HIEN', 'DA_SOAN_XONG', 'DANG_HEN_KH', 'CHO_KS_DUYET', 'TAM_DUNG'];
+
+/** Sự kiện phát cho bộ máy thông báo sau khi trạng thái đã được ghi. */
+var NOTIFY_ON = {
+  DA_PHAN_CONG: 'DA_PHAN_CONG',
+  CAN_BO_SUNG: 'CAN_BO_SUNG',
+  DANG_HEN_KH: 'DANG_HEN_KH',
+  HOAN_THANH_LS: 'HOAN_THANH_LS'
+};
+
+/* ---------------------------- Danh tính ---------------------------- */
+
+function passwordHash_(password) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(password || ''), Utilities.Charset.UTF_8);
+  return 'sha256:' + Utilities.base64Encode(bytes);
+}
+
+function authGroup_(user) {
+  return String(user.auth_group || (user.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL')).toUpperCase();
+}
+
+function activeUserById_(id) {
+  if (!id) return null;
+  var found = DataRepository.find('Users', 'user_id', id);
+  if (!found) return null;
+  if (String(found.is_active) !== 'true' && found.is_active !== true) throw new Error('Tài khoản đang bị khóa.');
+  return found;
+}
+
+/**
+ * GAS vẫn chạy trong tài khoản Google của người mở webapp, nhưng danh tính
+ * nghiệp vụ được chọn bằng mã cán bộ sau khi authenticateUser() thành công.
+ * UserProperties giữ lựa chọn này cho các lần gọi google.script.run tiếp theo.
+ */
+function currentUser_() {
+  var selected = PropertiesService.getUserProperties().getProperty('LS_AUTH_USER_ID');
+  var byCode = activeUserById_(selected);
+  if (byCode) return byCode;
+
+  var email = Session.getActiveUser().getEmail();
+  if (!email) throw new Error('Hãy nhập mã cán bộ để đăng nhập.');
+  var u = DataRepository.find('Users', 'email', email.toLowerCase());
+  if (!u) throw new Error('Mã cán bộ chưa được cấp quyền vào hệ thống.');
+  if (String(u.is_active) !== 'true' && u.is_active !== true) throw new Error('Tài khoản đang bị khóa.');
+  return u;
+}
+
+/**
+ * Danh tính cho mọi thao tác ghi. Tài khoản còn mật khẩu tạm chỉ được đọc và đổi
+ * mật khẩu; cho ghi tiếp nghĩa là cờ `must_change_password` không có tác dụng gì.
+ */
+function requireActor_() {
+  var u = currentUser_();
+  if (String(u.must_change_password) === 'true' || u.must_change_password === true) {
+    throw new Error('Hãy đổi mật khẩu tạm trước khi thao tác.');
+  }
+  return u;
+}
+
+function authenticateUser(loginCode, password) {
+  var code = String(loginCode || '').trim();
+  if (!code) throw new Error('Nhập mã cán bộ hoặc user admin.');
+  var rows = DataRepository.getAll('Users');
+  var matches = rows.filter(function (row) {
+    return String(row.login_code || row.user_id || '').trim().toLowerCase() === code.toLowerCase();
+  });
+  var user = matches[0];
+  if (!user && code.toLowerCase() === 'admin') {
+    user = rows.filter(function (row) { return row.role === 'ADMIN'; })[0];
+  }
+  if (!user) throw new Error('Mã cán bộ chưa được cấp quyền.');
+  if (String(user.is_active) !== 'true' && user.is_active !== true) throw new Error('Tài khoản đang bị khóa.');
+
+  var group = authGroup_(user);
+  if (group === 'INTERNAL') {
+    var given = String(password || '');
+    if (!given) throw new Error('Nhập mật khẩu cho tài khoản nội bộ.');
+    var expected = String(user.password_hash || '');
+    var defaultPassword = user.role === 'ADMIN' ? 'D@kl@k631' : 'D@klak631';
+    if (expected) {
+      if (passwordHash_(given) !== expected) throw new Error('Mật khẩu không đúng.');
+    } else if (given !== defaultPassword) {
+      throw new Error('Mật khẩu không đúng.');
+    } else {
+      DataRepository.tx(function (t) {
+        var found = t.find('Users', 'user_id', user.user_id);
+        if (found) t.write(found, { password_hash: passwordHash_(given), must_change_password: true });
+      });
+    }
+  }
+  PropertiesService.getUserProperties().setProperty('LS_AUTH_USER_ID', String(user.user_id));
+  return getBootstrap();
+}
+
+/**
+ * Đổi mật khẩu của chính mình. `must_change_password` được ghi từ trước nhưng
+ * không có đường nào để xóa nó — nghĩa là mật khẩu khởi tạo chung dùng được mãi.
+ */
+function changeOwnPassword(currentPassword, nextPassword) {
+  var u = currentUser_();
+  if (authGroup_(u) !== 'INTERNAL') throw new Error('Tài khoản phòng/PGD không dùng mật khẩu.');
+
+  var next = String(nextPassword || '');
+  if (next.length < 8) throw new Error('Mật khẩu mới phải từ 8 ký tự.');
+  if (!/[0-9]/.test(next) || !/[a-zA-Z]/.test(next)) throw new Error('Mật khẩu mới phải có cả chữ và số.');
+
+  var expected = String(u.password_hash || '');
+  var given = String(currentPassword || '');
+  var defaultPassword = u.role === 'ADMIN' ? 'D@kl@k631' : 'D@klak631';
+  if (expected) {
+    if (passwordHash_(given) !== expected) throw new Error('Mật khẩu hiện tại không đúng.');
+  } else if (given !== defaultPassword) {
+    throw new Error('Mật khẩu hiện tại không đúng.');
+  }
+  if (passwordHash_(next) === expected) throw new Error('Mật khẩu mới phải khác mật khẩu đang dùng.');
+
+  return DataRepository.tx(function (t) {
+    var found = t.find('Users', 'user_id', u.user_id);
+    if (!found) throw new Error('Không tìm thấy tài khoản.');
+    t.write(found, { password_hash: passwordHash_(next), must_change_password: false });
+    return { ok: true };
+  });
+}
+
+function logoutUser() {
+  PropertiesService.getUserProperties().deleteProperty('LS_AUTH_USER_ID');
+  return { ok: true };
+}
+
+function stamp_() { return new Date().toISOString(); }
+
+function id_(prefix) {
+  return prefix + '_' + Utilities.getUuid().replace(/-/g, '').substring(0, 12).toUpperCase();
+}
+
+/* ---------------------------- Kỳ kế hoạch tháng ---------------------------- */
+
+function monthKey_(date) {
+  var d = date ? new Date(date) : new Date();
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+}
+
+function monthBounds_(monthKey) {
+  if (!/^\d{4}-\d{2}$/.test(String(monthKey || ''))) throw new Error('Kỳ tháng phải có dạng YYYY-MM.');
+  var p = monthKey.split('-').map(Number);
+  var start = new Date(p[0], p[1] - 1, 1);
+  var end = new Date(p[0], p[1], 0);
+  var pad = function (n) { return ('0' + n).slice(-2); };
+  return {
+    start_date: p[0] + '-' + pad(p[1]) + '-01',
+    end_date: p[0] + '-' + pad(p[1]) + '-' + pad(end.getDate()),
+    name: 'Kế hoạch tháng ' + p[1] + '/' + p[0]
+  };
+}
+
+function publicMonthlyPlan_(plan) {
+  return {
+    period_id: plan.period_id, month_key: plan.month_key, name: plan.name,
+    start_date: plan.start_date, end_date: plan.end_date, activation_at: plan.activation_at,
+    status: plan.status, spreadsheet_url: plan.spreadsheet_url || '',
+    created_at: plan.created_at || '', activated_at: plan.activated_at || '', archived_at: plan.archived_at || ''
+  };
+}
+
+function planManager_(u) {
+  if (['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) === -1) throw new Error('Chỉ kiểm soát hoặc quản lý LS được tạo kế hoạch tháng.');
+  return u;
+}
+
+/** Bảo đảm có đúng một kỳ ACTIVE; kỳ soạn sẵn chỉ được kích hoạt từ ngày đầu kỳ. */
+function activateDueMonthlyPlans_() {
+  var today = stamp_().substring(0, 10);
+  var created = [];
+  var handoffs = [];
+  var activeId = DataRepository.tx(function (t) {
+    var plans = t.rows('MonthlyPlans');
+    if (!plans.length) {
+      var key = monthKey_();
+      var bounds = monthBounds_(key);
+      var initial = {
+        period_id: id_('PLAN'), month_key: key, name: bounds.name, start_date: bounds.start_date, end_date: bounds.end_date,
+        activation_at: bounds.start_date, status: 'ACTIVE', spreadsheet_id: '', spreadsheet_url: '',
+        created_by: 'SYSTEM', created_at: stamp_(), activated_at: stamp_(), archived_at: ''
+      };
+      t.append('MonthlyPlans', initial);
+      // Gắn dữ liệu kho cũ vào kỳ đầu tiên khi nâng cấp schema, không làm mất lịch sử.
+      t.rows('Requests').slice().forEach(function (r) {
+        if (r.period_id) return;
+        var requestFound = t.find('Requests', 'request_id', r.request_id);
+        if (requestFound) t.write(requestFound, { period_id: initial.period_id, origin_request_id: r.request_id });
+      });
+      t.rows('WorkItems').slice().forEach(function (i) {
+        if (i.period_id) return;
+        var itemFound = t.find('WorkItems', 'item_id', i.item_id);
+        if (itemFound) t.write(itemFound, { period_id: initial.period_id, origin_item_id: i.item_id });
+      });
+      created.push(initial.period_id);
+      return initial.period_id;
+    }
+
+    var due = plans.filter(function (p) { return p.status === 'SCHEDULED' && String(p.activation_at || p.start_date) <= today; })
+      .sort(function (a, b) { return String(a.activation_at).localeCompare(String(b.activation_at)); });
+    due.forEach(function (next) {
+      t.rows('MonthlyPlans').filter(function (p) { return p.status === 'ACTIVE' && p.period_id !== next.period_id; }).forEach(function (old) {
+        handoffs.push({ from: old.period_id, to: next.period_id });
+        var oldFound = t.find('MonthlyPlans', 'period_id', old.period_id);
+        if (oldFound) t.write(oldFound, { status: 'ARCHIVED', archived_at: stamp_() });
+      });
+      var nextFound = t.find('MonthlyPlans', 'period_id', next.period_id);
+      if (nextFound) t.write(nextFound, { status: 'ACTIVE', activated_at: stamp_() });
+    });
+    var active = t.rows('MonthlyPlans').filter(function (p) { return p.status === 'ACTIVE'; })
+      .sort(function (a, b) { return String(b.month_key).localeCompare(String(a.month_key)); })[0];
+    if (active) return active.period_id;
+    throw new Error('Không xác định được kỳ kế hoạch đang hoạt động.');
+  });
+  created.forEach(function (periodId) { provisionMonthlyPlanWorkbook_(periodId); });
+  handoffs.forEach(function (pair) {
+    carryOpenWorkToPlan_(pair.from, pair.to, { user_id: 'SYSTEM', full_name: 'Hệ thống' });
+    provisionMonthlyPlanWorkbook_(pair.to);
+  });
+  return DataRepository.find('MonthlyPlans', 'period_id', activeId);
+}
+
+function activePlan_() { return activateDueMonthlyPlans_(); }
+
+/** Trigger-safe entry point: Apps Script gọi định kỳ để tự kích hoạt kỳ đến hạn. */
+function activateMonthlyPlans() {
+  return publicMonthlyPlan_(activateDueMonthlyPlans_());
+}
+
+/** KS tạo trước đúng tháng kế tiếp; dữ liệu toàn hệ thống chưa chuyển cho tới activation_at. */
+function createNextMonthlyPlan() {
+  var u = planManager_(currentUser_());
+  var active = activePlan_();
+  var start = new Date(String(active.start_date) + 'T12:00:00');
+  var nextKey = monthKey_(new Date(start.getFullYear(), start.getMonth() + 1, 1));
+  var bounds = monthBounds_(nextKey);
+  var plan = DataRepository.tx(function (t) {
+    var exists = t.rows('MonthlyPlans').filter(function (p) { return p.month_key === nextKey; })[0];
+    if (exists) throw new Error('Kế hoạch ' + nextKey + ' đã được tạo trước đó.');
+    var created = {
+      period_id: id_('PLAN'), month_key: nextKey, name: bounds.name, start_date: bounds.start_date, end_date: bounds.end_date,
+      activation_at: bounds.start_date, status: 'SCHEDULED', spreadsheet_id: '', spreadsheet_url: '',
+      created_by: u.user_id, created_at: stamp_(), activated_at: '', archived_at: ''
+    };
+    t.append('MonthlyPlans', created);
+    logConfig_(t, u, 'Kế hoạch tháng', 'Tạo trước ' + nextKey + '; tự kích hoạt từ ' + bounds.start_date + '.');
+    return created;
+  });
+  provisionMonthlyPlanWorkbook_(plan.period_id);
+  carryOpenWorkToPlan_(active.period_id, plan.period_id, u);
+  return publicMonthlyPlan_(DataRepository.find('MonthlyPlans', 'period_id', plan.period_id));
+}
+
+function createMonthlyPlanWorkbook_(plan) {
+  var bounds = monthBounds_(plan.month_key);
+  var settings = {};
+  DataRepository.getAll('Settings').forEach(function (row) { settings[row.key] = row.value; });
+  var name = 'KẾ HOẠCH HỖ TRỢ TÍN DỤNG T' + Number(plan.month_key.substring(5)) + '.' + plan.month_key.substring(0, 4);
+  var ss;
+  if (settings.source_template_spreadsheet_id) {
+    var copy = DriveApp.getFileById(String(settings.source_template_spreadsheet_id)).makeCopy(name);
+    ss = SpreadsheetApp.openById(copy.getId());
+  } else {
+    ss = SpreadsheetApp.create(name);
+  }
+  var summary = ss.getSheets()[0];
+  if (!ss.getSheetByName('Tổng hợp')) summary.setName('Tổng hợp');
+  summary = ss.getSheetByName('Tổng hợp');
+  repairMonthlySummaryFormulas_(ss);
+  summary.getRange(1, 1, 3, 1).setValues([[plan.name], ['Kỳ: ' + bounds.start_date + ' đến ' + bounds.end_date], ['Dữ liệu được đồng bộ từ LS-Routing']]);
+  var units = DataRepository.getAll('Units').filter(function (u) { return String(u.is_active) === 'true' && u.kind === 'DON_VI_GUI'; });
+  units.forEach(function (u) { if (!ss.getSheetByName(u.source_tab || u.name || u.unit_id)) ss.insertSheet(u.source_tab || u.name || u.unit_id); });
+  if (!ss.getSheetByName('Danh mục')) ss.insertSheet('Danh mục');
+  return { spreadsheet_id: ss.getId(), spreadsheet_url: ss.getUrl() };
+}
+
+/** Không để mẫu tổng hợp sinh #DIV/0! khi kỳ chưa có việc. */
+function repairMonthlySummaryFormulas_(ss) {
+  var summary = ss.getSheetByName('Tổng hợp');
+  if (!summary) return 0;
+  var fixed = 0;
+  var total = summary.getRange('H48');
+  if (total.getFormula() === '=SUM(I48:P48)') {
+    total.setFormula('=IF($Q$49=0,"Chưa có dữ liệu",SUM(I48:P48))');
+    fixed++;
+  }
+  var cells = summary.getRange('I48:P48');
+  var formulas = cells.getFormulas()[0];
+  formulas.forEach(function (formula, index) {
+    var column = String.fromCharCode('I'.charCodeAt(0) + index);
+    if (formula === '=' + column + '49/$Q$49') {
+      formulas[index] = '=IF($Q$49=0,"Chưa có dữ liệu",' + column + '49/$Q$49)';
+      fixed++;
+    }
+  });
+  if (fixed) cells.setFormulas([formulas]);
+  return fixed;
+}
+
+function provisionMonthlyPlanWorkbook_(periodId) {
+  var plan = DataRepository.find('MonthlyPlans', 'period_id', periodId);
+  if (!plan) throw new Error('Không tìm thấy kỳ kế hoạch ' + periodId + '.');
+  if (!plan.spreadsheet_id) {
+    var book = createMonthlyPlanWorkbook_(plan);
+    DataRepository.tx(function (t) {
+      var found = t.find('MonthlyPlans', 'period_id', periodId);
+      if (found && !found.object.spreadsheet_id) t.write(found, book);
+    });
+  }
+  syncMonthlyPlanWorkbook_(periodId);
+}
+
+/** Chỉ ghi từ app ra Sheet kế hoạch; Sheet không phải nguồn ghi nghiệp vụ độc lập. */
+function syncMonthlyPlanWorkbook_(periodId) {
+  var plan = DataRepository.find('MonthlyPlans', 'period_id', periodId);
+  if (!plan || !plan.spreadsheet_id) return;
+  var ss = SpreadsheetApp.openById(plan.spreadsheet_id);
+  var settings = {};
+  DataRepository.getAll('Settings').forEach(function (row) { settings[row.key] = row.value; });
+  var copiedTemplate = !!settings.source_template_spreadsheet_id;
+  var requests = DataRepository.getAll('Requests');
+  var requestById = {};
+  requests.forEach(function (r) { requestById[r.request_id] = r; });
+  var items = DataRepository.getAll('WorkItems').filter(function (i) { return i.period_id === periodId; });
+  var users = {}, types = {}, units = DataRepository.getAll('Units').filter(function (u) { return String(u.is_active) === 'true' && u.kind === 'DON_VI_GUI'; });
+  DataRepository.getAll('Users').forEach(function (u) { users[u.user_id] = u.full_name || u.user_id; });
+  DataRepository.getAll('WorkTypes').forEach(function (w) { types[w.type_code] = w.display_name || w.type_code; });
+
+  var summary = ss.getSheetByName('Tổng hợp');
+  repairMonthlySummaryFormulas_(ss);
+  summary.getRange(1, 1, 3, 1).setValues([[plan.name], ['Kỳ: ' + plan.start_date + ' đến ' + plan.end_date], ['Dữ liệu đồng bộ từ LS-Routing lúc ' + stamp_()]]);
+  var unitTotals = units.map(function (u) {
+    var mine = items.filter(function (i) { var r = requestById[i.request_id]; return r && r.unit_id === u.unit_id; });
+    return [u.name, mine.length, mine.filter(function (i) { return OPEN_STATUS.indexOf(i.status) !== -1; }).length, mine.filter(function (i) { return i.status === 'HOAN_THANH_LS'; }).length];
+  });
+  // Bản sao mẫu đã có công thức Tổng hợp; không ghi đè công thức. Bản trống
+  // fallback vẫn có bảng tổng hợp tối thiểu để không mất khả năng vận hành.
+  if (!copiedTemplate) {
+    if (!summary.getRange(5, 1).getValue()) summary.getRange(5, 1, 1, 4).setValues([['Đơn vị', 'Tổng việc', 'Đang mở', 'Hoàn thành']]);
+    if (unitTotals.length) summary.getRange(6, 1, unitTotals.length, 4).setValues(unitTotals);
+  }
+
+  units.forEach(function (u) {
+    var tab = ss.getSheetByName(u.source_tab || u.name || u.unit_id);
+    if (!tab) tab = ss.insertSheet(u.source_tab || u.name || u.unit_id);
+    // Workbook mẫu có sẵn công thức kế hoạch ở G:K; chỉ thay vùng dữ liệu app.
+    var clearRows = Math.max(tab.getMaxRows() - 3, 1);
+    tab.getRange(4, 1, clearRows, 6).clearContent();
+    tab.getRange(4, 12, clearRows, 1).clearContent();
+    var rows = items.filter(function (i) { var r = requestById[i.request_id]; return r && r.unit_id === u.unit_id; }).map(function (i) {
+      var r = requestById[i.request_id] || {};
+      return [i.source_stt, r.requestor_name || '', r.cif || '', r.customer_name || '', i.product_name || '', types[i.work_type_code] || i.work_type_code,
+        i.occurrence_date || '', i.status || '', users[i.assigned_user_id] || '', i.note || ''];
+    });
+    if (rows.length) {
+      tab.getRange(4, 1, rows.length, 6).setValues(rows.map(function (row) { return row.slice(0, 6); }));
+      tab.getRange(4, 12, rows.length, 1).setValues(rows.map(function (row) { return [row[9] || row[7] || '']; }));
+    }
+    tab.setFrozenRows(Math.max(tab.getFrozenRows(), 3));
+  });
+
+  var catalog = ss.getSheetByName('Danh mục');
+  catalog.clearContents();
+  var options = DataRepository.getAll('CatalogOptions').filter(function (x) { return String(x.is_active) === 'true'; })
+    .map(function (x) { return [x.catalog_key, x.unit_id || '', x.label, x.code || '']; });
+  catalog.getRange(1, 1, 1, 4).setValues([['Nhóm', 'Đơn vị', 'Nhãn', 'Mã']]);
+  if (options.length) catalog.getRange(2, 1, options.length, 4).setValues(options);
+}
+
+function carryOpenWorkToPlan_(fromPeriodId, toPeriodId, u) {
+  var targetPlan = DataRepository.find('MonthlyPlans', 'period_id', toPeriodId);
+  if (!targetPlan) throw new Error('Không tìm thấy kỳ đích ' + toPeriodId + '.');
+  var copied = DataRepository.tx(function (t) {
+    var requests = {}, counts = {};
+    t.rows('Requests').forEach(function (r) { requests[r.request_id] = r; });
+    // Tiếp tục STT theo từng đơn vị của kỳ đích, tránh trùng mã khi chạy lại
+    // hoặc khi kỳ mới đã có dữ liệu được tạo thủ công trước lúc chuyển tiếp.
+    t.rows('WorkItems').filter(function (i) { return i.period_id === toPeriodId; }).forEach(function (i) {
+      var ref = String(i.source_stt || '');
+      var match = ref.match(/^(.+)_([0-9]+)$/);
+      if (match) counts[match[1]] = Math.max(counts[match[1]] || 0, Number(match[2]));
+    });
+    t.rows('WorkItems').filter(function (i) { return i.period_id === fromPeriodId && OPEN_STATUS.indexOf(i.status) !== -1; }).forEach(function (old) {
+      if (t.rows('WorkItems').some(function (existing) {
+        return existing.period_id === toPeriodId && existing.carryover_from_item_id === old.item_id;
+      })) return;
+      var oldReq = requests[old.request_id];
+      if (!oldReq) return;
+      var newRequestId = id_('REQ');
+      var newItemId = id_('ITEM');
+      t.append('Requests', {
+        request_id: newRequestId, period_id: toPeriodId, origin_request_id: oldReq.origin_request_id || oldReq.request_id,
+        carryover_from_request_id: oldReq.request_id, unit_id: oldReq.unit_id, created_by: u.user_id,
+        customer_name: oldReq.customer_name, customer_kind: oldReq.customer_kind, cif: oldReq.cif || '', phone: oldReq.phone || '', email: oldReq.email || '',
+        priority_flags_json: oldReq.priority_flags_json || '[]', requestor_id: oldReq.requestor_id || '', requestor_name: oldReq.requestor_name || '',
+        requestor_kind: oldReq.requestor_kind || '', note: oldReq.note || '', created_at: stamp_(), updated_at: stamp_()
+      });
+      var prefix = String(oldReq.unit_id || 'DONVI') + '_';
+      counts[oldReq.unit_id] = (counts[oldReq.unit_id] || 0) + 1;
+      t.append('WorkItems', {
+        item_id: newItemId, period_id: toPeriodId, origin_item_id: old.origin_item_id || old.item_id, carryover_from_item_id: old.item_id,
+        request_id: newRequestId, work_type_code: old.work_type_code, product_name: old.product_name, occurrence_date: targetPlan.start_date,
+        source_stt: prefix + counts[oldReq.unit_id], source_tab: old.source_tab || '', status: 'CHO_TIEP_NHAN', assigned_user_id: '', assigned_by: '', submitted_at: stamp_(),
+        accepted_at: '', assigned_at: '', due_at: '', completed_at: '', appointment_json: '', checklist_json: '', pending_json: '',
+        note: 'Chuyển tiếp từ ' + old.item_id + '.', version: 1, created_at: stamp_(), updated_at: stamp_()
+      });
+      t.append('Events', { event_id: id_('EVT'), item_id: newItemId, type: 'CHUYEN_TIEP_THANG', by: u.user_id, at: stamp_(),
+        reason: 'Chuyển tiếp việc mở từ kỳ ' + fromPeriodId + ', việc gốc ' + old.item_id + '.', before_json: JSON.stringify({ item_id: old.item_id, period_id: fromPeriodId }), after_json: JSON.stringify({ period_id: toPeriodId }) });
+    });
+    return true;
+  });
+  if (copied) syncMonthlyPlanWorkbook_(toPeriodId);
+}
+
+/* ---------------------------- Đọc dữ liệu ---------------------------- */
+
+/** ADMIN chỉ cần dữ liệu vận hành, không nhận dữ liệu định danh khách hàng. */
+function sanitizeAdminRequest_(row) {
+  var out = {};
+  Object.keys(row || {}).forEach(function (key) { out[key] = row[key]; });
+  ['customer_name', 'cif', 'phone', 'email', 'priority_flags_json', 'note'].forEach(function (key) {
+    if (Object.prototype.hasOwnProperty.call(out, key)) out[key] = '';
+  });
+  return out;
+}
+
+function sanitizeAdminEvent_(row) {
+  var out = {};
+  Object.keys(row || {}).forEach(function (key) { out[key] = row[key]; });
+  out.before_json = '';
+  out.after_json = '';
+  return out;
+}
+
+function sanitizeAdminOutbox_(row) {
+  var out = {};
+  Object.keys(row || {}).forEach(function (key) { out[key] = row[key]; });
+  if (String(out.recipient_kind) === 'KHACH') {
+    out.recipient = '';
+    out.recipient_name = '';
+    out.body = '';
+  }
+  return out;
+}
+
+/** Quản trị vận hành hệ thống, không đọc hồ sơ khách — kể cả gián tiếp qua việc. */
+function sanitizeAdminItem_(row) {
+  var out = {};
+  Object.keys(row || {}).forEach(function (key) { out[key] = row[key]; });
+  out.product_name = '';
+  if (out.appointment_json) {
+    var keep = {};
+    try {
+      var appt = JSON.parse(out.appointment_json);
+      keep = { at: appt.at || '', date: appt.date || '', time: appt.time || '',
+        channel: appt.channel || '', via_group: !!appt.via_group };
+    } catch (err) { keep = {}; }
+    out.appointment_json = JSON.stringify(keep);
+  }
+  return out;
+}
+
+/** Dữ liệu khởi tạo, đã lọc theo phạm vi vai trò. */
+function getBootstrap() {
+  var t0 = Date.now();
+  var u = currentUser_();
+  var activePlan = activePlan_();
+  var requests = DataRepository.getAll('Requests').filter(function (r) { return r.period_id === activePlan.period_id; });
+  var items = DataRepository.getAll('WorkItems').filter(function (i) { return i.period_id === activePlan.period_id; });
+
+  var reqById = {};
+  requests.forEach(function (r) { reqById[r.request_id] = r; });
+
+  if (u.role === 'PHONG_PGD') {
+    items = items.filter(function (i) {
+      var r = reqById[i.request_id];
+      return r && r.unit_id === u.unit_id;
+    });
+  } else if (u.role === 'CAN_BO_LS') {
+    items = items.filter(function (i) { return i.assigned_user_id === u.user_id; });
+  }
+
+  var keep = {};
+  items.forEach(function (i) { keep[i.request_id] = true; });
+
+  var visible = {};
+  items.forEach(function (i) { visible[i.item_id] = true; });
+
+  var result = {
+    activePlan: publicMonthlyPlan_(activePlan),
+    me: { user_id: u.user_id, full_name: u.full_name, email: u.email, role: u.role, unit_id: u.unit_id,
+      must_change_password: String(u.must_change_password) === 'true' || u.must_change_password === true },
+    users: DataRepository.getAll('Users').map(function (x) {
+      return { user_id: x.user_id, full_name: x.full_name, email: x.email || '', role: x.role, unit_id: x.unit_id,
+        sort_order: x.sort_order || '', source_tab: x.source_tab || '', is_active: x.is_active,
+        login_code: x.login_code || x.user_id || '', auth_group: authGroup_(x),
+        zalo_name: x.zalo_name || '', zalo_phone: x.zalo_phone || '' };
+    }),
+    units: DataRepository.getAll('Units'),
+    workTypes: DataRepository.getAll('WorkTypes'),
+    reasons: DataRepository.getAll('Reasons'),
+    catalogOptions: DataRepository.getAll('CatalogOptions').filter(function (x) { return String(x.is_active) === 'true' || x.is_active === true; }),
+    requests: requests.filter(function (r) { return keep[r.request_id]; }).map(function (r) {
+      return u.role === 'ADMIN' ? sanitizeAdminRequest_(r) : r;
+    }),
+    items: u.role === 'ADMIN' ? items.map(sanitizeAdminItem_) : items,
+    // Events và Inbox chỉ thêm, không xóa. Lấy phần đuôi gần nhất thay vì đọc
+    // trọn bảng, nếu không thời gian mở màn hình sẽ dài dần theo từng tháng.
+    events: DataRepository.tail('Events', 800).filter(function (e) { return visible[e.item_id]; }).map(function (e) {
+      return u.role === 'ADMIN' ? sanitizeAdminEvent_(e) : e;
+    }),
+    inbox: DataRepository.tail('Inbox', 200).filter(function (n) { return n.user_id === u.user_id; }),
+    // Cán bộ phải xem trước và xác nhận tin gửi khách ngay ở chi tiết việc, nên
+    // hàng đợi phải tới được tay họ — giới hạn đúng những việc họ đã nhìn thấy.
+    outbox: u.role === 'ADMIN' ? [] : DataRepository.tail('NotificationOutbox', 800)
+      .filter(function (o) { return visible[o.item_id]; }),
+    settings: DataRepository.getAll('Settings').filter(function (s) {
+      return ['timezone', 'week_start', 'work_days', 'work_open', 'work_close', 'work_break', 'holidays',
+        'backlog_alert', 'export_row_limit', 'retention_months', 'env', 'bank_name', 'hotline', 'app_url', 'sign_place'].indexOf(s.key) !== -1;
+    })
+  };
+  if (u.role === 'ADMIN') {
+    result.channels = DataRepository.getAll('Channels');
+    result.templates = DataRepository.getAll('Templates');
+    result.notifyRules = DataRepository.getAll('NotifyRules');
+    result.outbox = DataRepository.tail('NotificationOutbox', 500).map(sanitizeAdminOutbox_);
+    result.notificationMetrics = DataRepository.tail('NotificationMetrics', 2000);
+    result.configLog = DataRepository.tail('ConfigLog', 300);
+    result.settings = DataRepository.getAll('Settings');
+    // Chỉ trả trạng thái đã nạp token, không trả token. Trạng thái này lấy từ
+    // ScriptProperties để giao diện không báo sai khi triển khai thật.
+    var gatewaySettings = {};
+    result.settings.forEach(function (s) { gatewaySettings[s.key] = s.value; });
+    var gatewayRef = String(gatewaySettings.gateway_auth_ref || 'LS_GATEWAY_TOKEN').trim();
+    var gatewayTokenSet = !!PropertiesService.getScriptProperties().getProperty(gatewayRef);
+    result.settings = result.settings.map(function (s) {
+      var copy = {};
+      Object.keys(s).forEach(function (k) { copy[k] = s[k]; });
+      if (copy.key === 'gateway_token_set') copy.value = gatewayTokenSet ? 'true' : 'false';
+      return copy;
+    });
+  }
+  if (['ADMIN', 'KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1) {
+    result.monthlyPlans = DataRepository.getAll('MonthlyPlans').sort(function (a, b) { return String(b.month_key).localeCompare(String(a.month_key)); }).map(publicMonthlyPlan_);
+  }
+  result.stats = { sheetReads: DataRepository.sheetReads(), ms: Date.now() - t0 };
+  return result;
+}
+
+/* ---------------------------- Tạo yêu cầu ---------------------------- */
+
+function nextSourceStt_(t, unitId, periodId) {
+  var prefix = String(unitId || 'DONVI') + '_';
+  var reqUnits = {};
+  t.rows('Requests').forEach(function (r) { reqUnits[r.request_id] = r.unit_id; });
+  var max = 0;
+  t.rows('WorkItems').forEach(function (i) {
+    if (reqUnits[i.request_id] !== unitId || (periodId && i.period_id !== periodId)) return;
+    var ref = String(i.source_stt || '');
+    if (ref.indexOf(prefix) !== 0) return;
+    var n = Number(ref.substring(prefix.length));
+    if (n > max) max = n;
+  });
+  return prefix + (max + 1);
+}
+
+/**
+ * Một khách, nhiều việc, mỗi việc một ngày phát sinh riêng.
+ * payload = { customer:{name,kind,cif,phone,email}, note, items:[{work_type_code,product_name,occurrence_date}] }
+ */
+function createRequest(payload) {
+  var u = requireActor_();
+  if (u.role !== 'PHONG_PGD' && u.role !== 'KS_LS') throw new Error('Chỉ phòng/PGD được đăng ký việc mới.');
+  if (!payload || !payload.customer || !payload.customer.name) throw new Error('Thiếu tên khách hàng.');
+  if (!payload.items || !payload.items.length) throw new Error('Cần ít nhất một việc.');
+
+  var types = {};
+  DataRepository.getAll('WorkTypes').forEach(function (w) { types[w.type_code] = w; });
+  payload.items.forEach(function (it) {
+    if (!types[it.work_type_code]) throw new Error('Loại việc không hợp lệ: ' + it.work_type_code);
+    if (!it.product_name) throw new Error('Thiếu tên sản phẩm cho một dòng việc.');
+  });
+
+  var activePlan = activePlan_();
+  var ts = stamp_();
+  var requestId = id_('REQ');
+  // Không tin cậy requestor do trình duyệt gửi lên: cán bộ đề nghị luôn là
+  // tài khoản đã đăng nhập. Khi Admin luân chuyển unit_id, phòng mới được áp
+  // dụng ngay cho lần đăng nhập/kê khai tiếp theo và vẫn giữ được lịch sử.
+  var cif = String(payload.customer.cif || '').trim();
+  var kind = cif ? 'DA_CO_CIF' : 'KH_MOI';
+  var requestorId = u.user_id;
+  var requestorName = u.full_name || u.email || u.user_id;
+  var requestorKind = u.role === 'PHONG_PGD' ? 'VRM_PRM' : (u.role || 'VRM_PRM');
+
+  var result = DataRepository.tx(function (t) {
+    t.append('Requests', {
+      request_id: requestId,
+      period_id: activePlan.period_id,
+      origin_request_id: '',
+      carryover_from_request_id: '',
+      unit_id: u.unit_id,
+      created_by: u.user_id,
+      customer_name: payload.customer.name,
+      customer_kind: kind,
+      cif: cif,
+      phone: payload.customer.phone || '',
+      email: payload.customer.email || '',
+      priority_flags_json: JSON.stringify((payload.customer.priority_flags || []).filter(function (x) {
+        return ['VIP', 'QUAN_TRONG', 'XU_LY_GAP'].indexOf(String(x)) !== -1;
+      })),
+      requestor_id: requestorId,
+      requestor_name: requestorName,
+      requestor_kind: requestorKind,
+      note: payload.note || '',
+      created_at: ts,
+      updated_at: ts
+    });
+
+    var ids = [];
+    payload.items.forEach(function (it) {
+      var itemId = id_('ITEM');
+      ids.push(itemId);
+      var sourceStt = nextSourceStt_(t, u.unit_id, activePlan.period_id);
+      var unit = t.find('Units', 'unit_id', u.unit_id);
+      t.append('WorkItems', {
+        item_id: itemId,
+        period_id: activePlan.period_id,
+        origin_item_id: '',
+        carryover_from_item_id: '',
+        request_id: requestId,
+        work_type_code: it.work_type_code,
+        product_name: it.product_name,
+        occurrence_date: it.occurrence_date || ts.substring(0, 10),
+        source_stt: sourceStt,
+        source_tab: unit ? (unit.object.source_tab || unit.object.name || u.unit_id) : u.unit_id,
+        status: 'CHO_TIEP_NHAN',
+        assigned_user_id: '',
+        assigned_by: '',
+        submitted_at: ts,
+        accepted_at: '',
+        assigned_at: '',
+        due_at: '',
+        completed_at: '',
+        appointment_json: '',
+        checklist_json: '',
+        pending_json: '',
+        note: '',
+        version: 1,
+        created_at: ts,
+        updated_at: ts
+      });
+      t.append('Events', {
+        event_id: id_('EVT'), item_id: itemId, type: 'TAO_VIEC',
+        by: u.user_id, at: ts, reason: 'Đơn vị ' + u.unit_id + ' đăng ký yêu cầu.',
+        before_json: '', after_json: JSON.stringify(it)
+      });
+    });
+
+    return { ok: true, request_id: requestId, item_ids: ids, period_id: activePlan.period_id };
+  });
+  syncMonthlyPlanWorkbook_(result.period_id);
+  return result;
+}
+
+/* ---------------------------- Chuyển trạng thái ---------------------------- */
+
+/**
+ * opts = { reason, assignee_id, appointment:{at,channel,result}, expected_version }
+ * Trả lỗi khi trạng thái nguồn không cho phép chuyển, hoặc vai trò không đủ quyền,
+ * hoặc bản ghi đã bị người khác sửa (expected_version lệch).
+ */
+function transitionItem(itemId, to, opts) {
+  var u = requireActor_();
+  opts = opts || {};
+
+  var result = DataRepository.tx(function (t) {
+    var found = t.find('WorkItems', 'item_id', itemId);
+    if (!found) throw new Error('Không tìm thấy việc ' + itemId + '.');
+    var item = found.object;
+
+    if (opts.expected_version !== undefined && Number(item.version) !== Number(opts.expected_version)) {
+      throw new Error('Việc đã được người khác cập nhật. Tải lại trước khi lưu.');
+    }
+
+    var allowed = (FLOW_SERVER[item.status] || {})[to];
+    if (!allowed) throw new Error('Không thể chuyển từ ' + item.status + ' sang ' + to + '.');
+    if (allowed.indexOf(u.role) === -1) throw new Error('Vai trò ' + u.role + ' không được thực hiện thao tác này.');
+    if (u.role === 'CAN_BO_LS' && item.assigned_user_id !== u.user_id) throw new Error('Chỉ người được giao mới xử lý việc này.');
+
+    var req = t.find('Requests', 'request_id', item.request_id);
+    if (u.role === 'PHONG_PGD' && (!req || req.object.unit_id !== u.unit_id)) {
+      throw new Error('Việc không thuộc đơn vị của bạn.');
+    }
+
+    var ts = stamp_();
+    var fields = { status: to, version: Number(item.version) + 1, updated_at: ts };
+    var reason = opts.reason || '';
+
+    if (to === 'DA_PHAN_CONG') {
+      var staff = t.find('Users', 'user_id', opts.assignee_id);
+      if (!staff || staff.object.role !== 'CAN_BO_LS' || String(staff.object.is_active) !== 'true') throw new Error('Người nhận việc phải là cán bộ LS đang hoạt động.');
+      var wt = t.find('WorkTypes', 'type_code', item.work_type_code);
+      var slaHours = wt ? Number(wt.object.sla_hours) || 8 : 8;
+      fields.assigned_user_id = opts.assignee_id;
+      fields.assigned_by = u.user_id;
+      fields.assigned_at = ts;
+      fields.due_at = dueAt_(t, ts, slaHours);
+      reason = 'Giao ' + staff.object.full_name + (reason ? ' — ' + reason : '');
+    }
+
+    if (to === 'DANG_HEN_KH') {
+      if (!opts.appointment || !opts.appointment.at) throw new Error('Thiếu thời gian hẹn.');
+      // Khách không có kênh liên hệ nào thì vẫn hẹn được: tin đi vào nhóm nội bộ
+      // và gắn thẻ cán bộ phụ trách. Chặn ở đây là khóa chết những hồ sơ đó lại,
+      // vì mọi loại việc đều phải qua bước hẹn mới hoàn thành được.
+      if (!req) throw new Error('Không tìm thấy hồ sơ của việc này.');
+      if (!req.object.phone && !req.object.email && !opts.appointment.via_group) {
+        throw new Error('Khách chưa có điện thoại hoặc email; chọn báo qua nhóm nội bộ.');
+      }
+      fields.appointment_json = JSON.stringify(opts.appointment);
+      reason = 'Hẹn ' + opts.appointment.at + ' qua ' + opts.appointment.channel;
+    }
+
+    if ((to === 'CHO_PHAN_CONG' || to === 'DA_PHAN_CONG') && !item.accepted_at) fields.accepted_at = ts;
+    if (to === 'HOAN_THANH_LS') {
+      // Loại việc cần khách ký thì phải có lịch hẹn trước khi đóng việc.
+      var doneType = t.find('WorkTypes', 'type_code', item.work_type_code);
+      if (doneType && String(doneType.object.requires_appointment) === 'true' && !item.appointment_json) {
+        throw new Error('Loại việc này cần hẹn khách ký trước khi hoàn thành.');
+      }
+      fields.completed_at = ts;
+    }
+    if (to === 'DANG_THUC_HIEN' && item.status === 'HOAN_THANH_LS') fields.completed_at = '';
+    if (to === 'CAN_BO_SUNG' || to === 'HUY' || to === 'TAM_DUNG') {
+      if (!reason) throw new Error('Thao tác này bắt buộc ghi lý do.');
+    }
+
+    t.write(found, fields);
+    t.append('Events', {
+      event_id: id_('EVT'), item_id: itemId, type: to, by: u.user_id, at: ts,
+      reason: reason, before_json: JSON.stringify({ status: item.status }), after_json: JSON.stringify(fields)
+    });
+
+    // Xếp tin vào outbox trong cùng lần giữ khóa với việc, để không có trường hợp
+    // trạng thái đã đổi mà thông báo thì mất.
+    var queued = 0;
+    // Giao lần đầu và chuyển việc sang người khác là hai tin khác nhau; dùng chung
+    // một sự kiện thì quy tắc "chuyển việc" không bao giờ chạy.
+    var event = NOTIFY_ON[to];
+    if (to === 'DA_PHAN_CONG' && item.assigned_user_id && item.assigned_user_id !== opts.assignee_id) {
+      event = 'DOI_NGUOI';
+    }
+    if (event) {
+      var merged = {};
+      Object.keys(item).forEach(function (k) { merged[k] = item[k]; });
+      Object.keys(fields).forEach(function (k) { merged[k] = fields[k]; });
+      queued = Notifications.queue(t, merged, event, u.user_id);
+    }
+
+    return { ok: true, status: to, version: fields.version, queued: queued, period_id: item.period_id };
+  });
+  syncMonthlyPlanWorkbook_(result.period_id);
+  return result;
+}
+
+/* ---------------------------- Đề nghị sửa ---------------------------- */
+
+/** Phòng sửa việc đã vào LS xử lý thì thành đề nghị chờ kiểm soát duyệt. */
+function proposeRevision(itemId, fields, reason) {
+  var u = requireActor_();
+  if (!reason) throw new Error('Cần ghi lý do sửa.');
+
+  var result = DataRepository.tx(function (t) {
+    var found = t.find('WorkItems', 'item_id', itemId);
+    if (!found) throw new Error('Không tìm thấy việc ' + itemId + '.');
+    var item = found.object;
+    if (OPEN_STATUS.indexOf(item.status) === -1) throw new Error('Việc đã đóng, dùng chức năng mở lại.');
+
+    var req = t.find('Requests', 'request_id', item.request_id);
+    if (u.role === 'PHONG_PGD' && (!req || req.object.unit_id !== u.unit_id)) throw new Error('Việc không thuộc đơn vị của bạn.');
+    if (['PHONG_PGD', 'KS_LS', 'QUAN_LY_LS'].indexOf(u.role) === -1) throw new Error('Vai trò không được sửa hồ sơ.');
+
+    var ts = stamp_();
+    var direct = u.role !== 'PHONG_PGD' || ['CHO_TIEP_NHAN', 'CAN_BO_SUNG'].indexOf(item.status) !== -1;
+
+    if (direct) {
+      applyRevision_(t, found, req, fields, ts);
+      t.append('Events', {
+        event_id: id_('EVT'), item_id: itemId, type: 'SUA_THONG_TIN', by: u.user_id, at: ts,
+        reason: reason, before_json: JSON.stringify(item), after_json: JSON.stringify(fields)
+      });
+      return { ok: true, applied: true, period_id: item.period_id };
+    }
+
+    t.write(found, {
+      pending_json: JSON.stringify({ fields: fields, by: u.user_id, at: ts, reason: reason }),
+      updated_at: ts
+    });
+    t.append('Events', {
+      event_id: id_('EVT'), item_id: itemId, type: 'DE_NGHI_SUA', by: u.user_id, at: ts,
+      reason: reason, before_json: '', after_json: JSON.stringify(fields)
+    });
+    // Đề nghị sửa nằm im chờ duyệt mà không ai được báo thì nó chỉ là một cột
+    // dữ liệu, không phải một bước trong quy trình.
+    Notifications.queue(t, item, 'DE_NGHI_SUA', u.user_id);
+    return { ok: true, applied: false, period_id: item.period_id };
+  });
+  syncMonthlyPlanWorkbook_(result.period_id);
+  return result;
+}
+
+function resolveRevision(itemId, approve, reason) {
+  var u = requireActor_();
+  if (['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) === -1) throw new Error('Chỉ kiểm soát được duyệt đề nghị sửa.');
+
+  var result = DataRepository.tx(function (t) {
+    var found = t.find('WorkItems', 'item_id', itemId);
+    if (!found) throw new Error('Không tìm thấy việc ' + itemId + '.');
+    var pending = found.object.pending_json ? JSON.parse(found.object.pending_json) : null;
+    if (!pending) throw new Error('Việc này không có đề nghị sửa nào.');
+
+    var ts = stamp_();
+    var req = t.find('Requests', 'request_id', found.object.request_id);
+
+    if (approve) applyRevision_(t, found, req, pending.fields, ts);
+    t.write(found, { pending_json: '', updated_at: ts });
+
+    t.append('Events', {
+      event_id: id_('EVT'), item_id: itemId, type: approve ? 'DUYET_SUA' : 'TU_CHOI_SUA',
+      by: u.user_id, at: ts, reason: reason || '', before_json: '', after_json: JSON.stringify(pending.fields)
+    });
+    return { ok: true, approved: !!approve, period_id: found.object.period_id };
+  });
+  syncMonthlyPlanWorkbook_(result.period_id);
+  return result;
+}
+
+function applyRevision_(t, found, req, fields, ts) {
+  var itemFields = {}, reqFields = {};
+  Object.keys(fields).forEach(function (k) {
+    if (k.indexOf('customer.') === 0) {
+      var map = { name: 'customer_name', cif: 'cif', phone: 'phone', email: 'email', priority_flags: 'priority_flags_json' };
+      var col = map[k.substring(9)];
+      if (col) reqFields[col] = col === 'priority_flags_json'
+        ? JSON.stringify((fields[k] || []).filter(function (x) { return ['VIP', 'QUAN_TRONG', 'XU_LY_GAP'].indexOf(String(x)) !== -1; }))
+        : fields[k];
+    } else if (['work_type_code', 'product_name', 'occurrence_date'].indexOf(k) !== -1) {
+      itemFields[k] = fields[k];
+    }
+  });
+
+  // Đổi loại việc thì hạn tính lại theo SLA mới, mốc phân công giữ nguyên.
+  if (itemFields.work_type_code && found.object.assigned_at) {
+    var wt = t.find('WorkTypes', 'type_code', itemFields.work_type_code);
+    var hours = wt ? Number(wt.object.sla_hours) || 8 : 8;
+    itemFields.due_at = dueAt_(t, found.object.assigned_at, hours);
+  }
+
+  itemFields.version = Number(found.object.version) + 1;
+  itemFields.updated_at = ts;
+  t.write(found, itemFields);
+
+  if (req && Object.keys(reqFields).length) {
+    if (reqFields.cif) reqFields.customer_kind = 'DA_CO_CIF';
+    reqFields.updated_at = ts;
+    t.write(req, reqFields);
+  }
+}
+
+/** Tính hạn theo lịch làm việc trong Settings; không cộng thẳng giờ lịch. */
+function dueAt_(t, startIso, hours) {
+  var settings = {};
+  t.rows('Settings').forEach(function (row) { settings[row.key] = row.value; });
+  var days = String(settings.work_days || '1,2,3,4,5').split(',').map(function (x) { return Number(x); });
+  var holidays = String(settings.holidays || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  var open = String(settings.work_open || '08:00').split(':').map(Number);
+  var close = String(settings.work_close || '17:30').split(':').map(Number);
+  var pause = String(settings.work_break || '11:30-13:00').split('-');
+  var breakStart = String(pause[0] || '11:30').split(':').map(Number);
+  var breakEnd = String(pause[1] || '13:00').split(':').map(Number);
+  var cursor = new Date(startIso);
+  var remaining = Math.max(0, Math.round(Number(hours || 0) * 60));
+  var guard = 0;
+
+  function dayKey_(date) {
+    return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+  }
+  function at_(date, time) {
+    var result = new Date(date.getTime());
+    result.setHours(time[0], time[1], 0, 0);
+    return result;
+  }
+  function nextDay_() {
+    cursor.setDate(cursor.getDate() + 1);
+    cursor = at_(cursor, open);
+  }
+
+  while (remaining > 0 && guard++ < 10000) {
+    if (days.indexOf(cursor.getDay()) === -1 || holidays.indexOf(dayKey_(cursor)) !== -1) { nextDay_(); continue; }
+    var start = at_(cursor, open), end = at_(cursor, close), lunchStart = at_(cursor, breakStart), lunchEnd = at_(cursor, breakEnd);
+    if (cursor < start) cursor = start;
+    if (cursor >= end) { nextDay_(); continue; }
+    if (cursor >= lunchStart && cursor < lunchEnd) cursor = lunchEnd;
+    var segmentEnd = cursor < lunchStart ? lunchStart : end;
+    if (segmentEnd > end) segmentEnd = end;
+    if (cursor >= segmentEnd) { if (cursor < lunchEnd) { cursor = lunchEnd; continue; } nextDay_(); continue; }
+    var available = Math.floor((segmentEnd.getTime() - cursor.getTime()) / 60000);
+    var used = Math.min(remaining, available);
+    cursor = new Date(cursor.getTime() + used * 60000);
+    remaining -= used;
+  }
+  if (remaining > 0) throw new Error('Không thể tính hạn theo lịch làm việc; kiểm tra cấu hình ngày và giờ làm.');
+  return cursor.toISOString();
+}
+
+/* ---------------------------- Quản trị danh mục ---------------------------- */
+
+var ROLES = ['PHONG_PGD', 'CAN_BO_LS', 'KS_LS', 'QUAN_LY_LS', 'ADMIN'];
+
+/**
+ * Vai trò quyết định phạm vi dữ liệu trong getBootstrap. Một mã lạ do gõ nhầm
+ * trong file Excel sẽ không rơi vào nhánh lọc nào — nghĩa là người đó thấy toàn
+ * bộ hồ sơ khách của cả kỳ. Chặn ngay từ cửa vào.
+ */
+function requireRole_(role) {
+  var value = String(role || '').trim().toUpperCase();
+  if (ROLES.indexOf(value) === -1) {
+    throw new Error('Vai trò "' + role + '" không hợp lệ. Chỉ nhận: ' + ROLES.join(', ') + '.');
+  }
+  return value;
+}
+
+function requireAdmin_() {
+  var u = requireActor_();
+  if (u.role !== 'ADMIN') throw new Error('Chỉ quản trị hệ thống được thay đổi danh mục và cấu hình.');
+  return u;
+}
+
+function logConfig_(t, u, area, detail) {
+  t.append('ConfigLog', { id: id_('CFG'), at: stamp_(), by: u.user_id, area: area, detail: detail });
+}
+
+/** Lưu danh mục từ màn Quản trị. Các cột và bảng được giới hạn cứng, không nhận tên Sheet tùy ý. */
+function adminSaveCatalog(kind, code, data) {
+  var u = requireAdmin_();
+  var spec = {
+    workType: { table: 'WorkTypes', key: 'type_code', area: 'Loại việc' },
+    unit: { table: 'Units', key: 'unit_id', area: 'Đơn vị' },
+    user: { table: 'Users', key: 'user_id', area: 'Người dùng' },
+    reason: { table: 'Reasons', key: 'code', area: 'Lý do' },
+    catalogOption: { table: 'CatalogOptions', key: 'option_id', area: 'Dropdown nguồn' }
+  }[kind];
+  if (!spec) throw new Error('Danh mục không được phép thay đổi.');
+  if (!code || !data) throw new Error('Thiếu mã hoặc dữ liệu danh mục.');
+  if (kind === 'catalogOption') {
+    if (!data.catalog_key || !data.label) throw new Error('Dropdown phải có nhóm và nhãn hiển thị.');
+    if (data.sort_order === undefined || data.sort_order === '') data.sort_order = 9999;
+    data.is_active = data.is_active !== false;
+  }
+
+  var result = DataRepository.tx(function (t) {
+    var found = t.find(spec.table, spec.key, code);
+    if (kind === 'user') {
+      data.login_code = String(data.login_code || code).trim();
+      data.role = requireRole_(data.role);
+      // Nhóm đăng nhập suy từ vai trò, không nhận từ trình duyệt: EXTERNAL nghĩa là
+      // vào được mà không cần mật khẩu.
+      data.auth_group = data.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL';
+      if (!data.login_code) throw new Error('Người dùng phải có mã đăng nhập.');
+      if (!t.find('Units', 'unit_id', data.unit_id)) throw new Error('Đơn vị ' + data.unit_id + ' chưa có trong danh mục.');
+      var sameEmail = t.rows('Users').filter(function (x) {
+        return data.email && String(x.email).toLowerCase() === String(data.email || '').toLowerCase() && x.user_id !== code;
+      });
+      if (sameEmail.length) throw new Error('Email đã được cấp cho tài khoản khác.');
+      var sameCode = t.rows('Users').filter(function (x) {
+        return String(x.login_code || x.user_id).toLowerCase() === data.login_code.toLowerCase() && x.user_id !== code;
+      });
+      if (sameCode.length) throw new Error('Mã đăng nhập đã được cấp cho tài khoản khác.');
+      if (data.new_password) {
+        // Mật khẩu do quản trị đặt là mật khẩu tạm; chủ tài khoản phải đổi khi vào.
+        data.password_hash = passwordHash_(data.new_password);
+        data.must_change_password = true;
+      }
+      delete data.new_password;
+      if (found && found.object.role === 'CAN_BO_LS' &&
+          (data.role !== 'CAN_BO_LS' || !data.is_active) &&
+          t.rows('WorkItems').some(function (i) { return i.assigned_user_id === code && OPEN_STATUS.indexOf(i.status) !== -1; })) {
+        throw new Error('Cán bộ vẫn còn việc đang mở; cần bàn giao trước khi đổi vai trò hoặc khóa.');
+      }
+      // Khóa nốt tài khoản quản trị cuối cùng là tự nhốt mình ngoài cửa.
+      if (found && found.object.role === 'ADMIN' && (data.role !== 'ADMIN' || data.is_active === false)) {
+        var otherAdmins = t.rows('Users').filter(function (x) {
+          return x.role === 'ADMIN' && x.user_id !== code && String(x.is_active) === 'true';
+        });
+        if (!otherAdmins.length) throw new Error('Đây là tài khoản quản trị đang hoạt động duy nhất; tạo tài khoản quản trị khác trước.');
+      }
+    }
+    if (kind === 'workType') data.requires_ks_approval = true;
+    if (found) t.write(found, data);
+    else {
+      data[spec.key] = code;
+      t.append(spec.table, data);
+    }
+    logConfig_(t, u, spec.area, (found ? 'Sửa ' : 'Thêm ') + code + '.');
+    return { ok: true };
+  });
+  var current = DataRepository.find('MonthlyPlans', 'status', 'ACTIVE');
+  if (current) syncMonthlyPlanWorkbook_(current.period_id);
+  return result;
+}
+
+/** Nạp nhiều cán bộ từ CSV/TSV đã xuất bằng Excel. Không nhận mật khẩu rõ. */
+function adminImportUsers(rows) {
+  var u = requireAdmin_();
+  if (!Array.isArray(rows) || !rows.length) throw new Error('File nhập chưa có dòng dữ liệu.');
+  var result = DataRepository.tx(function (t) {
+    var existing = t.rows('Users');
+    var seen = {};
+    var created = 0;
+    var updated = 0;
+    rows.forEach(function (raw, index) {
+      var row = raw || {};
+      var code = String(row.login_code || row.ma_can_bo || row.ma || row.user_id || '').trim();
+      var name = String(row.full_name || row.ho_ten || row.hoTen || '').trim();
+      var unit = String(row.unit_id || row.don_vi || row.donVi || '').trim().toUpperCase();
+      var role;
+      try { role = requireRole_(row.role || row.vai_tro || (unit === 'PHONG_LS' ? 'CAN_BO_LS' : 'PHONG_PGD')); }
+      catch (err) { throw new Error('Dòng ' + (index + 2) + ': ' + err.message); }
+      if (!code || !name || !unit) throw new Error('Dòng ' + (index + 2) + ' thiếu mã cán bộ, họ tên hoặc đơn vị.');
+      if (!t.find('Units', 'unit_id', unit)) throw new Error('Dòng ' + (index + 2) + ': đơn vị ' + unit + ' chưa có trong danh mục.');
+      if (seen[code.toLowerCase()]) throw new Error('Mã cán bộ bị trùng trong file: ' + code);
+      seen[code.toLowerCase()] = true;
+      var found = existing.filter(function (x) {
+        return String(x.login_code || x.user_id).toLowerCase() === code.toLowerCase();
+      })[0];
+      var id = found ? found.user_id : 'U_' + code.replace(/[^A-Z0-9]/gi, '_').toUpperCase();
+      var data = {
+        user_id: id, full_name: name, email: String(row.email || row.email_cong_vu || '').trim().toLowerCase(),
+        login_code: code, auth_group: role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL',
+        unit_id: unit, role: role, sort_order: Number(row.sort_order || row.thu_tu || 9999),
+        source_tab: String(row.source_tab || 'Import Excel'), is_active: String(row.is_active || row.hoat_dong || 'true').toLowerCase() !== 'false',
+        zalo_name: String(row.zalo_name || '').trim(), zalo_phone: String(row.zalo_phone || '').trim(),
+        telegram_chat_id: String(row.telegram_chat_id || '').trim()
+      };
+      if (row.password || row.mat_khau) {
+        data.password_hash = passwordHash_(row.password || row.mat_khau);
+        data.must_change_password = true;
+      }
+      var foundRow = t.find('Users', 'user_id', id);
+      if (foundRow) { t.write(foundRow, data); updated += 1; }
+      else { t.append('Users', data); created += 1; }
+      existing.push(data);
+    });
+    logConfig_(t, u, 'Người dùng', 'Nhập ' + rows.length + ' dòng Excel: thêm ' + created + ', cập nhật ' + updated + '.');
+    return { ok: true, created: created, updated: updated };
+  });
+  return result;
+}
+
+function adminSaveSettings(values) {
+  var u = requireAdmin_();
+  var allowed = ['bank_name', 'hotline', 'app_url', 'timezone', 'week_start', 'retention_months', 'export_row_limit', 'backlog_alert', 'env',
+    'work_days', 'work_open', 'work_close', 'work_break', 'holidays', 'sign_place', 'gateway_url', 'gateway_auth_ref'];
+  return DataRepository.tx(function (t) {
+    allowed.forEach(function (key) {
+      if (values[key] === undefined) return;
+      var found = t.find('Settings', 'key', key);
+      var fields = { value: String(values[key]), updated_at: stamp_() };
+      if (found) t.write(found, fields);
+      else t.append('Settings', { key: key, value: fields.value, description: '', updated_at: fields.updated_at });
+    });
+    logConfig_(t, u, 'Cấu hình chung', 'Cập nhật cấu hình tổ chức và báo cáo.');
+    return { ok: true };
+  });
+}
+
+/* Biến bị cấm theo kênh — cùng một bảng với Notifications.gs và js/domain.js. */
+var FORBIDDEN_VARS = {
+  GMF: ['ten_khach', 'cif', 'san_pham', 'so_tien', 'so_dien_thoai'],
+  ZBS: ['cif', 'san_pham', 'so_tien'],
+  SMS: ['cif', 'san_pham', 'so_tien'],
+  TELEGRAM: ['cif', 'san_pham', 'so_tien'],
+  EMAIL: ['cif', 'so_tien'],
+  IN_APP: []
+};
+
+var TEMPLATE_CHANNELS = ['IN_APP', 'EMAIL', 'ZBS', 'SMS', 'GMF', 'TELEGRAM'];
+var TEMPLATE_STATUS = ['NHAP', 'CHO_DUYET', 'DA_DUYET', 'TU_CHOI'];
+var CHANNEL_STATUS_VALUES = ['CHUA_KICH_HOAT', 'THU_NGHIEM', 'HOAT_DONG', 'TAM_NGUNG'];
+
+function checkTemplateBody_(channel, body) {
+  var banned = FORBIDDEN_VARS[channel] || [];
+  var re = /\{\{\s*([a-z_]+)\s*\}\}/g, m;
+  while ((m = re.exec(String(body || '')))) {
+    if (banned.indexOf(m[1]) !== -1) {
+      return 'Kênh ' + channel + ' không được chứa biến {{' + m[1] + '}}.';
+    }
+  }
+  if (!String(body || '').trim()) return 'Nội dung mẫu đang trống.';
+  if (String(body || '').length > 600) return 'Nội dung quá dài (tối đa 600 ký tự).';
+  return '';
+}
+
+/**
+ * Lưu cấu hình gửi tin. Chỉ nhận đúng các cột của bảng: nhận nguyên object từ
+ * trình duyệt nghĩa là luật duyệt mẫu và luật biến cấm chỉ tồn tại ở client.
+ */
+function adminSaveDelivery(kind, code, data) {
+  var u = requireAdmin_();
+  var spec = {
+    channel: { table: 'Channels', key: 'code', area: 'Kênh gửi tin',
+      columns: ['status', 'test_mode', 'allowlist', 'rate_per_hour', 'max_retry', 'config_json', 'updated_at'] },
+    template: { table: 'Templates', key: 'code', area: 'Mẫu tin',
+      columns: ['name', 'channel', 'status', 'subject', 'body', 'approved_by', 'approved_at'] },
+    rule: { table: 'NotifyRules', key: 'rule_id', area: 'Quy tắc thông báo',
+      columns: ['channels', 'template_code', 'enabled', 'needs_confirm', 'throttle_minutes', 'when_case'] }
+  }[kind];
+  if (!spec || !code || !data) throw new Error('Dữ liệu kênh gửi không hợp lệ.');
+
+  var fields = {};
+  spec.columns.forEach(function (key) {
+    if (data[key] !== undefined) fields[key] = data[key];
+  });
+  if (!Object.keys(fields).length) throw new Error('Không có trường nào hợp lệ để lưu.');
+
+  if (kind === 'channel' && fields.status !== undefined && CHANNEL_STATUS_VALUES.indexOf(String(fields.status)) === -1) {
+    throw new Error('Trạng thái kênh không hợp lệ.');
+  }
+
+  return DataRepository.tx(function (t) {
+    var found = t.find(spec.table, spec.key, code);
+
+    if (kind === 'template') {
+      var before = found ? found.object : null;
+      var channel = String(fields.channel !== undefined ? fields.channel : (before ? before.channel : ''));
+      if (TEMPLATE_CHANNELS.indexOf(channel) === -1) throw new Error('Kênh của mẫu không hợp lệ.');
+      var body = fields.body !== undefined ? fields.body : (before ? before.body : '');
+      var bad = checkTemplateBody_(channel, body);
+      if (bad) throw new Error(bad);
+      if (fields.status !== undefined && TEMPLATE_STATUS.indexOf(String(fields.status)) === -1) {
+        throw new Error('Trạng thái mẫu không hợp lệ.');
+      }
+      // Sửa nội dung là mất hiệu lực duyệt cũ. Luật này phải nằm ở máy chủ, nếu
+      // không thì một lần gọi API là đủ để đẩy nội dung mới vào mẫu "đã duyệt".
+      var changed = before && (String(before.body) !== String(body) || String(before.channel) !== channel);
+      if (changed && String(fields.status || before.status) === 'DA_DUYET' && String(before.status) === 'DA_DUYET') {
+        fields.status = 'CHO_DUYET';
+        fields.approved_by = '';
+        fields.approved_at = '';
+      }
+      if (String(fields.status) === 'DA_DUYET') {
+        fields.approved_by = u.user_id;
+        fields.approved_at = stamp_();
+      }
+    }
+
+    if (kind === 'rule' && fields.template_code !== undefined) {
+      String(fields.template_code).split(',').map(function (x) { return x.trim(); }).filter(Boolean)
+        .forEach(function (tplCode) {
+          if (!t.find('Templates', 'code', tplCode)) throw new Error('Mẫu ' + tplCode + ' chưa tồn tại.');
+        });
+    }
+
+    if (!found) {
+      if (kind !== 'template') throw new Error('Không tìm thấy cấu hình ' + code + '.');
+      fields[spec.key] = code;
+      if (fields.status === undefined) fields.status = 'CHO_DUYET';
+      t.append(spec.table, fields);
+    } else t.write(found, fields);
+
+    logConfig_(t, u, spec.area, (found ? 'Cập nhật ' : 'Thêm ') + code + '.');
+    return { ok: true };
+  });
+}
+
+function adminRunOutbox() {
+  requireAdmin_();
+  return Notifications.runOutbox(20);
+}
+
+/**
+ * Xác nhận, gửi lại hoặc hủy một tin.
+ *
+ * Xác nhận tin gửi khách là trách nhiệm của người phụ trách việc, không phải của
+ * quản trị: quản trị không được xem nội dung gửi khách nên bấm xác nhận cũng là
+ * bấm mù. Quản trị vẫn xử lý được tin nội bộ và vẫn hủy được mọi tin.
+ */
+function changeOutbox(outboxId, action) {
+  var u = requireActor_();
+  if (['RETRY', 'CONFIRM', 'CANCEL'].indexOf(action) === -1) throw new Error('Thao tác hàng đợi không hợp lệ.');
+
+  return DataRepository.tx(function (t) {
+    var found = t.find('NotificationOutbox', 'outbox_id', outboxId);
+    if (!found) throw new Error('Không tìm thấy tin trong hàng đợi.');
+    var row = found.object;
+
+    var item = row.item_id ? t.find('WorkItems', 'item_id', row.item_id) : null;
+    var owner = item ? item.object.assigned_user_id : '';
+
+    if (u.role === 'ADMIN') {
+      if (action === 'CONFIRM' && String(row.recipient_kind) === 'KHACH') {
+        throw new Error('Tin gửi khách phải do cán bộ phụ trách hoặc kiểm soát xác nhận.');
+      }
+    } else if (['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1) {
+      // kiểm soát và quản lý LS xử lý được mọi tin của việc trong phạm vi
+    } else if (u.role === 'CAN_BO_LS') {
+      if (!item || owner !== u.user_id) throw new Error('Chỉ người được giao mới xử lý tin của việc này.');
+    } else {
+      throw new Error('Vai trò ' + u.role + ' không được thao tác hàng đợi gửi tin.');
+    }
+
+    if (action !== 'CANCEL' && ['CHO_XAC_NHAN', 'THAT_BAI', 'KHONG_GUI', 'DA_HUY'].indexOf(String(row.status)) === -1) {
+      throw new Error('Tin đang ở trạng thái ' + row.status + ', không cần thao tác này.');
+    }
+
+    var update = action === 'CANCEL'
+      ? { status: 'DA_HUY', note: 'Hủy bởi ' + u.full_name, next_try_at: '' }
+      : { status: 'CHO_GUI', next_try_at: '', retry_count: action === 'RETRY' ? 0 : Number(row.retry_count || 0),
+        note: action === 'CONFIRM' ? 'Đã xác nhận bởi ' + u.full_name : 'Gửi lại bởi ' + u.full_name };
+    t.write(found, update);
+    Notifications.recordMetricStatus(t, row, action === 'CANCEL' ? 'CANCELLED' : 'QUEUED');
+    t.append('Events', {
+      event_id: id_('EVT'), item_id: row.item_id || '', type: 'GUI_TIN', by: u.user_id, at: stamp_(),
+      reason: action + ' tin ' + outboxId + '.', before_json: JSON.stringify({ status: row.status }),
+      after_json: JSON.stringify({ status: update.status })
+    });
+    return { ok: true };
+  });
+}
+
+/** Giữ tên cũ cho các bản build đã phát hành. */
+function adminChangeOutbox(outboxId, action) { return changeOutbox(outboxId, action); }
+
+/** Gửi một tin kiểm thử tới chính người quản trị để xác nhận cấu hình chạy được. */
+function adminTestChannel(code, recipient) {
+  var u = requireAdmin_();
+  var to = String(recipient || '').trim();
+  if (!to) throw new Error('Nhập địa chỉ nhận tin thử.');
+  var id = DataRepository.tx(function (t) {
+    var outboxId = Notifications.queueTest(t, code, to, u.full_name);
+    logConfig_(t, u, 'Kênh gửi tin', 'Gửi thử qua ' + code + '.');
+    return outboxId;
+  });
+  var run = Notifications.runOutbox(5);
+  var row = DataRepository.find('NotificationOutbox', 'outbox_id', id);
+  return { ok: true, outbox_id: id, status: row ? row.status : '', note: row ? row.note : '', sent: run.sent };
+}
+
+/* ---------------------------- Thông báo trong app ---------------------------- */
+
+/**
+ * Đánh dấu đã đọc cho chính người đang đăng nhập.
+ * Không nhận danh sách id từ trình duyệt để tránh đọc hộ người khác.
+ */
+function markInboxRead() {
+  var u = currentUser_();
+  return DataRepository.tx(function (t) {
+    var rows = t.rows('Inbox').filter(function (n) {
+      return n.user_id === u.user_id && String(n.is_read) !== 'true' && n.is_read !== true;
+    });
+    rows.forEach(function (n) {
+      var found = t.find('Inbox', 'id', n.id);
+      if (found) t.write(found, { is_read: true });
+    });
+    return { ok: true, marked: rows.length };
+  });
+}

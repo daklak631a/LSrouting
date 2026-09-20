@@ -1,0 +1,15 @@
+# Công cụ trợ lý cục bộ, không thuộc mã nguồn dự án
+.agents/
+
+# Phụ thuộc và kết quả build tạm
+node_modules/
+*.log
+
+# Cấu hình clasp: chứa scriptId của dự án Apps Script cụ thể.
+# Mỗi người triển khai tự tạo bằng `clasp clone` hoặc `clasp create`.
+.clasp.json
+.clasprc.json
+
+# Rác hệ điều hành
+Thumbs.db
+.DS_Store
