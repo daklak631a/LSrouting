@@ -73,8 +73,11 @@ if (scriptIdArg && !fs.existsSync('.clasp.json')) {
 }
 if (!fs.existsSync('.clasp.json')) {
   warn('chưa có .clasp.json');
-  info('Lấy scriptId ở Apps Script → Project Settings → IDs, rồi chạy:');
+  info('Chưa có dự án Apps Script nào thì tạo thẳng từ dòng lệnh:');
+  info('  clasp create --type standalone --title "LS-Routing" --rootDir .');
+  info('Đã có dự án rồi thì lấy scriptId ở Apps Script → Project Settings → IDs:');
   info('  node prepare-clasp.mjs <scriptId>');
+  info('Đừng tạo dự án mới nếu bản cũ đang chạy: URL web app sẽ đổi.');
   info('Đừng dùng `clasp clone`: lệnh đó kéo mã cũ trên Apps Script về đè lên repo.');
   blocking += 1;
 } else {

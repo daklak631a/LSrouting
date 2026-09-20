@@ -127,8 +127,26 @@ clasp 2.x và 3.x đọc `~/.clasprc.json` theo hai định dạng khác nhau. M
 nhập bằng bản kia thì sao lưu file rồi đăng nhập lại; `prepare-clasp.mjs` in sẵn
 lệnh cho trường hợp của bạn.
 
-Nối repo với dự án Apps Script đang có: lấy `scriptId` ở Apps Script →
-Project Settings → IDs, rồi tự tạo `.clasp.json` ở gốc repo:
+### Chưa có dự án Apps Script nào
+
+Tạo thẳng từ dòng lệnh, không cần mở web:
+
+```bash
+clasp create --type standalone --title "LS-Routing" --rootDir .
+```
+
+Lệnh này tạo dự án trên Google và ghi luôn `.clasp.json`.
+
+Chọn `standalone` chứ đừng gắn script vào một bảng tính. `DataRepository` tìm kho
+dữ liệu qua thuộc tính `LS_SHEET_ID`; script gắn vào bảng tính sẽ làm
+`getActiveSpreadsheet()` trả về chính bảng tính đó và app đọc ghi nhầm chỗ thay
+vì dùng kho do `createStorageWorkbook()` tạo ra.
+
+### Đã có dự án Apps Script
+
+**Đừng tạo mới** — dự án mới có URL web app khác, người dùng đang mở link cũ sẽ
+phải đổi hết. Lấy `scriptId` ở Apps Script → Project Settings → IDs, rồi tự tạo
+`.clasp.json` ở gốc repo:
 
 ```json
 { "scriptId": "<scriptId>", "rootDir": "." }
