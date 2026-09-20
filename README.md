@@ -213,7 +213,7 @@ thu hồi ở <https://myaccount.google.com/permissions> khi không dùng nữa.
 | `Code.gs` | API máy chủ: quyền, luật trạng thái, đề nghị sửa, quản trị, SLA theo lịch làm việc |
 | `Notifications.gs` | Hàng đợi gửi, worker, đối soát |
 | `DataRepository.gs` | Đọc/ghi Sheet, một lần giữ khóa mỗi giao dịch |
-| `SetupSheetDB.gs` | Tạo và nâng cấp 17 bảng dữ liệu, gồm `CatalogOptions` và `NotificationMetrics` |
+| `SetupSheetDB.gs` | Tạo và nâng cấp 18 bảng dữ liệu, gồm `CatalogOptions`, `NotificationMetrics` và `PeriodSummary` |
 
 Tên trường và luật trạng thái của `Code.gs` khớp `js/domain.js`. Sửa một bên phải sửa bên kia.
 
