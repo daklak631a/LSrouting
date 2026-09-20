@@ -94,4 +94,31 @@ if (!domainSource.includes("short: 'Toàn bộ phòng'") || !domainSource.includ
   throw new Error('PGD navigation must include room-wide list and dashboard screens.');
 }
 
+// Script gắn vào bảng tính: `getActiveSpreadsheet()` trả về chính bảng tính chứa
+// script. Nếu nó thắng `LS_SHEET_ID` thì app đọc ghi vào file đó thay vì kho dữ
+// liệu do createStorageWorkbook() dựng, và chết ngay ở bảng đầu tiên.
+{
+  const openStorage = (hasProp) => {
+    const opened = [];
+    const ctx = {
+      SpreadsheetApp: {
+        getActiveSpreadsheet: () => ({ getSheetByName: () => ({ getLastRow: () => 0, getDataRange: () => ({ getValues: () => [[]] }) }) }),
+        openById: (id) => { opened.push(id); return { getSheetByName: () => ({ getLastRow: () => 0, getDataRange: () => ({ getValues: () => [[]] }) }) }; }
+      },
+      PropertiesService: { getScriptProperties: () => ({ getProperty: () => (hasProp ? 'KHO_DU_LIEU' : null), setProperty: () => {} }) },
+      LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) }
+    };
+    vm.runInNewContext(read('DataRepository.gs'), ctx);
+    ctx.DataRepository.getAll('Requests');
+    return opened;
+  };
+
+  if (openStorage(true).join() !== 'KHO_DU_LIEU') {
+    throw new Error('LS_SHEET_ID phải thắng bảng tính chứa script khi xác định kho dữ liệu.');
+  }
+  if (openStorage(false).length !== 0) {
+    throw new Error('Chưa khai LS_SHEET_ID thì phải dùng bảng tính đang mở để khởi tạo lần đầu.');
+  }
+}
+
 console.log('GAS contract check passed.');

@@ -137,10 +137,9 @@ clasp create --type standalone --title "LS-Routing" --rootDir .
 
 Lệnh này tạo dự án trên Google và ghi luôn `.clasp.json`.
 
-Chọn `standalone` chứ đừng gắn script vào một bảng tính. `DataRepository` tìm kho
-dữ liệu qua thuộc tính `LS_SHEET_ID`; script gắn vào bảng tính sẽ làm
-`getActiveSpreadsheet()` trả về chính bảng tính đó và app đọc ghi nhầm chỗ thay
-vì dùng kho do `createStorageWorkbook()` tạo ra.
+Nên chọn `standalone`. Script gắn vào một bảng tính vẫn chạy được — `DataRepository`
+luôn ưu tiên `LS_SHEET_ID` — nhưng bảng tính chứa script khi đó chỉ là chỗ treo
+mã, không liên quan gì tới dữ liệu, dễ gây hiểu nhầm khi bàn giao.
 
 ### Đã có dự án Apps Script
 

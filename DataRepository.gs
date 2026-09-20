@@ -20,14 +20,27 @@ var DataRepository = (function () {
   var cache = {};   // tên tab -> { sheet, headers, values }
   var reads = 0;    // đếm số lần thực sự chạm Sheet, dùng khi đo tốc độ
 
+  /**
+   * Kho dữ liệu là file mà `LS_SHEET_ID` trỏ tới — luôn luôn, kể cả khi script
+   * được gắn vào một bảng tính.
+   *
+   * Trước đây hàm này hỏi `getActiveSpreadsheet()` trước. Với script gắn vào
+   * bảng tính, lệnh đó trả về chính bảng tính chứa script, nên toàn bộ đọc ghi
+   * rơi vào file đó và `LS_SHEET_ID` bị bỏ qua — trong khi
+   * `createStorageWorkbook()` đã dựng 18 bảng ở một file khác. Cấu hình tường
+   * minh phải thắng ngữ cảnh ngầm.
+   */
   function book() {
     if (book_) return book_;
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!ss) {
-      var id = PropertiesService.getScriptProperties().getProperty(PROP_SHEET_ID);
-      if (!id) throw new Error('Chưa cấu hình kho dữ liệu. Đặt thuộc tính script ' + PROP_SHEET_ID + '.');
-      ss = SpreadsheetApp.openById(id);
+    var id = PropertiesService.getScriptProperties().getProperty(PROP_SHEET_ID);
+    if (id) {
+      book_ = SpreadsheetApp.openById(id);
+      return book_;
     }
+    // Chưa khai kho: cho phép dùng bảng tính đang mở để `createStorageWorkbook()`
+    // và `setupSheetDB()` có chỗ khởi tạo lần đầu.
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) throw new Error('Chưa cấu hình kho dữ liệu. Chạy createStorageWorkbook() hoặc đặt thuộc tính script ' + PROP_SHEET_ID + '.');
     book_ = ss;
     return ss;
   }
@@ -155,6 +168,11 @@ var DataRepository = (function () {
     tx: tx,
     sheetReads: function () { return reads; },
     clearCache: function () { cache = {}; },
-    setSheetId: function (id) { PropertiesService.getScriptProperties().setProperty(PROP_SHEET_ID, id); }
+    setSheetId: function (id) {
+      PropertiesService.getScriptProperties().setProperty(PROP_SHEET_ID, id);
+      // Đổi kho mà giữ lại file đã mở là cách ghi tiếp vào kho cũ trong cùng lượt chạy.
+      book_ = null;
+      cache = {};
+    }
   };
 })();
