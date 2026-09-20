@@ -161,6 +161,7 @@ function setupSheetDB_(ss) {
       sheet = ss.insertSheet(name);
       sheet.getRange(1, 1, 1, cols.length).setValues([cols]);
       styleHeader_(sheet, cols.length);
+      forceTextColumns_(sheet, cols.length);
       report.push('Tạo mới: ' + name);
       return;
     }
@@ -168,6 +169,7 @@ function setupSheetDB_(ss) {
     if (sheet.getLastColumn() === 0 || !sheet.getRange(1, 1).getValue()) {
       sheet.getRange(1, 1, 1, cols.length).setValues([cols]);
       styleHeader_(sheet, cols.length);
+      forceTextColumns_(sheet, cols.length);
       report.push('Ghi tiêu đề: ' + name);
       return;
     }
@@ -181,6 +183,7 @@ function setupSheetDB_(ss) {
       styleHeader_(sheet, current.length + missing.length);
       report.push('Thêm cột ' + name + ': ' + missing.join(', '));
     }
+    forceTextColumns_(sheet, Math.max(cols.length, current.length + missing.length));
   });
 
   seedCatalog_(ss, report);
@@ -287,6 +290,18 @@ function ensureSourceTemplateSetting_(ss, report) {
   var now = new Date().toISOString();
   sheet.appendRow(['source_template_spreadsheet_id', '18CIBRA4nTFDio7Z1P0ESxP1UwR17F_KKXUMTs6ILqSI', 'ID workbook mẫu kế hoạch tháng', now]);
   report.push('Bổ sung cấu hình workbook mẫu kế hoạch tháng');
+}
+
+/**
+ * Ép toàn bộ cột dữ liệu về định dạng văn bản.
+ *
+ * Google Sheet tự diễn giải chuỗi giống ngày tháng: ghi 2026-09 thì ô thành
+ * kiểu ngày và đọc ra là Date, không còn là 2026-09. Mọi so sánh chuỗi
+ * (month_key, start_date, occurrence_date) vì thế sai âm thầm.
+ */
+function forceTextColumns_(sheet, width) {
+  if (!width) return;
+  sheet.getRange(1, 1, sheet.getMaxRows(), width).setNumberFormat('@');
 }
 
 function styleHeader_(sheet, width) {

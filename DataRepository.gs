@@ -63,9 +63,28 @@ var DataRepository = (function () {
 
   function invalidate_(name) { delete cache[name]; }
 
+  // Cột chỉ chứa ngày, không chứa giờ. Sheet trả chúng về dạng Date nên phải
+  // dựng lại đúng chuỗi đã ghi, nếu không mọi phép so sánh chuỗi đều sai.
+  var DATE_ONLY = ['start_date', 'end_date', 'activation_at', 'occurrence_date', 'quota_date'];
+
+  /**
+   * Google Sheet tự diễn giải chuỗi giống ngày tháng: ghi "2026-09" vào ô thì
+   * đọc ra là một Date, không còn là "2026-09". Định dạng cột thành văn bản ngăn
+   * được việc đó cho dữ liệu mới; hàm này lo phần đã trót bị đổi kiểu.
+   */
+  function cellText_(header, value) {
+    // `instanceof Date` sai khi giá trị đến từ một realm khác; so sánh tag nội
+    // bộ thì đúng trong mọi trường hợp.
+    if (Object.prototype.toString.call(value) !== '[object Date]') return value;
+    var tz = Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh';
+    if (header === 'month_key') return Utilities.formatDate(value, tz, 'yyyy-MM');
+    if (DATE_ONLY.indexOf(header) !== -1) return Utilities.formatDate(value, tz, 'yyyy-MM-dd');
+    return value.toISOString();
+  }
+
   function toObject_(headers, row) {
     var o = {};
-    for (var j = 0; j < headers.length; j++) o[headers[j]] = row[j];
+    for (var j = 0; j < headers.length; j++) o[headers[j]] = cellText_(headers[j], row[j]);
     return o;
   }
 

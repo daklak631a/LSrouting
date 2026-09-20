@@ -121,6 +121,45 @@ if (!domainSource.includes("short: 'Toàn bộ phòng'") || !domainSource.includ
   }
 }
 
+// Google Sheet tự đổi chuỗi giống ngày tháng thành kiểu Date khi ghi vào ô. Đọc
+// ra phải dựng lại đúng chuỗi đã ghi, nếu không mọi so sánh chuỗi đều sai ngầm.
+{
+  const headers = ['period_id', 'month_key', 'start_date', 'created_at'];
+  const rows = [headers, ['PLAN_1', new Date(2026, 8, 1), new Date(2026, 8, 1), new Date(Date.UTC(2026, 8, 20, 10, 30))]];
+  const ctx = {
+    SpreadsheetApp: {
+      getActiveSpreadsheet: () => null,
+      openById: () => ({ getSheetByName: () => ({ getLastRow: () => 2, getDataRange: () => ({ getValues: () => rows }) }) })
+    },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: () => 'KHO', setProperty: () => {} }) },
+    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    Session: { getScriptTimeZone: () => 'Asia/Ho_Chi_Minh' },
+    Utilities: {
+      formatDate: (d, tz, fmt) => {
+        const p = (n) => String(n).padStart(2, '0');
+        return fmt === 'yyyy-MM'
+          ? d.getFullYear() + '-' + p(d.getMonth() + 1)
+          : d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+      }
+    }
+  };
+  vm.runInNewContext(read('DataRepository.gs'), ctx);
+  const plan = ctx.DataRepository.getAll('MonthlyPlans')[0];
+
+  if (plan.month_key !== '2026-09') {
+    throw new Error('month_key kiểu Date phải đọc ra "2026-09", nhận: ' + JSON.stringify(plan.month_key));
+  }
+  if (plan.start_date !== '2026-09-01') {
+    throw new Error('Cột ngày phải đọc ra yyyy-MM-dd, nhận: ' + JSON.stringify(plan.start_date));
+  }
+  if (typeof plan.created_at !== 'string' || !plan.created_at.includes('T')) {
+    throw new Error('Cột mốc thời gian phải đọc ra chuỗi ISO, nhận: ' + JSON.stringify(plan.created_at));
+  }
+  if (!read('SetupSheetDB.gs').includes("setNumberFormat('@')")) {
+    throw new Error('Cột dữ liệu phải ép về định dạng văn bản để Sheet không tự đổi kiểu.');
+  }
+}
+
 // Quyền khai trong appsscript.json phải phủ hết dịch vụ code gọi. Khai thiếu thì
 // Apps Script chỉ báo lỗi lúc chạy, ở đúng dòng gọi dịch vụ, không báo lúc đẩy mã.
 {
