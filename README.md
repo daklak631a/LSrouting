@@ -91,6 +91,56 @@ Tin `THAT_BAI` được worker tự gửi lại theo `max_retry` với giãn cá
 hết số lần thì chuyển `KHONG_GUI`. Trigger `overdueTick` chạy mỗi giờ để phát sự kiện
 quá hạn theo quy tắc R5.
 
+## Nối Apps Script với Git
+
+Kho mã là nguồn duy nhất; Apps Script chỉ là nơi chạy. Không sửa mã thẳng trên
+trình soạn thảo Apps Script — lần đẩy kế tiếp sẽ ghi đè mất.
+
+### Lần đầu, trên máy của bạn
+
+```bash
+npm install -g @google/clasp@2.4.2
+clasp login
+```
+
+Nối repo với dự án Apps Script đang có (lấy `scriptId` ở Apps Script →
+Project Settings → IDs):
+
+```bash
+clasp clone <scriptId> --rootDir .
+```
+
+Lệnh này tạo `.clasp.json`. File đó nằm trong `.gitignore` vì nó trỏ tới một dự
+án Apps Script cụ thể, mỗi người triển khai một khác.
+
+Từ đó mỗi lần sửa mã:
+
+```bash
+node build-gas.mjs && clasp push
+```
+
+`.claspignore` lọc sẵn: chỉ 4 file `.gs`, `Index.gas.html` và `appsscript.json`
+được đẩy lên. Thư mục `js/`, `css/` và các script kiểm thử ở lại trong repo.
+
+### Đẩy tự động mỗi khi push lên `main`
+
+`.github/workflows/deploy-gas.yml` chạy toàn bộ contract, kiểm `Index.gas.html`
+đã dựng lại chưa, rồi `clasp push`. Cần khai hai secret trong GitHub →
+Settings → Secrets and variables → Actions:
+
+| Tên | Lấy ở đâu |
+| --- | --- |
+| `CLASPRC_JSON` | toàn bộ nội dung `~/.clasprc.json` sau khi `clasp login` (Windows: `%USERPROFILE%\.clasprc.json`) |
+| `CLASP_JSON` | toàn bộ nội dung `.clasp.json` sinh ra ở bước `clasp clone` |
+
+Muốn workflow cập nhật luôn bản triển khai web app mà giữ nguyên URL thì thêm
+biến `DEPLOYMENT_ID` ở tab **Variables**, lấy bằng `clasp deployments`. Không
+khai thì workflow chỉ đẩy mã, bạn tự bấm triển khai trong Apps Script.
+
+`CLASPRC_JSON` chứa refresh token mở được toàn bộ dự án Apps Script của tài
+khoản đó. Dùng một tài khoản triển khai riêng, đừng dùng tài khoản cá nhân, và
+thu hồi ở <https://myaccount.google.com/permissions> khi không dùng nữa.
+
 ## Cấu trúc
 
 | File | Vai trò |

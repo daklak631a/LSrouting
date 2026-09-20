@@ -1,0 +1,73 @@
+name: Kiểm hợp đồng và đẩy lên Apps Script
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  kiem-tra:
+    name: Kiểm hợp đồng
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Index.gas.html là file sinh ra. Dựng lại rồi so với bản trong repo:
+      # lệch nghĩa là ai đó sửa thẳng file build thay vì sửa js/.
+      - name: Dựng lại Index.gas.html và kiểm tính đồng bộ
+        run: |
+          node build-gas.mjs
+          if ! git diff --quiet -- Index.gas.html; then
+            echo "::error::Index.gas.html chưa được dựng lại. Chạy 'node build-gas.mjs' rồi commit."
+            git diff --stat -- Index.gas.html
+            exit 1
+          fi
+
+      - name: Chạy toàn bộ contract
+        run: |
+          for f in verify-*.mjs; do
+            echo "--- $f"
+            node "$f"
+          done
+
+  trien-khai:
+    name: Đẩy lên Apps Script
+    needs: kiem-tra
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: apps-script
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cài clasp
+        run: npm install -g @google/clasp@2.4.2
+
+      # Hai secret này lấy từ máy đã `clasp login` một lần. Xem README.
+      - name: Nạp thông tin đăng nhập
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          CLASP_JSON: ${{ secrets.CLASP_JSON }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$CLASP_JSON" ]; then
+            echo "::error::Thiếu secret CLASPRC_JSON hoặc CLASP_JSON."
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > ~/.clasprc.json
+          printf '%s' "$CLASP_JSON" > .clasp.json
+
+      - name: Đẩy mã lên Apps Script
+        run: clasp push --force
+
+      # Bản triển khai web app giữ nguyên URL khi cập nhật theo deploymentId.
+      # Không khai DEPLOYMENT_ID thì chỉ đẩy mã, người vận hành tự bấm triển khai.
+      - name: Cập nhật bản triển khai web app
+        if: ${{ vars.DEPLOYMENT_ID != '' }}
+        run: clasp deploy --deploymentId "${{ vars.DEPLOYMENT_ID }}" --description "${{ github.sha }}"

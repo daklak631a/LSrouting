@@ -1,0 +1,6 @@
+# Index.gas.html là file sinh ra và được CI dựng lại để so sánh. Xuống dòng
+# phải thống nhất, nếu không máy Windows và runner Linux sẽ luôn thấy khác nhau.
+* text=auto eol=lf
+
+*.png binary
+*.mp3 binary

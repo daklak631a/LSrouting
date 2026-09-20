@@ -1,0 +1,12 @@
+# Chỉ đẩy lên Apps Script những gì Apps Script chạy được.
+# Mọi đường dẫn tính từ gốc repo; cú pháp giống .gitignore nhưng clasp cần
+# mẫu phủ định `!` để giữ lại file, nên liệt kê loại trừ trước rồi giữ lại sau.
+
+**/**
+
+!Code.gs
+!DataRepository.gs
+!Notifications.gs
+!SetupSheetDB.gs
+!Index.gas.html
+!appsscript.json
