@@ -200,6 +200,37 @@ Tin gửi khách bắt buộc cán bộ xem trước và bấm xác nhận, ở 
 Quản trị không xác nhận thay được: vai trò này không đọc được nội dung gửi khách
 nên bấm xác nhận cũng là bấm mù. Quản trị vẫn hủy được mọi tin và xử lý tin nội bộ.
 
+## Báo cáo nhiều kỳ
+
+Dữ liệu lịch sử nằm trong `Requests` và `WorkItems` của kho lưu trữ, phân biệt bằng
+`period_id`. File kế hoạch tháng là **bản sao một chiều** từ app ra Sheet, không phải
+nguồn — đừng đọc ngược nó để tổng hợp.
+
+Quản lý LS, kiểm soát và quản trị mở màn **Báo cáo**: chọn tháng, quý, năm, 12 tháng
+gần nhất hoặc khoảng tùy ý, xem theo đơn vị, loại việc hoặc cán bộ, xuất CSV.
+
+`getReport()` trả về **số liệu đã tổng hợp**, không trả dòng việc: báo cáo một năm
+chạm tới hàng nghìn việc nhưng chỉ gửi về vài chục dòng. Kỳ đã đóng đọc từ bảng
+`PeriodSummary` đã chốt; kỳ đang chạy tính trực tiếp vì số liệu còn thay đổi.
+
+### Vì sao chỉ số lại đặt như vậy
+
+Việc còn mở khi sang tháng mới được **nhân thành một dòng `WorkItems` mới** ở kỳ sau,
+dòng cũ ở lại kỳ cũ. Một việc kéo dài ba tháng tồn tại dưới dạng ba dòng. Cộng thẳng
+sẽ ra ba việc.
+
+| Chỉ số | Ý nghĩa | Cộng dồn nhiều kỳ |
+| --- | --- | --- |
+| `phat_sinh` | Việc phát sinh mới trong kỳ, không tính việc chuyển tiếp đến | Cộng được — mỗi việc chỉ phát sinh một lần |
+| `chuyen_tiep_vao` | Việc nhận từ kỳ trước | Cộng được, nhưng là số lượt chứ không phải số việc |
+| `hoan_thanh`, `huy` | Gắn với một thời điểm | Cộng được |
+| `qua_han` | Chấm ở dòng cuối của việc, không chấm lại ở mỗi kỳ nó đi qua | Cộng được |
+| `ton_cuoi_ky` | Ảnh chụp lúc kỳ đóng, không tính việc đã sang kỳ sau | **Không cộng** — lấy kỳ cuối |
+| `tong_gio_xu_ly` | Tổng giờ, không phải giờ trung bình | Cộng được; trung bình suy ra từ tổng chia số việc xong |
+
+Cột `carried_to_item_id` đánh dấu dòng đã sinh dòng tiếp ở kỳ sau. Nghi số liệu lệch
+thì chạy `rebuildPeriodSummaries()` để dựng lại toàn bộ bảng chốt.
+
 ## Hạn xử lý
 
 SLA tính theo **giờ làm việc thật** cả trên giao diện và phía GAS. Cấu hình ở Quản trị →

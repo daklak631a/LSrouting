@@ -40,6 +40,9 @@ var SCHEMA = {
   WorkItems: ['item_id', 'period_id', 'origin_item_id', 'carryover_from_item_id', 'request_id', 'work_type_code', 'product_name', 'occurrence_date',
     'source_stt', 'source_tab', 'status', 'assigned_user_id', 'assigned_by', 'submitted_at', 'accepted_at', 'assigned_at',
     'due_at', 'completed_at', 'appointment_json', 'checklist_json', 'pending_json', 'note',
+    // Việc mở sang kỳ sau được nhân thành dòng mới ở kỳ đó. Không đánh dấu dòng
+    // cũ thì báo cáo nhiều kỳ đếm một việc thành nhiều việc.
+    'carried_to_item_id',
     'version', 'created_at', 'updated_at'],
 
   Events: ['event_id', 'item_id', 'type', 'by', 'at', 'reason', 'before_json', 'after_json'],
@@ -65,6 +68,13 @@ var SCHEMA = {
     'cost_version', 'retry_count', 'created_at', 'updated_at'],
 
   Inbox: ['id', 'user_id', 'item_id', 'event', 'at', 'is_read'],
+
+  // Số liệu chốt của từng kỳ. Các cột đếm cộng dồn được qua nhiều kỳ vì mỗi việc
+  // chỉ tính ở kỳ nó phát sinh; `ton_cuoi_ky` là ảnh chụp nên lấy theo kỳ cuối,
+  // không cộng. Giữ `tong_gio_xu_ly` thay vì trung bình để gộp nhiều kỳ vẫn đúng.
+  PeriodSummary: ['summary_id', 'period_id', 'month_key', 'dimension', 'dim_key', 'dim_label',
+    'phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'ton_cuoi_ky', 'qua_han',
+    'tong_gio_xu_ly', 'updated_at'],
 
   // --- Vận hành ---
   ConfigLog: ['id', 'at', 'by', 'area', 'detail'],

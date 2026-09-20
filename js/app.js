@@ -102,6 +102,7 @@ LS.app = (function () {
       case 'queue': return S.queue();
       case 'mine': return S.mine();
       case 'board': return S.board();
+      case 'report': return S.report();
       case 'periods': return S.periods();
       case 'audit': return S.audit();
       case 'admin': return A.view();
@@ -358,6 +359,8 @@ LS.app = (function () {
     'out-retry-all': A.retryAll,
     'out-cancel': function (el) { A.cancel(el.getAttribute('data-id')); },
     'out-confirm': function (el) { A.confirmSend(el.getAttribute('data-id')); },
+    'report-refresh': function () { S.refreshReport(); },
+    'report-export': function () { S.exportReport(); },
     'type-edit': function (el) { A.typeDialog(el.getAttribute('data-code')); },
     'unit-edit': function (el) { A.unitDialog(el.getAttribute('data-id')); },
     'user-edit': function (el) { A.userDialog(el.getAttribute('data-id')); },
@@ -475,6 +478,13 @@ LS.app = (function () {
     }
 
     if (t.hasAttribute('data-cond')) { applyConds(); return; }
+
+    var reportField = { 'report-preset': 'preset', 'report-from': 'from', 'report-to': 'to', 'report-group': 'group' };
+    var reportAct = t.getAttribute('data-act');
+    if (reportAct && reportField[reportAct]) {
+      S.setReportFilter(reportField[reportAct], t.value);
+      return;
+    }
 
     var act = t.closest('[data-act]');
     if (act && t.tagName === 'INPUT') {

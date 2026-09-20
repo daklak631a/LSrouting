@@ -76,7 +76,7 @@ LS.api = (function () {
     });
     out.items = (raw.items || []).map(function (i) {
       return {
-        item_id: i.item_id, period_id: i.period_id || '', carryover_from_item_id: i.carryover_from_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
+        item_id: i.item_id, period_id: i.period_id || '', carryover_from_item_id: i.carryover_from_item_id || '', carried_to_item_id: i.carried_to_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
         occurrence_date: i.occurrence_date, status: i.status, assigned_user_id: i.assigned_user_id || '', assigned_by: i.assigned_by || '',
         submitted_at: i.submitted_at || '', accepted_at: i.accepted_at || '', assigned_at: i.assigned_at || '', due_at: i.due_at || '',
         completed_at: i.completed_at || '', appointment: json(i.appointment_json, null), checklist: json(i.checklist_json, []),
@@ -159,6 +159,8 @@ LS.api = (function () {
     saveSettings: function (values) { return call('adminSaveSettings', values); },
     saveDelivery: function (kind, code, data) { return call('adminSaveDelivery', kind, code, data); },
     runOutbox: function () { return call('adminRunOutbox'); },
+    getReport: function (opts) { return call('getReport', opts); },
+    rebuildPeriodSummaries: function () { return call('rebuildPeriodSummaries'); },
     testChannel: function (code, recipient) { return call('adminTestChannel', code, recipient); },
     changeOutbox: function (id, action) { return call('changeOutbox', id, action); },
     changePassword: function (current, next) { return call('changeOwnPassword', current, next); },

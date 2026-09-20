@@ -11,10 +11,10 @@ LS.domain = (function () {
 
   var ROLES = {
     PHONG_PGD: { label: 'Phòng / PGD', nav: ['work', 'room', 'room-board', 'audit'] },
-    KS_LS: { label: 'Kiểm soát LS', nav: ['queue', 'work', 'board', 'periods', 'audit'] },
+    KS_LS: { label: 'Kiểm soát LS', nav: ['queue', 'work', 'board', 'report', 'periods', 'audit'] },
     CAN_BO_LS: { label: 'Cán bộ LS', nav: ['mine', 'audit'] },
-    QUAN_LY_LS: { label: 'Quản lý LS', nav: ['board', 'queue', 'work', 'periods', 'audit'] },
-    ADMIN: { label: 'Quản trị hệ thống', nav: ['admin', 'board', 'periods', 'audit'] }
+    QUAN_LY_LS: { label: 'Quản lý LS', nav: ['board', 'queue', 'work', 'report', 'periods', 'audit'] },
+    ADMIN: { label: 'Quản trị hệ thống', nav: ['admin', 'board', 'report', 'periods', 'audit'] }
   };
 
   var SCREENS = {
@@ -24,6 +24,7 @@ LS.domain = (function () {
     queue: { icon: 'shield', short: 'Hàng chờ', title: 'Tiếp nhận & phân công', sub: 'Kiểm tra hồ sơ, giao việc cho cán bộ LS' },
     mine: { icon: 'briefcase', short: 'Việc tôi', title: 'Việc của tôi', sub: 'Việc đang được giao cho bạn' },
     board: { icon: 'chart', short: 'Tổng hợp', title: 'Tổng hợp', sub: 'Kết quả theo kỳ, loại việc và cán bộ LS' },
+    report: { icon: 'chart', short: 'Báo cáo', title: 'Báo cáo nhiều kỳ', sub: 'Tổng hợp theo tháng, quý, năm hoặc khoảng tùy chọn' },
     periods: { icon: 'calendar', short: 'Kỳ tháng', title: 'Kế hoạch tháng', sub: 'Kỳ đang vận hành và lịch sử các tháng trước' },
     admin: { icon: 'sliders', short: 'Quản trị', title: 'Quản trị hệ thống', sub: 'Kênh gửi tin, danh mục, người dùng, giám sát' },
     audit: { icon: 'history', short: 'Nhật ký', title: 'Nhật ký', sub: 'Lịch sử thao tác trong phạm vi được xem' }
@@ -710,6 +711,131 @@ LS.domain = (function () {
     return { due: item.due_at, left: left, late: left < 0, soon: left >= 0 && left < 2 * 3600000 };
   }
 
+  /* ============================ Báo cáo nhiều kỳ ============================ */
+
+  var REPORT_PRESETS = [
+    ['month', 'Tháng này'], ['quarter', 'Quý này'], ['year', 'Năm nay'],
+    ['last12', '12 tháng gần nhất'], ['custom', 'Khoảng tùy chọn']
+  ];
+
+  function monthKey(d) { return d.getFullYear() + '-' + U.pad(d.getMonth() + 1); }
+
+  function presetRange(preset) {
+    var now = new Date();
+    var y = now.getFullYear(), m = now.getMonth();
+    if (preset === 'quarter') {
+      var q = Math.floor(m / 3) * 3;
+      return { from: y + '-' + U.pad(q + 1), to: y + '-' + U.pad(q + 3) };
+    }
+    if (preset === 'year') return { from: y + '-01', to: y + '-12' };
+    if (preset === 'last12') return { from: monthKey(new Date(y, m - 11, 1)), to: monthKey(now) };
+    return { from: monthKey(now), to: monthKey(now) };
+  }
+
+  function monthsInRange(from, to) {
+    var out = [];
+    var a = from.split('-').map(Number), b = to.split('-').map(Number);
+    var cur = new Date(a[0], a[1] - 1, 1), end = new Date(b[0], b[1] - 1, 1);
+    while (cur <= end && out.length < 240) { out.push(monthKey(cur)); cur.setMonth(cur.getMonth() + 1); }
+    return out;
+  }
+
+  /**
+   * Bản tính báo cáo của trình duyệt. Định nghĩa chỉ số phải khớp `getReport`
+   * trong Code.gs, nếu không bản xem thử và bản chạy thật nói hai con số khác nhau.
+   *
+   * Khác biệt duy nhất là cách xác định kỳ: phía GAS dùng `period_id` của kỳ kế
+   * hoạch, bản trình duyệt không có kỳ nên suy từ tháng của ngày phát sinh.
+   */
+  function reportFromItems(from, to, group, st) {
+    var dim = { unit: 'DON_VI', work_type: 'LOAI_VIEC', staff: 'CAN_BO' }[group] || 'DON_VI';
+    var wanted = monthsInRange(from, to);
+    var inRange = {};
+    wanted.forEach(function (k) { inRange[k] = true; });
+
+    var now = U.now();
+    var months = {}, totals = {}, snapshot = {}, lastMonth = '';
+
+    st.items.forEach(function (i) {
+      var key = String(i.occurrence_date || '').substring(0, 7);
+      if (!inRange[key]) return;
+
+      var req = U.byId(st.requests, 'request_id', i.request_id) || {};
+      var done = i.status === 'HOAN_THANH_LS';
+      var hours = done && i.assigned_at && i.completed_at
+        ? Math.max(0, (new Date(i.completed_at).getTime() - new Date(i.assigned_at).getTime()) / 3600000) : 0;
+      // Việc đã chuyển sang kỳ sau được chấm trễ ở dòng cuối của nó, không
+      // phải ở mỗi kỳ nó đi qua — nếu không một việc trễ đếm thành ba lần trễ.
+      var late = i.due_at && !i.carried_to_item_id
+        ? (done ? String(i.completed_at || '') > String(i.due_at) : now > String(i.due_at)) : false;
+      var open = STATUS[i.status] && STATUS[i.status].open && !i.carried_to_item_id;
+
+      var dimKey, dimLabel;
+      if (dim === 'DON_VI') {
+        dimKey = req.unit_id || '';
+        var unit = U.byId(st.units, 'unit_id', dimKey);
+        dimLabel = unit ? unit.name : (dimKey || 'Chưa rõ đơn vị');
+      } else if (dim === 'LOAI_VIEC') {
+        dimKey = i.work_type_code || '';
+        var wt = U.byId(st.workTypes, 'code', dimKey);
+        dimLabel = wt ? wt.name : (dimKey || 'Chưa rõ loại việc');
+      } else {
+        dimKey = i.assigned_user_id || '';
+        var us = U.byId(st.users, 'user_id', dimKey);
+        dimLabel = us ? us.full_name : 'Chưa giao';
+      }
+
+      function add(acc) {
+        if (i.carryover_from_item_id) acc.chuyen_tiep_vao += 1; else acc.phat_sinh += 1;
+        if (done) { acc.hoan_thanh += 1; acc.tong_gio_xu_ly += hours; }
+        if (i.status === 'HUY') acc.huy += 1;
+        if (late) acc.qua_han += 1;
+        return acc;
+      }
+      function blank(extra) {
+        return Object.assign({ phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0,
+          ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 }, extra || {});
+      }
+
+      var m = months[key] || (months[key] = blank({ month_key: key, name: 'Tháng ' + Number(key.substring(5)) + '/' + key.substring(0, 4) }));
+      add(m);
+      if (open) m.ton_cuoi_ky += 1;
+
+      var row = totals[dimKey] || (totals[dimKey] = blank({ key: dimKey, label: dimLabel }));
+      row.label = dimLabel;
+      add(row);
+
+      if (key > lastMonth) { lastMonth = key; }
+      snapshot[key] = snapshot[key] || {};
+      if (open) snapshot[key][dimKey] = (snapshot[key][dimKey] || 0) + 1;
+    });
+
+    var last = snapshot[lastMonth] || {};
+    var rows = Object.keys(totals).map(function (k) {
+      var r = totals[k];
+      // Tồn là ảnh chụp cuối kỳ, không phải tổng cộng dồn qua các tháng.
+      r.ton_cuoi_ky = Number(last[k] || 0);
+      r.gio_xu_ly_tb = r.hoan_thanh ? Math.round((r.tong_gio_xu_ly / r.hoan_thanh) * 10) / 10 : 0;
+      return r;
+    }).sort(function (a, b) { return b.phat_sinh - a.phat_sinh || String(a.label).localeCompare(String(b.label)); });
+
+    var monthRows = wanted.map(function (k) {
+      return months[k] || { month_key: k, name: 'Tháng ' + Number(k.substring(5)) + '/' + k.substring(0, 4),
+        phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 };
+    });
+
+    var total = monthRows.reduce(function (acc, m) {
+      ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'qua_han', 'tong_gio_xu_ly']
+        .forEach(function (k) { acc[k] += Number(m[k] || 0); });
+      acc.ton_cuoi_ky = Number(m.ton_cuoi_ky || 0);
+      return acc;
+    }, { phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 });
+    total.gio_xu_ly_tb = total.hoan_thanh ? Math.round((total.tong_gio_xu_ly / total.hoan_thanh) * 10) / 10 : 0;
+
+    return { from: from, to: to, group: group, months: monthRows, rows: rows, total: total,
+      periods: monthRows.length, generated_at: U.now() };
+  }
+
   function dueFrom(startIso, workTypeCode, st) {
     var wt = U.byId(st.workTypes, 'code', workTypeCode);
     return U.addWorkingHours(startIso, wt ? wt.sla_hours : 8, st.calendar);
@@ -1015,6 +1141,8 @@ LS.domain = (function () {
     signPlace: signPlace, nextSlot: nextSlot, officerTag: officerTag,
     CHANNELS: CHANNELS, CHANNEL_STATUS: CHANNEL_STATUS,
     addressFor: addressFor, templateFor: templateFor, emailUsedToday: emailUsedToday,
+    REPORT_PRESETS: REPORT_PRESETS, presetRange: presetRange, monthsInRange: monthsInRange,
+    reportFromItems: reportFromItems, monthKey: monthKey,
     VARS: VARS, FORBIDDEN: FORBIDDEN, TPL_STATUS: TPL_STATUS,
     NOTIFY_EVENTS: NOTIFY_EVENTS, AUDIENCE: AUDIENCE, OUT_STATUS: OUT_STATUS,
     label: label, tone: tone,

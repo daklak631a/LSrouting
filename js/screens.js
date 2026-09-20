@@ -1142,6 +1142,163 @@ LS.screens = (function () {
     });
   }
 
+  /* ============================ Màn: báo cáo nhiều kỳ ============================ */
+
+  // Báo cáo không nằm trong ảnh chụp bootstrap: máy chủ chỉ trả số liệu đã tổng
+  // hợp khi được hỏi, để một báo cáo năm không kéo hàng nghìn dòng việc về máy.
+  var reportCache = null;
+
+  var REPORT_GROUPS = [['unit', 'Đơn vị gửi'], ['work_type', 'Loại việc'], ['staff', 'Cán bộ LS']];
+
+  function reportOpts() {
+    var preset = f('report', 'preset', 'quarter');
+    var base = D.presetRange(preset === 'custom' ? 'month' : preset);
+    return {
+      preset: preset,
+      from: preset === 'custom' ? f('report', 'from', base.from) : base.from,
+      to: preset === 'custom' ? f('report', 'to', base.to) : base.to,
+      group: f('report', 'group', 'unit')
+    };
+  }
+
+  function loadReport(force) {
+    var o = reportOpts();
+    var key = [o.from, o.to, o.group].join('|');
+    if (!force && reportCache && reportCache.key === key) return;
+
+    if (!U.isGas()) {
+      reportCache = { key: key, data: D.reportFromItems(o.from, o.to, o.group, st()), loading: false };
+      return;
+    }
+    if (reportCache && reportCache.key === key && reportCache.loading) return;
+    reportCache = { key: key, data: null, loading: true, error: '' };
+    LS.api.getReport({ from: o.from, to: o.to, group: o.group }).then(function (data) {
+      reportCache = { key: key, data: data, loading: false, error: '' };
+      LS.app.render();
+    }).catch(function (error) {
+      reportCache = { key: key, data: null, loading: false, error: error.message || 'Không lấy được báo cáo.' };
+      LS.app.render();
+    });
+  }
+
+  function refreshReport() { loadReport(true); LS.app.render(); }
+
+  function setReportFilter(key, value) {
+    setFilter('report', key, value);
+    if (key !== 'preset') setFilter('report', 'preset', 'custom');
+    loadReport(true);
+    LS.app.render();
+  }
+
+  function num(n) { return Number(n || 0).toLocaleString('vi-VN'); }
+
+  function report() {
+    var o = reportOpts();
+    loadReport(false);
+
+    var controls = '<div class="f-row" style="align-items:flex-end">' +
+      ui.field('Khoảng thời gian',
+        ui.select('report_preset', D.REPORT_PRESETS, o.preset, { attrs: ' data-act="report-preset"' })) +
+      ui.field('Từ tháng', ui.input('report_from', o.from, { placeholder: '2026-01', attrs: ' data-act="report-from"' })) +
+      ui.field('Đến tháng', ui.input('report_to', o.to, { placeholder: '2026-12', attrs: ' data-act="report-to"' })) +
+      ui.field('Xem theo', ui.select('report_group', REPORT_GROUPS, o.group, { attrs: ' data-act="report-group"' })) +
+      '</div>';
+
+    var head = ui.block({
+      title: 'Phạm vi báo cáo', icon: 'calendar',
+      actions: ui.btn('Tải lại', { act: 'report-refresh', sm: true, icon: 'history' }),
+      note: 'Việc kéo dài nhiều tháng chỉ được tính một lần, ở tháng nó phát sinh.',
+      body: ui.pad(controls)
+    });
+
+    if (reportCache && reportCache.loading) {
+      return head + ui.block({ title: 'Đang tổng hợp', icon: 'chart',
+        body: ui.empty({ icon: 'chart', title: 'Đang tổng hợp số liệu', text: 'Máy chủ đang gộp dữ liệu của ' + o.from + ' đến ' + o.to + '.' }) });
+    }
+    if (reportCache && reportCache.error) {
+      return head + ui.banner('danger', 'Không lấy được báo cáo', reportCache.error);
+    }
+
+    var data = reportCache && reportCache.data;
+    if (!data) return head;
+    var t = data.total;
+
+    var strip = ui.strip([
+      ui.metric('Việc phát sinh', num(t.phat_sinh), '', data.periods + ' kỳ'),
+      ui.metric('Hoàn thành', num(t.hoan_thanh), t.hoan_thanh ? 'ok' : ''),
+      ui.metric('Quá hạn', num(t.qua_han), t.qua_han ? 'danger' : ''),
+      ui.metric('Tồn cuối kỳ', num(t.ton_cuoi_ky), t.ton_cuoi_ky ? 'warn' : '', 'ảnh chụp kỳ cuối'),
+      ui.metric('Giờ xử lý TB', t.gio_xu_ly_tb ? t.gio_xu_ly_tb + 'h' : '—')
+    ]);
+
+    var groupLabel = (REPORT_GROUPS.filter(function (g) { return g[0] === data.group; })[0] || [])[1] || '';
+
+    var byDim = ui.block({
+      title: 'Theo ' + String(groupLabel).toLowerCase(), count: data.rows.length, icon: 'chart',
+      actions: ui.btn('Xuất CSV', { act: 'report-export', sm: true, icon: 'download' }),
+      body: ui.table(
+        [{ label: groupLabel }, { label: 'Phát sinh', cls: 'num' }, { label: 'Chuyển tiếp vào', cls: 'num' },
+          { label: 'Hoàn thành', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }, { label: 'Hủy', cls: 'num' },
+          { label: 'Tồn cuối kỳ', cls: 'num' }, { label: 'Giờ TB', cls: 'num' }],
+        data.rows.map(function (r) {
+          return { cls: r.qua_han ? 'flag-warn' : '', cells: [
+            '<div class="t1">' + U.esc(r.label) + '</div>',
+            '<span class="tid">' + num(r.phat_sinh) + '</span>',
+            '<span class="tid">' + num(r.chuyen_tiep_vao) + '</span>',
+            '<span class="tid">' + num(r.hoan_thanh) + '</span>',
+            '<span class="tid">' + num(r.qua_han) + '</span>',
+            '<span class="tid">' + num(r.huy) + '</span>',
+            '<span class="tid">' + num(r.ton_cuoi_ky) + '</span>',
+            '<span class="tid">' + (r.gio_xu_ly_tb ? r.gio_xu_ly_tb + 'h' : '—') + '</span>'
+          ] };
+        }),
+        { icon: 'chart', title: 'Chưa có việc nào trong khoảng này', text: 'Đổi khoảng thời gian rồi xem lại.' }
+      )
+    });
+
+    var byMonth = ui.block({
+      title: 'Diễn biến theo tháng', count: data.months.length, icon: 'calendar',
+      body: ui.table(
+        [{ label: 'Tháng' }, { label: 'Phát sinh', cls: 'num' }, { label: 'Chuyển tiếp vào', cls: 'num' },
+          { label: 'Hoàn thành', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }, { label: 'Tồn cuối kỳ', cls: 'num' }],
+        data.months.map(function (m) {
+          return { cells: [
+            '<div class="t1">' + U.esc(m.name || m.month_key) + '</div>' +
+            (m.status && m.status !== 'ARCHIVED' ? '<div class="t2">kỳ đang chạy, số liệu còn thay đổi</div>' : ''),
+            '<span class="tid">' + num(m.phat_sinh) + '</span>',
+            '<span class="tid">' + num(m.chuyen_tiep_vao) + '</span>',
+            '<span class="tid">' + num(m.hoan_thanh) + '</span>',
+            '<span class="tid">' + num(m.qua_han) + '</span>',
+            '<span class="tid">' + num(m.ton_cuoi_ky) + '</span>'
+          ] };
+        }),
+        { icon: 'calendar', title: 'Chưa có kỳ nào', text: 'Khoảng đã chọn chưa có kỳ kế hoạch nào.' }
+      )
+    });
+
+    return head + strip + byDim + byMonth;
+  }
+
+  function exportReport() {
+    var data = reportCache && reportCache.data;
+    if (!data) { ui.toast('Chưa có số liệu để xuất.', 'err'); return; }
+    var groupLabel = (REPORT_GROUPS.filter(function (g) { return g[0] === data.group; })[0] || [])[1] || 'Nhóm';
+    var rows = [[groupLabel, 'Phát sinh', 'Chuyển tiếp vào', 'Hoàn thành', 'Quá hạn', 'Hủy', 'Tồn cuối kỳ', 'Giờ xử lý TB']];
+    data.rows.forEach(function (r) {
+      rows.push([r.label, r.phat_sinh, r.chuyen_tiep_vao, r.hoan_thanh, r.qua_han, r.huy, r.ton_cuoi_ky, r.gio_xu_ly_tb]);
+    });
+    rows.push([]);
+    rows.push(['Tháng', 'Phát sinh', 'Chuyển tiếp vào', 'Hoàn thành', 'Quá hạn', 'Tồn cuối kỳ']);
+    data.months.forEach(function (m) {
+      rows.push([m.name || m.month_key, m.phat_sinh, m.chuyen_tiep_vao, m.hoan_thanh, m.qua_han, m.ton_cuoi_ky]);
+    });
+    var csv = rows.map(function (r) {
+      return r.map(function (c) { return '"' + String(c === undefined ? '' : c).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\n');
+    LS.app.download('bao-cao-' + data.from + '_' + data.to + '.csv', '﻿' + csv, 'text/csv;charset=utf-8');
+    ui.toast('Đã xuất ' + data.rows.length + ' dòng.');
+  }
+
   /* ============================ Màn: nhật ký ============================ */
 
   function audit() {
@@ -1898,6 +2055,7 @@ LS.screens = (function () {
 
   return {
     work: work, room: room, roomBoard: roomBoard, queue: queue, mine: mine, board: board, periods: periods, audit: audit,
+    report: report, exportReport: exportReport, refreshReport: refreshReport, setReportFilter: setReportFilter,
     headerSummary: headerSummary,
     detail: detail, flow: flow, quickAssign: quickAssign, submitFlow: submitFlow,
     editItem: editItem, submitEdit: submitEdit, revision: revision,

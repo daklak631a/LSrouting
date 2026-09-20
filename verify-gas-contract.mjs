@@ -84,7 +84,7 @@ if (!screens.includes('function performanceReport') || !screens.includes("['day'
 if (!screens.includes('assignmentRecommendation') || !read('js/admin.js').includes('ASSIGNMENT_RULE')) {
   throw new Error('Quick assignment must use editable Admin responsibility rules.');
 }
-if (!domainSource.includes("ADMIN: { label: 'Quản trị hệ thống', nav: ['admin', 'board', 'periods', 'audit'] }")) {
+if (!domainSource.includes("ADMIN: { label: 'Quản trị hệ thống', nav: ['admin', 'board', 'report', 'periods', 'audit'] }")) {
   throw new Error('Admin must be able to open the operational board.');
 }
 if (!screens.includes('queueTabs') || !screens.includes('function paginate') || !screens.includes('function roomBoard')) {

@@ -303,6 +303,10 @@ function activateDueMonthlyPlans_() {
   });
   handoffs.forEach(function (pair) {
     carryOpenWorkToPlan_(pair.from, pair.to, { user_id: 'SYSTEM', full_name: 'Hệ thống' });
+    // Chốt số liệu kỳ vừa đóng *sau* khi chuyển tiếp, để `ton_cuoi_ky` phản ánh
+    // đúng phần còn lại chứ không đếm cả việc vừa sang kỳ mới.
+    try { writePeriodSummary_(pair.from); }
+    catch (err) { Logger.log('Chưa chốt được số liệu kỳ ' + pair.from + ': ' + err); }
     provisionMonthlyPlanWorkbook_(pair.to);
   });
   return DataRepository.find('MonthlyPlans', 'period_id', activeId);
@@ -522,12 +526,229 @@ function carryOpenWorkToPlan_(fromPeriodId, toPeriodId, u) {
         accepted_at: '', assigned_at: '', due_at: '', completed_at: '', appointment_json: '', checklist_json: '', pending_json: '',
         note: 'Chuyển tiếp từ ' + old.item_id + '.', version: 1, created_at: stamp_(), updated_at: stamp_()
       });
+      // Đánh dấu dòng cũ đã sinh ra dòng mới ở kỳ sau. Thiếu dấu này thì việc
+      // kéo dài ba tháng nằm trong ba kỳ dưới dạng ba dòng đang mở, và mọi báo
+      // cáo nhiều kỳ đếm nó ba lần.
+      var oldFound = t.find('WorkItems', 'item_id', old.item_id);
+      if (oldFound) t.write(oldFound, { carried_to_item_id: newItemId, updated_at: stamp_() });
       t.append('Events', { event_id: id_('EVT'), item_id: newItemId, type: 'CHUYEN_TIEP_THANG', by: u.user_id, at: stamp_(),
         reason: 'Chuyển tiếp việc mở từ kỳ ' + fromPeriodId + ', việc gốc ' + old.item_id + '.', before_json: JSON.stringify({ item_id: old.item_id, period_id: fromPeriodId }), after_json: JSON.stringify({ period_id: toPeriodId }) });
     });
     return true;
   });
   if (copied) syncMonthlyPlanWorkbook_(toPeriodId);
+}
+
+/* ---------------------------- Báo cáo nhiều kỳ ---------------------------- */
+
+/**
+ * Số liệu một kỳ, tách theo bốn chiều. Chỉ số được chọn sao cho **cộng dồn qua
+ * nhiều kỳ vẫn đúng**:
+ *
+ *  - `phat_sinh` đếm việc phát sinh mới trong kỳ, không đếm việc chuyển tiếp từ
+ *    kỳ trước. Mỗi việc thật vì thế chỉ được tính đúng một lần trên toàn bộ
+ *    lịch sử, dù nó kéo dài bao nhiêu tháng.
+ *  - `hoan_thanh`, `huy`, `qua_han` gắn với một thời điểm nên cũng chỉ xảy ra
+ *    một lần.
+ *  - `ton_cuoi_ky` là ảnh chụp tại thời điểm kỳ đóng; cộng dồn sẽ vô nghĩa nên
+ *    báo cáo nhiều kỳ lấy giá trị của kỳ cuối cùng.
+ *  - Giữ `tong_gio_xu_ly` thay vì giờ trung bình: trung bình của nhiều trung
+ *    bình không phải trung bình.
+ */
+function periodSummaryRows_(periodId) {
+  var plan = DataRepository.find('MonthlyPlans', 'period_id', periodId);
+  if (!plan) return [];
+
+  var requests = {};
+  DataRepository.getAll('Requests').forEach(function (r) { requests[r.request_id] = r; });
+  var units = {};
+  DataRepository.getAll('Units').forEach(function (x) { units[x.unit_id] = x.name || x.unit_id; });
+  var types = {};
+  DataRepository.getAll('WorkTypes').forEach(function (x) { types[x.type_code] = x.display_name || x.type_code; });
+  var users = {};
+  DataRepository.getAll('Users').forEach(function (x) { users[x.user_id] = x.full_name || x.user_id; });
+
+  var items = DataRepository.getAll('WorkItems').filter(function (i) { return i.period_id === periodId; });
+  var now = stamp_();
+  var buckets = {};
+
+  function bucket_(dimension, key, label) {
+    var id = dimension + ' ' + key;
+    if (!buckets[id]) {
+      buckets[id] = { dimension: dimension, dim_key: key, dim_label: label,
+        phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 };
+    }
+    return buckets[id];
+  }
+
+  items.forEach(function (i) {
+    var req = requests[i.request_id] || {};
+    var done = i.status === 'HOAN_THANH_LS';
+    var hours = 0;
+    if (done && i.assigned_at && i.completed_at) {
+      hours = Math.max(0, (new Date(i.completed_at).getTime() - new Date(i.assigned_at).getTime()) / 3600000);
+    }
+    // Việc đã chuyển sang kỳ sau được chấm trễ ở dòng cuối của nó, không phải
+    // ở mỗi kỳ nó đi qua — nếu không một việc trễ đếm thành ba lần trễ.
+    var late = i.due_at && !i.carried_to_item_id
+      ? (done ? String(i.completed_at || '') > String(i.due_at) : String(now) > String(i.due_at))
+      : false;
+
+    var targets = [
+      bucket_('TONG', '', 'Toàn hệ thống'),
+      bucket_('DON_VI', req.unit_id || '', units[req.unit_id] || req.unit_id || 'Chưa rõ đơn vị'),
+      bucket_('LOAI_VIEC', i.work_type_code || '', types[i.work_type_code] || i.work_type_code || 'Chưa rõ loại việc'),
+      bucket_('CAN_BO', i.assigned_user_id || '', i.assigned_user_id ? (users[i.assigned_user_id] || i.assigned_user_id) : 'Chưa giao')
+    ];
+
+    targets.forEach(function (b) {
+      if (i.carryover_from_item_id) b.chuyen_tiep_vao += 1; else b.phat_sinh += 1;
+      if (done) { b.hoan_thanh += 1; b.tong_gio_xu_ly += hours; }
+      if (i.status === 'HUY') b.huy += 1;
+      // Việc đã sinh dòng tiếp ở kỳ sau không còn là tồn của kỳ này nữa.
+      if (OPEN_STATUS.indexOf(i.status) !== -1 && !i.carried_to_item_id) b.ton_cuoi_ky += 1;
+      if (late) b.qua_han += 1;
+    });
+  });
+
+  return Object.keys(buckets).map(function (k) {
+    var b = buckets[k];
+    b.period_id = periodId;
+    b.month_key = plan.month_key;
+    b.tong_gio_xu_ly = Math.round(b.tong_gio_xu_ly * 100) / 100;
+    return b;
+  });
+}
+
+/** Chốt số liệu một kỳ vào PeriodSummary. Chạy lại thì ghi đè, không nhân bản. */
+function writePeriodSummary_(periodId) {
+  var rows = periodSummaryRows_(periodId);
+  DataRepository.tx(function (t) {
+    var existing = {};
+    t.rows('PeriodSummary').forEach(function (r) {
+      if (r.period_id === periodId) existing[r.dimension + ' ' + r.dim_key] = r.summary_id;
+    });
+    rows.forEach(function (row) {
+      var key = row.dimension + ' ' + row.dim_key;
+      var fields = {
+        period_id: row.period_id, month_key: row.month_key, dimension: row.dimension,
+        dim_key: row.dim_key, dim_label: row.dim_label, phat_sinh: row.phat_sinh,
+        chuyen_tiep_vao: row.chuyen_tiep_vao, hoan_thanh: row.hoan_thanh, huy: row.huy,
+        ton_cuoi_ky: row.ton_cuoi_ky, qua_han: row.qua_han, tong_gio_xu_ly: row.tong_gio_xu_ly,
+        updated_at: stamp_()
+      };
+      if (existing[key]) {
+        var found = t.find('PeriodSummary', 'summary_id', existing[key]);
+        if (found) t.write(found, fields);
+      } else {
+        fields.summary_id = id_('SUM');
+        t.append('PeriodSummary', fields);
+      }
+    });
+    return true;
+  });
+  return rows.length;
+}
+
+/** Dựng lại số liệu chốt cho mọi kỳ. Gọi tay khi nghi số liệu lệch. */
+function rebuildPeriodSummaries() {
+  var u = currentUser_();
+  if (['KS_LS', 'QUAN_LY_LS', 'ADMIN'].indexOf(u.role) === -1) {
+    throw new Error('Vai trò ' + u.role + ' không được dựng lại số liệu báo cáo.');
+  }
+  var plans = DataRepository.getAll('MonthlyPlans');
+  var done = plans.map(function (p) { return { month_key: p.month_key, rows: writePeriodSummary_(p.period_id) }; });
+  Logger.log(JSON.stringify(done));
+  return { periods: done.length, detail: done };
+}
+
+var REPORT_DIMENSION = { unit: 'DON_VI', work_type: 'LOAI_VIEC', staff: 'CAN_BO', total: 'TONG' };
+
+/**
+ * Báo cáo nhiều kỳ: tháng, quý, năm hay bất kỳ khoảng nào.
+ *
+ * Trả về **số liệu đã tổng hợp**, không trả dòng việc: một báo cáo năm chạm tới
+ * hàng nghìn việc nhưng chỉ cần gửi về vài chục dòng.
+ *
+ * Kỳ đã đóng đọc từ PeriodSummary; kỳ đang chạy tính trực tiếp vì số liệu của
+ * nó còn thay đổi từng giờ.
+ */
+function getReport(opts) {
+  var u = currentUser_();
+  if (['KS_LS', 'QUAN_LY_LS', 'ADMIN'].indexOf(u.role) === -1) {
+    throw new Error('Vai trò ' + u.role + ' không được xem báo cáo tổng hợp.');
+  }
+  opts = opts || {};
+  var group = REPORT_DIMENSION[String(opts.group || 'unit')] ? String(opts.group || 'unit') : 'unit';
+  var dimension = REPORT_DIMENSION[group];
+
+  var from = String(opts.from || '');
+  var to = String(opts.to || '');
+  if (!/^\d{4}-\d{2}$/.test(from) || !/^\d{4}-\d{2}$/.test(to)) throw new Error('Khoảng báo cáo phải có dạng YYYY-MM.');
+  if (from > to) { var swap = from; from = to; to = swap; }
+
+  var plans = DataRepository.getAll('MonthlyPlans')
+    .filter(function (p) { return p.month_key >= from && p.month_key <= to; })
+    .sort(function (a, b) { return String(a.month_key).localeCompare(String(b.month_key)); });
+
+  var stored = {};
+  DataRepository.getAll('PeriodSummary').forEach(function (r) {
+    (stored[r.period_id] = stored[r.period_id] || []).push(r);
+  });
+
+  var months = [];
+  var totals = {};
+  var lastSnapshot = {};
+
+  plans.forEach(function (plan) {
+    var rows = plan.status === 'ARCHIVED' && stored[plan.period_id] && stored[plan.period_id].length
+      ? stored[plan.period_id]
+      : periodSummaryRows_(plan.period_id);
+
+    var monthTotal = { month_key: plan.month_key, name: plan.name, status: plan.status,
+      phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 };
+    var snapshot = {};
+
+    rows.forEach(function (r) {
+      if (String(r.dimension) === 'TONG') {
+        ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'ton_cuoi_ky', 'qua_han', 'tong_gio_xu_ly']
+          .forEach(function (k) { monthTotal[k] += Number(r[k] || 0); });
+        return;
+      }
+      if (String(r.dimension) !== dimension) return;
+
+      var key = String(r.dim_key || '');
+      var acc = totals[key] || (totals[key] = { key: key, label: r.dim_label || key || 'Chưa rõ',
+        phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, qua_han: 0, tong_gio_xu_ly: 0 });
+      acc.label = r.dim_label || acc.label;
+      ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'qua_han', 'tong_gio_xu_ly']
+        .forEach(function (k) { acc[k] += Number(r[k] || 0); });
+      // Tồn là ảnh chụp: giữ riêng theo kỳ rồi lấy kỳ cuối, không cộng dồn.
+      snapshot[key] = Number(r.ton_cuoi_ky || 0);
+    });
+
+    months.push(monthTotal);
+    if (Object.keys(snapshot).length) lastSnapshot = snapshot;
+    else if (rows.length) lastSnapshot = {};
+  });
+
+  var rows = Object.keys(totals).map(function (k) {
+    var r = totals[k];
+    r.ton_cuoi_ky = Number(lastSnapshot[k] || 0);
+    r.gio_xu_ly_tb = r.hoan_thanh ? Math.round((r.tong_gio_xu_ly / r.hoan_thanh) * 10) / 10 : 0;
+    return r;
+  }).sort(function (a, b) { return b.phat_sinh - a.phat_sinh || String(a.label).localeCompare(String(b.label)); });
+
+  var total = months.reduce(function (acc, m) {
+    ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'qua_han', 'tong_gio_xu_ly']
+      .forEach(function (k) { acc[k] += Number(m[k] || 0); });
+    acc.ton_cuoi_ky = Number(m.ton_cuoi_ky || 0);
+    return acc;
+  }, { phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 });
+  total.gio_xu_ly_tb = total.hoan_thanh ? Math.round((total.tong_gio_xu_ly / total.hoan_thanh) * 10) / 10 : 0;
+
+  return { from: from, to: to, group: group, months: months, rows: rows, total: total,
+    periods: plans.length, generated_at: stamp_() };
 }
 
 /* ---------------------------- Đọc dữ liệu ---------------------------- */
