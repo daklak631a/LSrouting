@@ -1119,7 +1119,18 @@ LS.screens = (function () {
         p.spreadsheet_url ? '<a class="btn btn-quiet btn-sm" href="' + U.attr(p.spreadsheet_url) + '" target="_blank" rel="noopener">Mở Sheet</a>' : '<span class="t2">Chưa có liên kết</span>'
       ] };
     });
-    return ui.block({
+    // Kỳ không có kho Sheet nghĩa là lần tạo file đã hỏng. Hệ thống tự thử lại
+    // mỗi giờ, nhưng phải nói ra, nếu không tháng đó lặng lẽ không có file kế hoạch.
+    var thieuKho = plans.filter(function (p) {
+      return ['ACTIVE', 'SCHEDULED'].indexOf(p.status) !== -1 && !p.spreadsheet_url;
+    });
+
+    return (thieuKho.length
+      ? ui.banner('warn', thieuKho.length + ' kỳ chưa tạo được kho Sheet kế hoạch',
+        'Kỳ ' + thieuKho.map(function (p) { return U.esc(p.month_key || p.period_id); }).join(', ') +
+        ' chưa có file. Hệ thống thử lại mỗi giờ; nếu vẫn không có, chạy setupFirstMonthlyPlan() trong Apps Script để đọc lỗi cụ thể.')
+      : '') +
+      ui.block({
       title: 'Kế hoạch tháng', icon: 'calendar',
       actions: canCreate ? ui.btn('Tạo tháng kế tiếp', { act: 'create-next-monthly-plan', icon: 'plus', sm: true }) : '',
       note: active.name ? 'Đang xem: ' + U.esc(active.name) + '. Kỳ đã tạo trước chỉ tự kích hoạt từ ngày đầu tháng.' : 'Chưa có kỳ hoạt động.',

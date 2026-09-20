@@ -281,12 +281,26 @@ function activateDueMonthlyPlans_() {
       var nextFound = t.find('MonthlyPlans', 'period_id', next.period_id);
       if (nextFound) t.write(nextFound, { status: 'ACTIVE', activated_at: stamp_() });
     });
+    // Kỳ đã có dòng nhưng chưa có kho Sheet: lần tạo trước đã hỏng giữa chừng
+    // (Drive lỗi, mất quyền mở workbook mẫu). Không thử lại thì tháng đó vĩnh
+    // viễn không có file kế hoạch và không có lệnh nào sửa được.
+    t.rows('MonthlyPlans').forEach(function (p) {
+      if (['ACTIVE', 'SCHEDULED'].indexOf(p.status) === -1) return;
+      if (p.spreadsheet_id) return;
+      if (created.indexOf(p.period_id) === -1) created.push(p.period_id);
+    });
+
     var active = t.rows('MonthlyPlans').filter(function (p) { return p.status === 'ACTIVE'; })
       .sort(function (a, b) { return String(b.month_key).localeCompare(String(a.month_key)); })[0];
     if (active) return active.period_id;
     throw new Error('Không xác định được kỳ kế hoạch đang hoạt động.');
   });
-  created.forEach(function (periodId) { provisionMonthlyPlanWorkbook_(periodId); });
+  // Tạo kho Sheet có thể chậm và có thể hỏng. Để nó ném lỗi ra ngoài là chặn
+  // luôn đường đăng nhập; lần chạy kế tiếp của trigger sẽ thử lại.
+  created.forEach(function (periodId) {
+    try { provisionMonthlyPlanWorkbook_(periodId); }
+    catch (err) { Logger.log('Chưa tạo được kho kế hoạch ' + periodId + ': ' + err); }
+  });
   handoffs.forEach(function (pair) {
     carryOpenWorkToPlan_(pair.from, pair.to, { user_id: 'SYSTEM', full_name: 'Hệ thống' });
     provisionMonthlyPlanWorkbook_(pair.to);
@@ -299,6 +313,36 @@ function activePlan_() { return activateDueMonthlyPlans_(); }
 /** Trigger-safe entry point: Apps Script gọi định kỳ để tự kích hoạt kỳ đến hạn. */
 function activateMonthlyPlans() {
   return publicMonthlyPlan_(activateDueMonthlyPlans_());
+}
+
+/**
+ * Khởi tạo kỳ kế hoạch đầu tiên và kho Sheet của nó, gọi tay từ trình soạn thảo
+ * Apps Script sau khi chạy `setupSheetDB()`.
+ *
+ * Kỳ đầu tiên vẫn tự sinh ở lần đăng nhập đầu hoặc ở lượt trigger hằng giờ, nên
+ * hàm này không bắt buộc. Nó tồn tại để người triển khai chủ động dựng file kế
+ * hoạch và **đọc được lỗi ngay** thay vì để người dùng đầu tiên chịu một lần
+ * đăng nhập kéo dài hoặc một kỳ không có kho Sheet mà không biết vì sao.
+ *
+ * Chạy lại bao nhiêu lần cũng được: đã có kỳ thì không tạo thêm, đã có kho Sheet
+ * thì chỉ đồng bộ lại.
+ */
+function setupFirstMonthlyPlan() {
+  var plan = activateDueMonthlyPlans_();
+  if (!plan.spreadsheet_id) {
+    // Lần này không nuốt lỗi: người chạy cần biết vì sao không tạo được file.
+    provisionMonthlyPlanWorkbook_(plan.period_id);
+    plan = DataRepository.find('MonthlyPlans', 'period_id', plan.period_id);
+  } else {
+    syncMonthlyPlanWorkbook_(plan.period_id);
+  }
+  var result = {
+    period_id: plan.period_id, month_key: plan.month_key, name: plan.name,
+    status: plan.status, url: plan.spreadsheet_url || ''
+  };
+  Logger.log(JSON.stringify(result));
+  notify_('Kỳ kế hoạch đang hoạt động: ' + plan.name + '\nKho Sheet: ' + (plan.spreadsheet_url || 'chưa tạo được'));
+  return result;
 }
 
 /** KS tạo trước đúng tháng kế tiếp; dữ liệu toàn hệ thống chưa chuyển cho tới activation_at. */

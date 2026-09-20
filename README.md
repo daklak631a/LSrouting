@@ -30,6 +30,16 @@ lưu trữ độc lập, gồm toàn bộ 17 bảng dữ liệu và danh mục �
 hoạch. Mỗi việc còn giữ `source_stt`/`source_tab` để hiển thị lại số thứ tự theo phòng giống file gốc.
 Hàm trả về URL file và lưu ID vào thuộc tính `LS_SHEET_ID` của dự án GAS.
 
+Sau đó chạy `setupFirstMonthlyPlan()` để dựng kỳ kế hoạch của tháng hiện tại và file
+Google Sheet kế hoạch của kỳ đó. Kỳ đầu tiên vẫn tự sinh ở lần đăng nhập đầu hoặc ở
+lượt trigger hằng giờ, nên bước này không bắt buộc — nhưng chạy tay thì bạn đọc được
+lỗi ngay thay vì để người dùng đầu tiên chịu một lần đăng nhập kéo dài. Chạy lại bao
+nhiêu lần cũng được: đã có kỳ thì không tạo thêm, đã có file thì chỉ đồng bộ lại.
+
+Nếu kỳ nào chưa tạo được file (Drive lỗi, mất quyền mở workbook mẫu), màn Kỳ kế hoạch
+sẽ báo rõ. Hệ thống tự thử lại mỗi giờ; muốn biết lỗi cụ thể thì chạy
+`setupFirstMonthlyPlan()` trong trình soạn thảo Apps Script.
+
 Sau khi tạo kho, chạy `setupSheetDB()` để bổ sung cột đăng nhập và tài khoản `admin` nếu
 còn thiếu. Người dùng đăng nhập trong webapp bằng `login_code`: phòng/PGD chỉ cần mã cán
 bộ; LS, kiểm soát và quản trị cần mã kèm mật khẩu. Mật khẩu chỉ được lưu dưới dạng SHA-256
