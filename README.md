@@ -106,6 +106,16 @@ quá hạn theo quy tắc R5.
 Kho mã là nguồn duy nhất; Apps Script chỉ là nơi chạy. Không sửa mã thẳng trên
 trình soạn thảo Apps Script — lần đẩy kế tiếp sẽ ghi đè mất.
 
+### Kiểm tra máy đã sẵn sàng chưa
+
+```bash
+node prepare-clasp.mjs
+```
+
+Lệnh này báo còn thiếu bước nào: chưa cài clasp, chưa đăng nhập, file đăng nhập
+lệch phiên bản, chưa có `.clasp.json`, hay `Index.gas.html` chưa dựng lại. Nó
+không đụng vào file thông tin đăng nhập của bạn.
+
 ### Lần đầu, trên máy của bạn
 
 ```bash
@@ -113,11 +123,21 @@ npm install -g @google/clasp@2.4.2
 clasp login
 ```
 
+clasp 2.x và 3.x đọc `~/.clasprc.json` theo hai định dạng khác nhau. Máy đã đăng
+nhập bằng bản kia thì sao lưu file rồi đăng nhập lại; `prepare-clasp.mjs` in sẵn
+lệnh cho trường hợp của bạn.
+
 Nối repo với dự án Apps Script đang có: lấy `scriptId` ở Apps Script →
 Project Settings → IDs, rồi tự tạo `.clasp.json` ở gốc repo:
 
 ```json
 { "scriptId": "<scriptId>", "rootDir": "." }
+```
+
+Hoặc để script tạo giúp:
+
+```bash
+node prepare-clasp.mjs <scriptId>
 ```
 
 Tạo tay chứ đừng dùng `clasp clone`: lệnh đó kéo mã hiện có trên Apps Script về
