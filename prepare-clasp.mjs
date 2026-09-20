@@ -111,7 +111,44 @@ try {
   blocking += 1;
 }
 
-/* 6. doGet phải trỏ đúng tên file HTML sau khi clasp đổi tên */
+/* 6. Quyền khai trong appsscript.json phải phủ hết dịch vụ code thật sự gọi.
+      Khai thiếu thì Apps Script chỉ báo lỗi lúc chạy, ở đúng dòng gọi dịch vụ. */
+const SCOPE_OF = {
+  DriveApp: 'https://www.googleapis.com/auth/drive',
+  SpreadsheetApp: 'https://www.googleapis.com/auth/spreadsheets',
+  MailApp: 'https://www.googleapis.com/auth/script.send_mail',
+  GmailApp: 'https://www.googleapis.com/auth/gmail.send',
+  UrlFetchApp: 'https://www.googleapis.com/auth/script.external_request',
+  ScriptApp: 'https://www.googleapis.com/auth/script.scriptapp',
+  CalendarApp: 'https://www.googleapis.com/auth/calendar'
+};
+try {
+  const manifest = JSON.parse(fs.readFileSync('appsscript.json', 'utf8'));
+  const declared = manifest.oauthScopes || [];
+  const source = ['Code.gs', 'DataRepository.gs', 'Notifications.gs', 'SetupSheetDB.gs']
+    .filter((f) => fs.existsSync(f)).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+
+  const needed = Object.keys(SCOPE_OF).filter((svc) => new RegExp('\\b' + svc + '\\.').test(source));
+  if (/Session\.getActiveUser|Session\.getEffectiveUser/.test(source)) {
+    needed.push('__email');
+    SCOPE_OF.__email = 'https://www.googleapis.com/auth/userinfo.email';
+  }
+  const lacking = needed.filter((svc) => !declared.includes(SCOPE_OF[svc]));
+
+  if (lacking.length) {
+    warn('appsscript.json thiếu quyền cho: ' + lacking.map((s) => s.replace('__email', 'Session.getActiveUser')).join(', '));
+    lacking.forEach((s) => info('  "' + SCOPE_OF[s] + '"'));
+    info('Apps Script chỉ báo lỗi này lúc chạy, không báo lúc đẩy mã lên.');
+    blocking += 1;
+  } else {
+    ok('quyền khai trong appsscript.json phủ đủ ' + needed.length + ' dịch vụ đang dùng');
+  }
+} catch {
+  warn('không đọc được appsscript.json');
+  blocking += 1;
+}
+
+/* 7. doGet phải trỏ đúng tên file HTML sau khi clasp đổi tên */
 const doGet = fs.readFileSync('Code.gs', 'utf8');
 if (doGet.includes("createHtmlOutputFromFile('Index.gas')")) {
   ok("doGet gọi 'Index.gas' — khớp tên Index.gas.html sau khi clasp đẩy lên");

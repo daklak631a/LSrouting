@@ -121,4 +121,28 @@ if (!domainSource.includes("short: 'Toàn bộ phòng'") || !domainSource.includ
   }
 }
 
+// Quyền khai trong appsscript.json phải phủ hết dịch vụ code gọi. Khai thiếu thì
+// Apps Script chỉ báo lỗi lúc chạy, ở đúng dòng gọi dịch vụ, không báo lúc đẩy mã.
+{
+  const scopeOf = {
+    DriveApp: 'https://www.googleapis.com/auth/drive',
+    SpreadsheetApp: 'https://www.googleapis.com/auth/spreadsheets',
+    MailApp: 'https://www.googleapis.com/auth/script.send_mail',
+    UrlFetchApp: 'https://www.googleapis.com/auth/script.external_request',
+    ScriptApp: 'https://www.googleapis.com/auth/script.scriptapp'
+  };
+  const declared = JSON.parse(read('appsscript.json')).oauthScopes || [];
+  const sources = ['Code.gs', 'DataRepository.gs', 'Notifications.gs', 'SetupSheetDB.gs']
+    .map((f) => read(f)).join('\n');
+
+  for (const [service, scope] of Object.entries(scopeOf)) {
+    if (new RegExp('\\b' + service + '\\.').test(sources) && !declared.includes(scope)) {
+      throw new Error('appsscript.json thiếu quyền cho ' + service + ': ' + scope);
+    }
+  }
+  if (/Session\.getActiveUser/.test(sources) && !declared.includes('https://www.googleapis.com/auth/userinfo.email')) {
+    throw new Error('appsscript.json thiếu quyền userinfo.email cho Session.getActiveUser().');
+  }
+}
+
 console.log('GAS contract check passed.');
