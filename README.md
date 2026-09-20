@@ -103,15 +103,18 @@ npm install -g @google/clasp@2.4.2
 clasp login
 ```
 
-Nối repo với dự án Apps Script đang có (lấy `scriptId` ở Apps Script →
-Project Settings → IDs):
+Nối repo với dự án Apps Script đang có: lấy `scriptId` ở Apps Script →
+Project Settings → IDs, rồi tự tạo `.clasp.json` ở gốc repo:
 
-```bash
-clasp clone <scriptId> --rootDir .
+```json
+{ "scriptId": "<scriptId>", "rootDir": "." }
 ```
 
-Lệnh này tạo `.clasp.json`. File đó nằm trong `.gitignore` vì nó trỏ tới một dự
-án Apps Script cụ thể, mỗi người triển khai một khác.
+Tạo tay chứ đừng dùng `clasp clone`: lệnh đó kéo mã hiện có trên Apps Script về
+và ghi đè lên mã trong repo. Kho mã mới là bản đúng, không phải chiều ngược lại.
+
+`.clasp.json` nằm trong `.gitignore` vì nó trỏ tới một dự án Apps Script cụ thể,
+mỗi người triển khai một khác.
 
 Từ đó mỗi lần sửa mã:
 
