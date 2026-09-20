@@ -26,7 +26,7 @@ Lệnh này gộp `index.html` + `css/styles.css` + toàn bộ `js/*.js` thành 
 
 Đẩy lên Apps Script: `Code.gs`, `DataRepository.gs`, `Notifications.gs`, `SetupSheetDB.gs`,
 `Index.gas.html`. Chạy `createStorageWorkbook()` một lần để tạo một file Google Sheet
-lưu trữ độc lập, gồm toàn bộ 17 bảng dữ liệu và danh mục đơn vị/loại việc/dropdown theo mẫu kế
+lưu trữ độc lập, gồm toàn bộ 18 bảng dữ liệu và danh mục đơn vị/loại việc/dropdown theo mẫu kế
 hoạch. Mỗi việc còn giữ `source_stt`/`source_tab` để hiển thị lại số thứ tự theo phòng giống file gốc.
 Hàm trả về URL file và lưu ID vào thuộc tính `LS_SHEET_ID` của dự án GAS.
 
@@ -40,10 +40,10 @@ Kho khởi tạo trỏ sẵn tới một workbook mẫu để nhân bản cho t�
 script phải mở được file mẫu đó. Không mở được thì chọn một trong hai:
 
 - chia sẻ file mẫu cho tài khoản đang chạy script, hoặc
-- chạy  để tạo file kế hoạch trống thay vì nhân bản mẫu.
+- chạy `usePlanTemplate("")` để tạo file kế hoạch trống thay vì nhân bản mẫu.
 
-Đổi sang mẫu khác thì chạy ; hàm kiểm tra mở được
-file ngay lúc khai, không để lỗi nổ ở lần dựng kỳ kế tiếp.
+Đổi sang mẫu khác thì chạy `usePlanTemplate("<spreadsheetId>")`; hàm kiểm tra mở
+được file ngay lúc khai, không để lỗi nổ ở lần dựng kỳ kế tiếp.
 
 Nếu kỳ nào chưa tạo được file, màn Kỳ kế hoạch sẽ báo rõ. Hệ thống tự thử lại mỗi giờ; muốn biết lỗi cụ thể thì chạy
 `setupFirstMonthlyPlan()` trong trình soạn thảo Apps Script.
