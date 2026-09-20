@@ -349,6 +349,46 @@ function setupFirstMonthlyPlan() {
   return result;
 }
 
+/**
+ * Đổi hoặc bỏ workbook mẫu dùng để dựng file kế hoạch tháng.
+ *
+ *   usePlanTemplate('1AbC...')  nhân bản workbook mẫu đó cho mỗi kỳ
+ *   usePlanTemplate('')         tạo file kế hoạch trống, không nhân bản mẫu
+ *
+ * Cấu hình này nằm ở tầng triển khai nên không đặt trong màn Quản trị và không
+ * đòi đăng nhập ứng dụng: nó được gọi tay từ trình soạn thảo Apps Script, nơi
+ * chưa có phiên đăng nhập nào. Quyền sửa dự án Apps Script chính là lớp chặn,
+ * và nó chặt hơn vai trò trong app.
+ */
+function usePlanTemplate(spreadsheetId) {
+  var actor = Session.getEffectiveUser().getEmail() || 'SYSTEM';
+  var u = { user_id: actor, full_name: actor };
+  var id = String(spreadsheetId || '').trim();
+
+  // Khai một mã thì phải mở được ngay, đừng để lỗi nổ ở lần dựng kỳ kế tiếp.
+  if (id) {
+    try { DriveApp.getFileById(id).getName(); }
+    catch (err) {
+      throw new Error('Không mở được ' + id + ' bằng tài khoản ' +
+        actor + '. ' + err.message);
+    }
+  }
+
+  DataRepository.tx(function (t) {
+    var found = t.find('Settings', 'key', 'source_template_spreadsheet_id');
+    var fields = { value: id, updated_at: stamp_() };
+    if (found) t.write(found, fields);
+    else t.append('Settings', { key: 'source_template_spreadsheet_id', value: id, description: 'ID workbook mẫu kế hoạch tháng', updated_at: fields.updated_at });
+    logConfig_(t, u, 'Kế hoạch tháng', id ? 'Dùng workbook mẫu ' + id + '.' : 'Bỏ workbook mẫu; kế hoạch tháng sẽ tạo file trống.');
+    return true;
+  });
+
+  var result = { source_template_spreadsheet_id: id,
+    note: id ? 'Mỗi kỳ sẽ nhân bản workbook mẫu này.' : 'Mỗi kỳ sẽ tạo file kế hoạch trống.' };
+  Logger.log(JSON.stringify(result));
+  return result;
+}
+
 /** KS tạo trước đúng tháng kế tiếp; dữ liệu toàn hệ thống chưa chuyển cho tới activation_at. */
 function createNextMonthlyPlan() {
   var u = planManager_(currentUser_());
@@ -379,8 +419,21 @@ function createMonthlyPlanWorkbook_(plan) {
   DataRepository.getAll('Settings').forEach(function (row) { settings[row.key] = row.value; });
   var name = 'KẾ HOẠCH HỖ TRỢ TÍN DỤNG T' + Number(plan.month_key.substring(5)) + '.' + plan.month_key.substring(0, 4);
   var ss;
-  if (settings.source_template_spreadsheet_id) {
-    var copy = DriveApp.getFileById(String(settings.source_template_spreadsheet_id)).makeCopy(name);
+  var templateId = String(settings.source_template_spreadsheet_id || '').trim();
+  if (templateId) {
+    // Không tự rơi về file trống: workbook mẫu mang toàn bộ tab từng phòng, công
+    // thức và dropdown của kế hoạch. Lặng lẽ tạo file trống thay thế là đánh tráo
+    // một thứ khác hẳn rồi báo thành công.
+    var copy;
+    try {
+      copy = DriveApp.getFileById(templateId).makeCopy(name);
+    } catch (err) {
+      throw new Error(
+        'Không mở được workbook mẫu ' + templateId + ' bằng tài khoản ' +
+        (Session.getEffectiveUser().getEmail() || 'đang chạy script') + '. ' +
+        'Chia sẻ file mẫu cho tài khoản này, hoặc chạy usePlanTemplate("") để tạo file kế hoạch trống ' +
+        'thay vì nhân bản mẫu. Lỗi gốc: ' + err.message);
+    }
     ss = SpreadsheetApp.openById(copy.getId());
   } else {
     ss = SpreadsheetApp.create(name);

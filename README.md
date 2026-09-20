@@ -36,8 +36,16 @@ lượt trigger hằng giờ, nên bước này không bắt buộc — nhưng c
 lỗi ngay thay vì để người dùng đầu tiên chịu một lần đăng nhập kéo dài. Chạy lại bao
 nhiêu lần cũng được: đã có kỳ thì không tạo thêm, đã có file thì chỉ đồng bộ lại.
 
-Nếu kỳ nào chưa tạo được file (Drive lỗi, mất quyền mở workbook mẫu), màn Kỳ kế hoạch
-sẽ báo rõ. Hệ thống tự thử lại mỗi giờ; muốn biết lỗi cụ thể thì chạy
+Kho khởi tạo trỏ sẵn tới một workbook mẫu để nhân bản cho từng kỳ. Tài khoản chạy
+script phải mở được file mẫu đó. Không mở được thì chọn một trong hai:
+
+- chia sẻ file mẫu cho tài khoản đang chạy script, hoặc
+- chạy  để tạo file kế hoạch trống thay vì nhân bản mẫu.
+
+Đổi sang mẫu khác thì chạy ; hàm kiểm tra mở được
+file ngay lúc khai, không để lỗi nổ ở lần dựng kỳ kế tiếp.
+
+Nếu kỳ nào chưa tạo được file, màn Kỳ kế hoạch sẽ báo rõ. Hệ thống tự thử lại mỗi giờ; muốn biết lỗi cụ thể thì chạy
 `setupFirstMonthlyPlan()` trong trình soạn thảo Apps Script.
 
 Sau khi tạo kho, chạy `setupSheetDB()` để bổ sung cột đăng nhập và tài khoản `admin` nếu
