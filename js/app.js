@@ -298,6 +298,47 @@ LS.app = (function () {
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   }
 
+  /**
+   * Xuất file .xlsx thật. Thư viện SheetJS chỉ nạp khi bấm xuất (không làm nặng
+   * lần mở app). Mạng chặn CDN thì rơi về CSV của trang đầu, vẫn mở được bằng Excel.
+   * sheets = [{ name, rows: [[ô, ô, …], …] }], dòng đầu là tiêu đề.
+   */
+  var xlsxLoading = null;
+
+  function loadXlsx() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (xlsxLoading) return xlsxLoading;
+    xlsxLoading = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = function () { resolve(window.XLSX); };
+      s.onerror = function () { xlsxLoading = null; reject(new Error('Không tải được thư viện Excel')); };
+      document.head.appendChild(s);
+    });
+    return xlsxLoading;
+  }
+
+  function downloadXlsx(name, sheets) {
+    sheets = sheets.filter(function (s) { return s.rows && s.rows.length; });
+    if (!sheets.length) { ui.toast('Chưa có số liệu để xuất.', 'err'); return; }
+    ui.toast('Đang tạo file Excel…');
+    loadXlsx().then(function (X) {
+      var wb = X.utils.book_new();
+      sheets.forEach(function (s) {
+        var ws = X.utils.aoa_to_sheet(s.rows);
+        ws['!cols'] = s.rows[0].map(function (_, i) {
+          return { wch: Math.min(42, Math.max(8, Math.max.apply(null, s.rows.map(function (r) { return String(r[i] === undefined || r[i] === null ? '' : r[i]).length; })) + 2)) };
+        });
+        X.utils.book_append_sheet(wb, ws, String(s.name).replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31));
+      });
+      X.writeFile(wb, name + '.xlsx');
+    }).catch(function (e) {
+      var q = function (v) { return '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"'; };
+      download(name + '.csv', sheets[0].rows.map(function (r) { return r.map(q).join(','); }).join('\r\n'), 'text/csv');
+      ui.toast(e.message + ' — đã xuất CSV thay thế.', 'warn');
+    });
+  }
+
   /** Ẩn/hiện trường cấu hình phụ thuộc lựa chọn khác trong cùng hộp thoại. */
   function applyConds() {
     var dlg = document.getElementById('dialog');
@@ -367,6 +408,8 @@ LS.app = (function () {
     'out-cancel': function (el) { A.cancel(el.getAttribute('data-id')); },
     'out-confirm': function (el) { A.confirmSend(el.getAttribute('data-id')); },
     'report-refresh': function () { S.refreshReport(); },
+    'report-run': function () { S.refreshReport(); },
+    'board-export': function () { S.exportBoard(); },
     'report-export': function () { S.exportReport(); },
     'type-edit': function (el) { A.typeDialog(el.getAttribute('data-code')); },
     'unit-edit': function (el) { A.unitDialog(el.getAttribute('data-id')); },
@@ -768,7 +811,7 @@ LS.app = (function () {
 
   return {
     init: init, render: render, download: download, applyConds: applyConds,
-    refreshServer: refreshServer, background: background, scheduleRefresh: scheduleRefresh
+    refreshServer: refreshServer, background: background, scheduleRefresh: scheduleRefresh, downloadXlsx: downloadXlsx
   };
 })();
 

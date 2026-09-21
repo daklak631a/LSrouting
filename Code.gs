@@ -1782,7 +1782,8 @@ function adminImportUsers(rows) {
 function adminSaveSettings(values) {
   var u = requireAdmin_();
   var allowed = ['bank_name', 'hotline', 'app_url', 'timezone', 'week_start', 'retention_months', 'export_row_limit', 'backlog_alert', 'env',
-    'work_days', 'work_open', 'work_close', 'work_break', 'holidays', 'sign_place', 'gateway_url', 'gateway_auth_ref'];
+    'work_days', 'work_open', 'work_close', 'work_break', 'holidays', 'sign_place', 'gateway_url', 'gateway_auth_ref',
+    'target_done_month', 'target_done_staff_month'];
   return DataRepository.tx(function (t) {
     allowed.forEach(function (key) {
       if (values[key] === undefined) return;

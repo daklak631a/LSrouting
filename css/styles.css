@@ -1070,7 +1070,11 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .viz-rl .t1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .viz-rl .t2 { font-size: 0.7rem; }
 .viz-track { display: flex; align-items: center; gap: 0.45rem; min-width: 0; }
+.viz-lane { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
 .viz-fill { display: flex; gap: 2px; height: 14px; min-width: 3px; }
+.viz-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink-2); border-radius: 1px; }
+.viz-target { position: absolute; left: 0; right: 0; border-top: 2px solid var(--ink-2); z-index: 1; pointer-events: none; }
+.viz-target em { position: absolute; right: 0; bottom: 2px; font: 600 0.64rem/1 "Be Vietnam Pro", sans-serif; font-style: normal; color: var(--ink-2); background: var(--surface); padding: 0 0.25rem; }
 .viz-seg { height: 100%; min-width: 3px; }
 .viz-seg:last-child { border-radius: 0 4px 4px 0; }
 .viz-val { font: 600 0.74rem/1 'IBM Plex Mono', monospace; color: var(--ink-2); white-space: nowrap; }

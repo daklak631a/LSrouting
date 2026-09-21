@@ -19,7 +19,7 @@ Bản trình duyệt không gửi ra ngoài; chỉ GAS gọi provider thật.
 
 ### URL web app đang dùng
 
-Deployment chuẩn đã được cập nhật lên **Version 21**, chạy dưới tài khoản
+Deployment chuẩn đã được cập nhật lên **Version 22**, chạy dưới tài khoản
 `daklak631a@gmail.com`, quyền truy cập `Anyone`:
 
 `https://script.google.com/macros/s/AKfycbylljXwRUkxUCL_wnxztLAzotSNi9iiOvgpGtXPCwzIQHjCgpPz6d_zvG_XC1urUlCH/exec`
@@ -69,6 +69,16 @@ cá nhân có giờ làm và việc xong 7 ngày; dashboard phòng có gửi/ho�
 Rê chuột hoặc Tab vào cột để xem số, mỗi đồ thị có "Xem bảng số liệu". Các cột giờ trong
 bảng Kết quả giờ là **giờ làm** (bỏ đêm, nghỉ trưa, cuối tuần); giờ xử lý lấy từ đồng hồ
 khách hàng (đã trừ tạm dừng/chờ ký); trung bình tổng tính trên từng hồ sơ.
+
+Tổng hợp lọc thêm được theo **cán bộ LS** và **đơn vị gửi** (bấm *Xem* để áp dụng), và có
+nút **Tải Excel** (6 trang tính theo đúng bộ lọc). Quản trị → Cấu hình chung đặt **chỉ tiêu
+hoàn thành/tháng** cho toàn LS và cho mỗi cán bộ: Tổng hợp hiện ô "Đạt chỉ tiêu" (kỳ tháng,
+năm hoặc khoảng ≥ 1 tháng) và vạch chỉ tiêu trên đồ thị cán bộ; Báo cáo nhiều kỳ vẽ đường chỉ
+tiêu trên đồ thị theo tháng. File Excel dùng SheetJS nạp từ cdnjs khi bấm xuất; mạng chặn CDN
+thì tự xuất CSV thay thế.
+
+**Báo cáo nhiều kỳ chỉ chạy khi bấm "Chạy báo cáo".** Mở màn hay đổi ô lọc không tự gọi máy
+chủ; đổi lọc sau khi đã chạy thì kết quả cũ vẫn hiện kèm cảnh báo "kết quả cũ".
 
 **Phím tắt** (bấm `?` hoặc nút bàn phím trên thanh đầu để xem): `1–9` chuyển màn, `/` tìm,
 `F` bộ lọc, `N` tạo việc, `R` tải lại, `[` `]` đổi tab/trang; trong danh sách `J`/`K` chọn

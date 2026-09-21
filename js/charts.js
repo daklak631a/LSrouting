@@ -73,7 +73,8 @@ LS.charts = (function () {
     var total = 0, max = 0, peak = { i: -1, v: -1 };
     o.series.forEach(function (s) { s.values.forEach(function (v, i) { total += v || 0; if (v > max) max = v; if (v > peak.v) peak = { i: i, v: v, s: s }; }); });
     if (!labels.length || !total) return empty(o);
-    var ax = ticks(max, o.integer !== false);
+    var target = Number(o.target) || 0;
+    var ax = ticks(Math.max(max, target), o.integer !== false);
     var every = Math.max(1, Math.ceil(labels.length / 12));
     var grid = ax.list.map(function (t) {
       return '<div class="viz-grid" style="bottom:' + (t / ax.max * 100) + '%"><span>' + fmt(t) + '</span></div>';
@@ -89,6 +90,8 @@ LS.charts = (function () {
         '<div class="viz-bars">' + bars + '</div>' +
         '<div class="viz-xl">' + (i % every === 0 ? U.esc(l) : '') + '</div></div>';
     }).join('');
+    // Đường chỉ tiêu: một vạch mảnh màu chữ, có nhãn — không mang màu của chuỗi nào.
+    if (target) grid += '<div class="viz-target" style="bottom:' + (target / ax.max * 100) + '%"><em>Chỉ tiêu ' + fmt(target, o.unit) + '</em></div>';
     return '<figure class="viz">' + head(o) +
       '<div class="viz-cols"><div class="viz-plot">' + grid + '</div><div class="viz-groups" style="--n:' + labels.length + '">' + groups + '</div></div>' +
       dataTable(o, labels) + '</figure>';
@@ -105,7 +108,8 @@ LS.charts = (function () {
     });
     if (!rows.some(function (x) { return x.sum > 0; })) return empty(o);
     if (o.sort) rows.sort(function (a, b) { return b.sum - a.sum; });
-    var max = Math.max.apply(null, rows.map(function (x) { return x.sum; }));
+    var target = Number(o.target) || 0;
+    var max = Math.max.apply(null, rows.map(function (x) { return x.sum; }).concat([target]));
     var body = rows.map(function (x) {
       var segs = o.series.map(function (s, k) {
         var v = s.values[x.i] || 0;
@@ -113,10 +117,12 @@ LS.charts = (function () {
       }).join('');
       return '<div class="viz-row" data-tip="' + U.attr(tip(x.r.label, o.series, x.i, o.unit)) + '">' +
         '<div class="viz-rl"><span class="t1">' + U.esc(x.r.label) + '</span>' + (x.r.note ? '<span class="t2">' + U.esc(x.r.note) + '</span>' : '') + '</div>' +
-        '<div class="viz-track"><div class="viz-fill" style="width:' + (max ? x.sum / max * 100 : 0) + '%">' + segs + '</div>' +
+        '<div class="viz-track"><div class="viz-lane"><div class="viz-fill" style="width:' + (max ? x.sum / max * 100 : 0) + '%">' + segs + '</div>' +
+        (target ? '<i class="viz-mark" style="left:' + (target / max * 100) + '%" title="Chỉ tiêu ' + fmt(target, o.unit) + '"></i>' : '') + '</div>' +
         '<span class="viz-val">' + fmt(x.sum, o.unit) + '</span></div></div>';
     }).join('');
-    return '<figure class="viz">' + head(o) + '<div class="viz-hbars">' + body + '</div>' +
+    var headOpts = target ? Object.assign({}, o, { sub: (o.sub ? o.sub + ' · ' : '') + 'vạch dọc = chỉ tiêu ' + fmt(target, o.unit) }) : o;
+    return '<figure class="viz">' + head(headOpts) + '<div class="viz-hbars">' + body + '</div>' +
       dataTable(o, (o.rows || []).map(function (r) { return r.label; })) + '</figure>';
   }
 

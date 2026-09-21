@@ -1519,6 +1519,9 @@ LS.admin = (function () {
         ui.field('Đầu tuần báo cáo', ui.select('week_start', [['MONDAY', 'Thứ Hai'], ['SUNDAY', 'Chủ Nhật']], s.week_start)) +
         ui.field('Thời hạn lưu (tháng)', ui.input('retention_months', s.retention_months, { type: 'number', min: 1 })) +
         ui.field('Giới hạn dòng khi xuất', ui.input('export_row_limit', s.export_row_limit, { type: 'number', min: 100 })) +
+        '</div><div class="f-row">' +
+        ui.field('Chỉ tiêu hoàn thành / tháng (toàn LS)', ui.input('target_done_month', s.target_done_month || '', { type: 'number', min: 0 }), 'để trống = không so chỉ tiêu') +
+        ui.field('Chỉ tiêu hoàn thành / tháng (mỗi cán bộ)', ui.input('target_done_staff_month', s.target_done_staff_month || '', { type: 'number', min: 0 }), 'vạch dọc trên đồ thị tải cán bộ') +
         '</div></div>' +
 
         '<div style="margin-top:1.125rem">' + ui.sectionTitle('Vận hành') +
@@ -1550,7 +1553,7 @@ LS.admin = (function () {
     ['bank_name', 'hotline', 'sign_place', 'app_url', 'timezone', 'week_start', 'env', 'gateway_url', 'gateway_auth_ref'].forEach(function (k) {
       s[k] = String(d.get(k) || '').trim();
     });
-    ['retention_months', 'export_row_limit', 'backlog_alert'].forEach(function (k) {
+    ['retention_months', 'export_row_limit', 'backlog_alert', 'target_done_month', 'target_done_staff_month'].forEach(function (k) {
       s[k] = Number(d.get(k) || 0);
     });
 

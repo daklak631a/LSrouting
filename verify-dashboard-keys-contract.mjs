@@ -37,3 +37,15 @@ if (!/data-row=/.test(screens) || !/r\.attrs/.test(read('js/ui.js'))) fail('Dòn
 if (!/js\/charts\.js/.test(read('index.html'))) fail('index.html phải nạp js/charts.js.');
 
 console.log('Dashboard charts and keyboard shortcut contract OK');
+
+// Báo cáo nhiều kỳ chỉ chạy khi bấm nút; lọc Tổng hợp theo cán bộ/đơn vị; chỉ tiêu; Excel.
+const reportFn = screens.slice(screens.indexOf('  function report() {'), screens.indexOf('  function exportBoard()'));
+if (/loadReport\(/.test(reportFn)) fail('Màn Báo cáo không được tự tải khi vẽ; chỉ chạy khi bấm "Chạy báo cáo".');
+const setRep = screens.slice(screens.indexOf('function setReportFilter'), screens.indexOf('function num('));
+if (/loadReport\(/.test(setRep)) fail('Đổi bộ lọc báo cáo không được tự tải.');
+if (!/'report-run'/.test(app)) fail('Thiếu nút Chạy báo cáo.');
+if (!/function boardItems\(\)/.test(screens) || !/draftAttrs\('board', 'staff'\)/.test(screens)) fail('Tổng hợp phải lọc được theo cán bộ / đơn vị.');
+if (!/'target_done_month', 'target_done_staff_month'/.test(read('Code.gs'))) fail('Máy chủ phải cho lưu chỉ tiêu tháng.');
+if (!/function downloadXlsx/.test(app) || !/exportBoard/.test(screens)) fail('Phải xuất được Excel.');
+if (!/viz-target/.test(read('js/charts.js'))) fail('Đồ thị cột phải vẽ được đường chỉ tiêu.');
+console.log('Report run button, board filters, targets and Excel contract OK');

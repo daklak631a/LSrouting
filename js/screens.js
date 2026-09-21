@@ -130,11 +130,33 @@ LS.screens = (function () {
 
   function mean(list) { return list.length ? list.reduce(function (a, b) { return a + b; }, 0) / list.length : null; }
 
+  /** Việc trong phạm vi Tổng hợp: quyền xem của vai trò, rồi bộ lọc cán bộ / đơn vị. */
+  function boardItems() {
+    var staff = f('board', 'staff', ''), unit = f('board', 'unit', '');
+    return visibleItems().filter(function (i) {
+      if (staff && i.assigned_user_id !== staff) return false;
+      if (unit) { var r = reqOf(i); if (!r || r.unit_id !== unit) return false; }
+      return true;
+    });
+  }
+
+  function boardStaff() {
+    var staff = f('board', 'staff', '');
+    return staffList(true).filter(function (u) { return !staff || u.user_id === staff; });
+  }
+
+  function sendingUnits() {
+    return st().units.filter(function (x) { return x.kind === 'DON_VI_GUI' || x.kind === 'PGD'; });
+  }
+
+  /** Chỉ tiêu hoàn thành/tháng do quản trị đặt; 0 = chưa đặt. */
+  function target(key) { var n = Number(st().settings[key]); return isFinite(n) && n > 0 ? n : 0; }
+
   /** Báo cáo xuyên kỳ: giao, hoàn thành, tồn, quá hạn và thời gian xử lý từng cán bộ. */
   function performanceReport(range) {
-    var all = visibleItems(), events = visibleEvents();
+    var all = boardItems(), events = visibleEvents();
     var workload = D.staffWorkloadByGroup(all, st(), range.fromDate, range.toDate);
-    var rows = staffList(true).map(function (u) {
+    var rows = boardStaff().map(function (u) {
       var mine = all.filter(function (i) { return i.assigned_user_id === u.user_id; });
       var assigned = mine.filter(function (i) { return inRange(i.assigned_at || i.accepted_at || i.submitted_at, range); });
       var received = mine.filter(function (i) { return inRange(i.accepted_at, range); });
@@ -196,12 +218,15 @@ LS.screens = (function () {
         ? ui.field('Từ', ui.input('', filterValue('board', 'from', range.fromDate), { type: 'date', attrs: draftAttrs('board', 'from') })) +
           ui.field('Đến', ui.input('', filterValue('board', 'to', range.toDate), { type: 'date', attrs: draftAttrs('board', 'to') }))
         : ui.field(period === 'day' ? 'Ngày' : 'Trong', ui.input('', filterValue('board', 'anchor', U.localDate()), { type: 'date', attrs: draftAttrs('board', 'anchor') }))) +
+      ui.field('Cán bộ LS', ui.select('', staffList(true).map(function (x) { return [x.user_id, x.full_name]; }), filterValue('board', 'staff', ''), { blank: 'Tất cả cán bộ', attrs: draftAttrs('board', 'staff') })) +
+      ui.field('Đơn vị gửi', ui.select('', sendingUnits().map(function (x) { return [x.unit_id, x.name]; }), filterValue('board', 'unit', ''), { blank: 'Tất cả đơn vị', attrs: draftAttrs('board', 'unit') })) +
       '<span class="report-range-note">' + U.esc(reportLabel(range)) + '</span>' +
       '<div class="report-actions">' +
       '<button type="button" class="btn btn-primary btn-sm" data-act="apply-report">' + U.icon('search', 15) + ' Xem</button>' +
       ui.btn('Tải ảnh', { act: 'download-daily-image', icon: 'download', sm: true, title: 'Tải ảnh PNG vùng kết quả đang xem' }) +
+      ui.btn('Tải Excel', { act: 'board-export', icon: 'file', sm: true, title: 'Tải file Excel toàn bộ các bảng của Tổng hợp' }) +
       '</div></div>';
-    var body = dashboardTabs(active) + (active === 'report' ? ui.strip([ui.metric('Đã phân công', report.assigned), ui.metric('Hoàn thành kỳ', report.done, 'ok'), ui.metric('Đang mở', report.open, 'info'), ui.metric('Quá hạn', report.late, report.late ? 'danger' : ''), ui.metric('Nhận hồ sơ TB', report.avgReceiveHours === null ? '—' : report.avgReceiveHours.toFixed(1) + 'h'), ui.metric('Toàn trình TB', report.avgTotalHours === null ? '—' : report.avgTotalHours.toFixed(1) + 'h')]) +
+    var body = dashboardTabs(active) + (active === 'report' ? ui.strip([ui.metric('Đã phân công', report.assigned), ui.metric('Hoàn thành kỳ', report.done, 'ok'), ui.metric('Đang mở', report.open, 'info'), ui.metric('Quá hạn', report.late, report.late ? 'danger' : ''), ui.metric('Nhận hồ sơ TB', report.avgReceiveHours === null ? '—' : report.avgReceiveHours.toFixed(1) + 'h'), ui.metric('Toàn trình TB', report.avgTotalHours === null ? '—' : report.avgTotalHours.toFixed(1) + 'h')].concat(targetMetric(report))) +
       resultCharts(report) +
       ui.table(
         [{ label: 'Cán bộ LS' }, { label: 'Đã giao', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }, { label: 'TB nhận (giờ làm)', cls: 'num' }, { label: 'TB xử lý (giờ làm)', cls: 'num' }, { label: 'TB toàn trình (giờ làm)', cls: 'num' }, { label: 'Đúng hạn', cls: 'num' }],
@@ -225,16 +250,34 @@ LS.screens = (function () {
     });
   }
 
+  /** Chỉ tiêu cho kỳ đang xem: chỉ tiêu tháng quy theo số tháng (kỳ ngày/tuần không so). */
+  function periodTarget(range, key) {
+    var monthly = target(key);
+    if (!monthly || ['month', 'year'].indexOf(range.period) === -1 && range.period !== 'range') return 0;
+    var days = Math.round((range.to - range.from) / 86400000);
+    if (range.period === 'range' && days < 27) return 0;
+    return Math.round(monthly * (range.period === 'year' ? 12 : Math.max(1, Math.round(days / 30.4))));
+  }
+
+  function targetMetric(report) {
+    var staffOnly = !!f('board', 'staff', '');
+    var goal = periodTarget(report.range, staffOnly ? 'target_done_staff_month' : 'target_done_month');
+    if (!goal) return [];
+    var p = Math.round(report.done * 100 / goal);
+    return [ui.metric('Đạt chỉ tiêu', p + '%', p >= 100 ? 'ok' : (p >= 70 ? 'info' : 'warn'), report.done + '/' + goal + ' việc')];
+  }
+
   /** Hai đồ thị đầu tab Kết quả: nhịp phát sinh/hoàn thành và tải theo cán bộ. */
   function resultCharts(report) {
     var range = report.range, b = LS.charts.buckets(range.fromDate, range.toDate);
     var inflow = b.labels.map(function () { return 0; }), outflow = inflow.slice();
-    visibleItems().forEach(function (i) {
+    boardItems().forEach(function (i) {
       var k = b.keyOf(i.occurrence_date);
       if (k !== -1 && i.status !== 'HUY') inflow[k] += 1;
       var d = i.status === 'HOAN_THANH_LS' ? b.keyOf(i.completed_at) : -1;
       if (d !== -1) outflow[d] += 1;
     });
+    report.series = { labels: b.labels, inflow: inflow, outflow: outflow };
     var unitWord = { day: 'ngày', week: 'tuần', month: 'tháng' }[b.mode];
     var staffRows = report.rows.filter(function (x) { return x.done || x.open; });
     return '<div class="viz-pair">' +
@@ -246,6 +289,7 @@ LS.screens = (function () {
       }) +
       LS.charts.bars({
         title: 'Tải việc theo cán bộ LS', sub: 'Hoàn thành trong kỳ + đang mở hiện tại', labelHead: 'Cán bộ LS', sort: true,
+        target: periodTarget(range, 'target_done_staff_month'),
         rows: staffRows.map(function (x) { return { label: x.user.full_name, note: x.late ? x.late + ' việc quá hạn' : '' }; }),
         series: [{ name: 'Hoàn thành', values: staffRows.map(function (x) { return x.done; }) },
           { name: 'Đang mở', values: staffRows.map(function (x) { return x.open; }), slot: 2 }],
@@ -254,7 +298,7 @@ LS.screens = (function () {
   }
 
   function typeSummaryBlock(range) {
-    var items = visibleItems().filter(function (i) { return inRange(i.occurrence_date + 'T12:00:00', range); });
+    var items = boardItems().filter(function (i) { return inRange(i.occurrence_date + 'T12:00:00', range); });
     var rows = st().workTypes.map(function (w) {
       var mine = items.filter(function (i) { return i.work_type_code === w.code; });
       var done = mine.filter(function (i) { return i.status === 'HOAN_THANH_LS'; }).length;
@@ -1179,7 +1223,7 @@ LS.screens = (function () {
   /* ============================ Màn: điều hành ============================ */
 
   function board() {
-    var all = visibleItems();
+    var all = boardItems();
     var report = performanceReport(reportRange());
     var open = all.filter(function (i) { return D.STATUS[i.status].open; });
     var done = all.filter(function (i) { return i.status === 'HOAN_THANH_LS'; });
@@ -1192,7 +1236,7 @@ LS.screens = (function () {
       return i.due_at && i.completed_at && new Date(i.completed_at) <= new Date(i.due_at);
     }).length, done.length);
 
-    var load = staffList().map(function (u) {
+    var load = staffList().filter(function (u) { return !f('board', 'staff', '') || u.user_id === f('board', 'staff', ''); }).map(function (u) {
       var m = all.filter(function (i) { return i.assigned_user_id === u.user_id; });
       var op = m.filter(function (i) { return D.STATUS[i.status].open; });
       return {
@@ -1205,7 +1249,7 @@ LS.screens = (function () {
 
     // Theo đơn vị: lọc đúng kỳ đang chọn — trước đây đếm toàn bộ lịch sử dù thanh lọc
     // phía trên ghi một kỳ cụ thể.
-    var byUnit = st().units.filter(function (x) { return x.kind === 'DON_VI_GUI' || x.kind === 'PGD'; }).map(function (unit) {
+    var byUnit = sendingUnits().map(function (unit) {
       var m = all.filter(function (i) { var r = reqOf(i); return r && r.unit_id === unit.unit_id && inRange(i.occurrence_date + 'T12:00:00', report.range); });
       return {
         unit: unit, total: m.length,
@@ -1347,9 +1391,16 @@ LS.screens = (function () {
     };
   }
 
+  function reportKey(o) { return [o.from, o.to, o.group].join('|'); }
+
+  /**
+   * Chỉ gọi khi người dùng bấm "Chạy báo cáo". Đổi bộ lọc không tự tải: báo cáo
+   * năm bắt máy chủ gộp nhiều kỳ, chạy ngầm mỗi lần chạm vào ô lọc là tốn cả
+   * thời gian lẫn hạn mức Apps Script.
+   */
   function loadReport(force) {
     var o = reportOpts();
-    var key = [o.from, o.to, o.group].join('|');
+    var key = reportKey(o);
     if (!force && reportCache && reportCache.key === key) return;
 
     if (!U.isGas()) {
@@ -1371,8 +1422,7 @@ LS.screens = (function () {
 
   function setReportFilter(key, value) {
     setFilter('report', key, value);
-    if (key !== 'preset') setFilter('report', 'preset', 'custom');
-    loadReport(true);
+    if (key !== 'preset' && key !== 'group') setFilter('report', 'preset', 'custom');
     LS.app.render();
   }
 
@@ -1380,7 +1430,8 @@ LS.screens = (function () {
 
   function report() {
     var o = reportOpts();
-    loadReport(false);
+    var running = reportCache && reportCache.loading;
+    var stale = reportCache && reportCache.data && reportCache.key !== reportKey(o);
 
     var controls = '<div class="f-row" style="align-items:flex-end">' +
       ui.field('Khoảng thời gian',
@@ -1392,12 +1443,13 @@ LS.screens = (function () {
 
     var head = ui.block({
       title: 'Phạm vi báo cáo', icon: 'calendar',
-      actions: ui.btn('Tải lại', { act: 'report-refresh', sm: true, icon: 'history' }),
-      note: 'Việc kéo dài nhiều tháng chỉ được tính một lần, ở tháng nó phát sinh.',
+      actions: ui.btn(running ? 'Đang chạy…' : 'Chạy báo cáo', { act: 'report-run', sm: true, kind: 'primary', icon: 'play', disabled: running }) +
+        (reportCache && reportCache.data ? ui.btn('Tải Excel', { act: 'report-export', sm: true, icon: 'file' }) : ''),
+      note: 'Chọn phạm vi rồi bấm Chạy báo cáo — đổi ô lọc không tự tải. Việc kéo dài nhiều tháng chỉ được tính một lần, ở tháng nó phát sinh.',
       body: ui.pad(controls)
     });
 
-    if (reportCache && reportCache.loading) {
+    if (running) {
       return head + ui.block({ title: 'Đang tổng hợp', icon: 'chart',
         body: ui.empty({ icon: 'chart', title: 'Đang tổng hợp số liệu', text: 'Máy chủ đang gộp dữ liệu của ' + o.from + ' đến ' + o.to + '.' }) });
     }
@@ -1406,7 +1458,14 @@ LS.screens = (function () {
     }
 
     var data = reportCache && reportCache.data;
-    if (!data) return head;
+    if (!data) {
+      return head + ui.block({ title: 'Chưa chạy báo cáo', icon: 'chart',
+        body: ui.empty({ icon: 'chart', title: 'Chọn phạm vi rồi bấm Chạy báo cáo', text: 'Báo cáo chỉ tổng hợp khi bạn yêu cầu, để không bắt máy chủ gộp dữ liệu mỗi lần mở màn.',
+          action: ui.btn('Chạy báo cáo', { kind: 'primary', act: 'report-run', icon: 'play' }) }) });
+    }
+    var shown = String(reportCache.key).split('|');
+    var staleNote = stale ? ui.banner('warn', 'Đang hiện kết quả cũ: ' + shown[0] + ' → ' + shown[1],
+      'Bộ lọc đã đổi. Bấm Chạy báo cáo để tổng hợp theo phạm vi mới.') : '';
     var t = data.total;
 
     var strip = ui.strip([
@@ -1421,10 +1480,26 @@ LS.screens = (function () {
     ]);
 
     var groupLabel = (REPORT_GROUPS.filter(function (g) { return g[0] === data.group; })[0] || [])[1] || '';
+    var goal = target('target_done_month');
+    if (goal) {
+      var p = Math.round(t.hoan_thanh * 100 / (goal * Math.max(1, data.months.length)));
+      strip = ui.strip([
+        ui.metric('Đạt chỉ tiêu', p + '%', p >= 100 ? 'ok' : (p >= 70 ? 'info' : 'warn'), num(t.hoan_thanh) + '/' + num(goal * Math.max(1, data.months.length)) + ' việc')
+      ]) + strip;
+    }
+
+    var reportCharts = '<section class="block"><div class="viz-pair" style="border-top:0">' +
+      LS.charts.columns({ title: 'Phát sinh và hoàn thành theo tháng', labelHead: 'Tháng',
+        labels: data.months.map(function (m) { return m.name || m.month_key; }), target: goal,
+        series: [{ name: 'Phát sinh', values: data.months.map(function (m) { return Number(m.phat_sinh) || 0; }) },
+          { name: 'Hoàn thành', values: data.months.map(function (m) { return Number(m.hoan_thanh) || 0; }), slot: 2 }] }) +
+      LS.charts.bars({ title: 'Phát sinh theo ' + String(groupLabel).toLowerCase(), labelHead: groupLabel, sort: true,
+        rows: data.rows.map(function (r) { return { label: r.label, note: num(r.hoan_thanh) + ' hoàn thành' + (r.qua_han ? ' · ' + num(r.qua_han) + ' quá hạn' : '') }; }),
+        series: [{ name: 'Phát sinh', values: data.rows.map(function (r) { return Number(r.phat_sinh) || 0; }) }] }) +
+      '</div></section>';
 
     var byDim = ui.block({
       title: 'Theo ' + String(groupLabel).toLowerCase(), count: data.rows.length, icon: 'chart',
-      actions: ui.btn('Xuất CSV', { act: 'report-export', sm: true, icon: 'download' }),
       body: ui.table(
         [{ label: groupLabel }, { label: 'Phát sinh', cls: 'num' }, { label: 'Chuyển tiếp vào', cls: 'num' },
           { label: 'Hoàn thành', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }, { label: 'Hủy', cls: 'num' },
@@ -1470,7 +1545,37 @@ LS.screens = (function () {
       )
     });
 
-    return head + strip + byDim + byMonth;
+    return head + staleNote + strip + reportCharts + byDim + byMonth;
+  }
+
+  /** Excel của màn Tổng hợp: mỗi bảng một trang tính, theo đúng bộ lọc đang xem. */
+  function exportBoard() {
+    var report = performanceReport(reportRange());
+    resultCharts(report);
+    var range = report.range, items = boardItems();
+    var h = function (v) { return v === null || v === undefined ? '' : Math.round(v * 10) / 10; };
+    var scope = [['Kỳ', reportLabel(range)], ['Cán bộ', f('board', 'staff', '') ? userName(f('board', 'staff', '')) : 'Tất cả'],
+      ['Đơn vị', f('board', 'unit', '') ? unitName(f('board', 'unit', '')) : 'Tất cả'], ['Xuất lúc', U.fmtDT(U.now())]];
+    var groups = {};
+    items.filter(function (i) { return inRange(i.occurrence_date + 'T12:00:00', range); }).forEach(function (i) {
+      var g = wtGroup(i.work_type_code);
+      if (!groups[g]) groups[g] = { n: 0, open: 0, done: 0, huy: 0 };
+      groups[g].n += 1;
+      if (i.status === 'HOAN_THANH_LS') groups[g].done += 1; else if (i.status === 'HUY') groups[g].huy += 1; else groups[g].open += 1;
+    });
+    var units = sendingUnits().map(function (x) {
+      var m = items.filter(function (i) { var r = reqOf(i); return r && r.unit_id === x.unit_id && inRange(i.occurrence_date + 'T12:00:00', range); });
+      return [x.name, m.length, m.filter(function (i) { return i.status === 'HOAN_THANH_LS'; }).length, m.filter(function (i) { return D.STATUS[i.status].open; }).length];
+    }).filter(function (r) { return r[1]; });
+    LS.app.downloadXlsx('tong-hop-' + range.fromDate + '_' + range.toDate, [
+      { name: 'Phạm vi', rows: [['Mục', 'Giá trị']].concat(scope) },
+      { name: 'Kết quả cán bộ', rows: [['Cán bộ LS', 'Đơn vị', 'Đã giao', 'Hoàn thành', 'Đang mở', 'Quá hạn', 'TB nhận (giờ làm)', 'TB xử lý (giờ làm)', 'TB toàn trình (giờ làm)', 'Đúng hạn (%)']]
+        .concat(report.rows.map(function (x) { return [x.user.full_name, unitName(x.user.unit_id), x.assigned, x.done, x.open, x.late, h(x.avgReceiveHours), h(x.avgHours), h(x.avgTotalHours), x.onTime === null ? '' : x.onTime]; })) },
+      { name: 'Phát sinh - hoàn thành', rows: [['Mốc', 'Phát sinh', 'Hoàn thành']].concat(report.series.labels.map(function (l, i) { return [l, report.series.inflow[i], report.series.outflow[i]]; })) },
+      { name: 'Theo loại việc', rows: [['Nhóm loại việc', 'Phát sinh', 'Đang mở', 'Hoàn thành', 'Hủy']].concat(Object.keys(groups).map(function (g) { return [g, groups[g].n, groups[g].open, groups[g].done, groups[g].huy]; })) },
+      { name: 'Theo đơn vị', rows: [['Đơn vị', 'Tổng việc', 'Hoàn thành', 'Đang mở']].concat(units) },
+      { name: 'Trạng thái hiện tại', rows: [['Trạng thái', 'Số việc']].concat(Object.keys(D.STATUS).map(function (k) { return [D.STATUS[k].label, items.filter(function (i) { return i.status === k; }).length]; }).filter(function (r) { return r[1]; })) }
+    ]);
   }
 
   function exportReport() {
@@ -1483,16 +1588,14 @@ LS.screens = (function () {
       rows.push([r.label, r.phat_sinh, r.chuyen_tiep_vao, r.hoan_thanh, r.qua_han, r.huy, r.ton_cuoi_ky,
         r.gio_tiep_nhan_tb, r.gio_phan_cong_tb, r.gio_xu_ly_tb, r.gio_toan_trinh_tb]);
     });
-    rows.push([]);
-    rows.push(['Tháng', 'Phát sinh', 'Chuyển tiếp vào', 'Hoàn thành', 'Quá hạn', 'Tồn cuối kỳ']);
+    var months = [['Tháng', 'Phát sinh', 'Chuyển tiếp vào', 'Hoàn thành', 'Quá hạn', 'Tồn cuối kỳ']];
     data.months.forEach(function (m) {
-      rows.push([m.name || m.month_key, m.phat_sinh, m.chuyen_tiep_vao, m.hoan_thanh, m.qua_han, m.ton_cuoi_ky]);
+      months.push([m.name || m.month_key, m.phat_sinh, m.chuyen_tiep_vao, m.hoan_thanh, m.qua_han, m.ton_cuoi_ky]);
     });
-    var csv = rows.map(function (r) {
-      return r.map(function (c) { return '"' + String(c === undefined ? '' : c).replace(/"/g, '""') + '"'; }).join(',');
-    }).join('\n');
-    LS.app.download('bao-cao-' + data.from + '_' + data.to + '.csv', '﻿' + csv, 'text/csv;charset=utf-8');
-    ui.toast('Đã xuất ' + data.rows.length + ' dòng.');
+    LS.app.downloadXlsx('bao-cao-' + data.from + '_' + data.to, [
+      { name: 'Theo ' + groupLabel, rows: rows },
+      { name: 'Theo tháng', rows: months }
+    ]);
   }
 
   /* ============================ Màn: nhật ký ============================ */
@@ -2503,7 +2606,7 @@ LS.screens = (function () {
     detail: detail, saveChecklistToggle: saveChecklistToggle, addLinked: addLinked, toggleLinkedBox: toggleLinkedBox, flow: flow, quickAssign: quickAssign, submitFlow: submitFlow,
     editItem: editItem, submitEdit: submitEdit, revision: revision,
     newRequest: newRequest, submitNewRequest: submitNewRequest, rowForm: rowForm, syncProductOptions: syncProductOptions,
-    exportCsv: exportCsv, downloadDailyImage: downloadDailyImage, sweepOverdue: sweepOverdue,
+    exportCsv: exportCsv, downloadDailyImage: downloadDailyImage, exportBoard: exportBoard, sweepOverdue: sweepOverdue,
     visibleItems: visibleItems, setFilter: setFilter, toggleSort: toggleSort, resetFilters: resetFilters, resetFilter: resetFilter, openFilter: openFilter, setDraftFilter: setDraftFilter, applyFilter: applyFilter, applyReportFilter: applyReportFilter,
     staffList: staffList, userName: userName, unitName: unitName, itemLabel: itemLabel, itemRef: itemRef,
     roomShowBacklog: roomShowBacklog
