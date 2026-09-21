@@ -375,6 +375,7 @@ LS.app = (function () {
     'room-backlog': function () { S.roomShowBacklog(); },
     'board-tab': function (el) { S.setFilter('board', 'tab', el.getAttribute('data-tab') || 'report'); render(); },
     'sort-column': function (el) { S.toggleSort(el.getAttribute('data-screen') || current, el.getAttribute('data-sort') || 'date'); render(); },
+    'queue-unit': function (el) { S.setFilter('queue', 'qunit', el.getAttribute('data-unit') || ''); S.setFilter('queue', 'page', 1); render(); },
     'queue-tab': function (el) { S.setFilter('queue', 'tab', el.getAttribute('data-tab')); S.setFilter('queue', 'page', 1); render(); },
     'queue-page': function (el) { if (!el.disabled) { S.setFilter('queue', 'page', Number(el.getAttribute('data-page')) || 1); render(); } },
     revision: function (el) { S.revision(el.getAttribute('data-id'), el.getAttribute('data-ok') === '1'); },

@@ -49,3 +49,9 @@ if (!/'target_done_month', 'target_done_staff_month'/.test(read('Code.gs'))) fai
 if (!/function downloadXlsx/.test(app) || !/exportBoard/.test(screens)) fail('Phải xuất được Excel.');
 if (!/viz-target/.test(read('js/charts.js'))) fail('Đồ thị cột phải vẽ được đường chỉ tiêu.');
 console.log('Report run button, board filters, targets and Excel contract OK');
+
+// Hàng chờ: hôm nay → T+1 → còn lại; dòng hôm nay có nền riêng; chip lọc theo phòng.
+if (!/function queuePriority\(list\)/.test(screens) || !/queuePriority\(sortItems\(scoped, 'queue'\)\)/.test(screens)) fail('Hàng chờ phải ưu tiên hôm nay rồi T+1.');
+if (!/row-today/.test(screens) || !/tr\.row-today td/.test(css)) fail('Dòng hôm nay phải có nền riêng.');
+if (!/'queue-unit'/.test(app) || !/function queueUnitChips/.test(screens)) fail('Hàng chờ phải lọc được theo phòng.');
+console.log('Queue day priority and unit chips contract OK');

@@ -821,7 +821,9 @@ LS.screens = (function () {
         return '<div class="t1">' + U.esc(wtGroup(item.work_type_code)) + '</div>' +
           '<div class="t2">' + U.esc(productLabel(item)) + '</div>';
       case 'date':
-        return '<div class="t2">' + U.fmtDate(item.occurrence_date) + '</div>';
+        var dayRank = queueDayRank(item);
+        return '<div class="t2">' + U.fmtDate(item.occurrence_date) + '</div>' +
+          (dayRank === 0 ? ui.tag('Hôm nay', 'ok') : dayRank === 1 ? ui.tag('T+1', 'info') : '');
       case 'status':
         return ui.statusTag(item.status);
       case 'staff':
@@ -851,7 +853,8 @@ LS.screens = (function () {
       list.map(function (i) {
         var s = D.sla(i, st());
         return {
-          cls: (i.syncing ? 'is-pending ' : '') + priorityRowClass(i) + ' ' + (s && s.late ? 'flag' : (s && s.soon ? 'flag-warn' : '')),
+          cls: (i.syncing ? 'is-pending ' : '') + priorityRowClass(i) + ' ' + (s && s.late ? 'flag' : (s && s.soon ? 'flag-warn' : '')) +
+            (screen === 'queue' ? ['  row-today', ' row-next', ''][queueDayRank(i)] : ''),
           // Dòng nhận tiêu điểm bằng phím J/K (tabindex -1: không chen vào vòng Tab).
           attrs: i.syncing ? '' : ' data-row="' + U.attr(i.item_id) + '" tabindex="-1"',
           cells: keys.map(function (k) { return cell(k, i); })
@@ -1020,6 +1023,50 @@ LS.screens = (function () {
     return { from: from, to: to };
   }
 
+  /**
+   * Thứ tự ưu tiên của hàng chờ theo ngày phát sinh: 0 = hôm nay, 1 = T+1 (ngày làm
+   * việc kế tiếp — thứ Sáu thì T+1 là thứ Hai), 2 = các ngày còn lại. Chỉ tính cho
+   * việc còn mở; việc đã xong/hủy không cần kéo lên đầu.
+   */
+  var dayMarks = null;
+
+  function queueDays() {
+    var today = U.localDate();
+    if (dayMarks && dayMarks.today === today) return dayMarks;
+    var cal = D.processingCalendar(st()), d = new Date(today + 'T12:00:00'), guard = 0;
+    do { d.setDate(d.getDate() + 1); guard += 1; } while (!U.isWorkday(d, cal) && guard < 14);
+    dayMarks = { today: today, next: U.localDate(d) };
+    return dayMarks;
+  }
+
+  function queueDayRank(item) {
+    if (!item || !D.STATUS[item.status] || !D.STATUS[item.status].open) return 2;
+    var day = String(item.occurrence_date || '').substring(0, 10), m = queueDays();
+    return day === m.today ? 0 : day === m.next ? 1 : 2;
+  }
+
+  /** Giữ thứ tự sắp xếp người dùng chọn, nhưng luôn đưa hôm nay rồi T+1 lên trước. */
+  function queuePriority(list) {
+    return list.map(function (x, n) { return { x: x, n: n, r: queueDayRank(x) }; })
+      .sort(function (a, b) { return a.r - b.r || a.n - b.n; })
+      .map(function (o) { return o.x; });
+  }
+
+  /** Chip lọc theo phòng/PGD gửi; mặc định "Tất cả". */
+  function queueUnitChips(source, current) {
+    var counts = {};
+    source.forEach(function (i) { var r = reqOf(i); if (r) counts[r.unit_id] = (counts[r.unit_id] || 0) + 1; });
+    var units = st().units.filter(function (x) { return counts[x.unit_id]; });
+    if (!units.length && !current) return '';
+    var chip = function (id, label, n) {
+      var on = (current || '') === id;
+      return '<button type="button" class="unit-chip' + (on ? ' is-active' : '') + '" data-act="queue-unit" data-unit="' + U.attr(id) + '" aria-pressed="' + on + '">' +
+        U.esc(label) + ' <span>' + n + '</span></button>';
+    };
+    return '<div class="unit-chips" role="group" aria-label="Lọc theo phòng gửi">' + chip('', 'Tất cả phòng', source.length) +
+      units.map(function (x) { return chip(x.unit_id, x.name, counts[x.unit_id]); }).join('') + '</div>';
+  }
+
   function withinQueueWindow(item, range) {
     var day = String(item.occurrence_date || '').substring(0, 10);
     return !day || (day >= range.from && day <= range.to);
@@ -1071,7 +1118,13 @@ LS.screens = (function () {
       : tab === 'assign' ? all.filter(function (i) { return i.status === 'CHO_PHAN_CONG'; })
         : tab === 'assigned' ? all.filter(function (i) { return i.status === 'DA_PHAN_CONG'; })
         : tab === 'review' ? review : tab === 'late' ? all.filter(function (i) { var s = D.sla(i, st()); return s && s.late; }) : running;
-    var filtered = sortItems(applyFilters('queue', source), 'queue');
+    var unitSel = f('queue', 'qunit', '');
+    var scoped = applyFilters('queue', source);
+    var unitChips = queueUnitChips(scoped, unitSel);
+    if (unitSel) scoped = scoped.filter(function (i) { var r = reqOf(i); return r && r.unit_id === unitSel; });
+    var filtered = queuePriority(sortItems(scoped, 'queue'));
+    var todayCount = filtered.filter(function (i) { return queueDayRank(i) === 0; }).length;
+    var nextCount = filtered.filter(function (i) { return queueDayRank(i) === 1; }).length;
     var page = paginate(filtered, 'queue');
 
     var out = '';
@@ -1102,9 +1155,9 @@ LS.screens = (function () {
 
     out += ui.block({
       title: 'Hàng chờ & đang xử lý', count: filtered.length + '/' + source.length, icon: 'activity',
-      note: '',
-      filters: '<div class="queue-toolbar">' + queueTabs(tab, counts) + '<div class="queue-tools">' + listSearch('queue') + filterBar('queue', { status: true, type: true, staff: true, dates: true }) + sortControl('queue') + '</div></div>',
-      body: itemTable(page.rows, tab === 'intake' || tab === 'assign' ? ['code', 'customer', 'unit', 'work', 'date', 'status', 'act'] : ['code', 'customer', 'work', 'staff', 'sla', 'status', 'act'], {
+      note: todayCount || nextCount ? 'Ưu tiên trên cùng: <b>' + todayCount + '</b> việc hôm nay (nền xanh), <b>' + nextCount + '</b> việc T+1, sau đó các ngày còn lại.' : '',
+      filters: '<div class="queue-toolbar">' + queueTabs(tab, counts) + '<div class="queue-tools">' + listSearch('queue') + filterBar('queue', { status: true, type: true, staff: true, dates: true }) + sortControl('queue') + '</div></div>' + unitChips,
+      body: itemTable(page.rows, tab === 'intake' || tab === 'assign' ? ['code', 'customer', 'unit', 'work', 'date', 'status', 'act'] : ['code', 'customer', 'unit', 'work', 'date', 'staff', 'sla', 'status', 'act'], {
         icon: 'activity', title: 'Không có hồ sơ trong trang này', text: 'Đổi tab, kỳ ngày hoặc bộ lọc để xem danh sách khác.'
       }, 'queue') + pageControls(page)
     });

@@ -19,7 +19,7 @@ Bản trình duyệt không gửi ra ngoài; chỉ GAS gọi provider thật.
 
 ### URL web app đang dùng
 
-Deployment chuẩn đã được cập nhật lên **Version 22**, chạy dưới tài khoản
+Deployment chuẩn đã được cập nhật lên **Version 23**, chạy dưới tài khoản
 `daklak631a@gmail.com`, quyền truy cập `Anyone`:
 
 `https://script.google.com/macros/s/AKfycbylljXwRUkxUCL_wnxztLAzotSNi9iiOvgpGtXPCwzIQHjCgpPz6d_zvG_XC1urUlCH/exec`
@@ -79,6 +79,12 @@ thì tự xuất CSV thay thế.
 
 **Báo cáo nhiều kỳ chỉ chạy khi bấm "Chạy báo cáo".** Mở màn hay đổi ô lọc không tự gọi máy
 chủ; đổi lọc sau khi đã chạy thì kết quả cũ vẫn hiện kèm cảnh báo "kết quả cũ".
+
+**Hàng chờ ưu tiên theo ngày.** Trong mọi tab của Hàng chờ, việc có ngày phát sinh **hôm
+nay** luôn lên trên cùng (nền xanh ngọc, nhãn "Hôm nay"), kế đến **T+1** (ngày làm việc kế
+tiếp — thứ Sáu thì T+1 là thứ Hai; nhãn "T+1"), sau đó các ngày còn lại theo kiểu sắp xếp đang
+chọn. Hàng chip **phòng gửi** (mặc định "Tất cả phòng", kèm số việc) để tách riêng từng
+phòng/PGD; bảng luôn có cột Đơn vị.
 
 **Phím tắt** (bấm `?` hoặc nút bàn phím trên thanh đầu để xem): `1–9` chuyển màn, `/` tìm,
 `F` bộ lọc, `N` tạo việc, `R` tải lại, `[` `]` đổi tab/trang; trong danh sách `J`/`K` chọn

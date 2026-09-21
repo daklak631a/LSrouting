@@ -1104,3 +1104,18 @@ kbd { display: inline-block; min-width: 1.5em; padding: 0.08rem 0.4rem; border: 
 .keys dt { display: flex; gap: 0.25rem; flex-wrap: wrap; }
 .keys dd { margin: 0; color: var(--ink-2); }
 @media (hover: none) { [data-hotkeys] [data-hotkey]::after { display: none; } }
+
+/* ============================ Hàng chờ: ưu tiên ngày ============================ */
+
+/* Hôm nay: nền xanh ngọc nhạt, khác hẳn nền vàng (VIP), hồng (gấp), xanh dương (quan trọng).
+   Đặt sau các lớp ưu tiên khách nên nền hôm nay thắng; nhãn ưu tiên và vạch trái vẫn giữ. */
+table.t tbody tr.row-today td { background: #dff3ef; }
+table.t tbody tr.row-today:not(.flag):not(.flag-warn):not(.priority-urgent):not(.priority-vip):not(.priority-important) td:first-child { box-shadow: inset 4px 0 0 var(--brand); }
+table.t tbody tr.row-today:hover td { background: #cdebe5; }
+table.t tbody tr.row-next:not(.priority-urgent):not(.priority-vip):not(.priority-important) td { background: #f3f8fc; }
+.unit-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 1rem 0.65rem; }
+.unit-chip { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 30px; padding: 0.25rem 0.65rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-2); font-size: 0.76rem; font-weight: 600; cursor: pointer; }
+.unit-chip span { font: 600 0.7rem/1 'IBM Plex Mono', monospace; color: var(--ink-4); }
+.unit-chip:hover { border-color: var(--brand-300); color: var(--brand-800); }
+.unit-chip.is-active { border-color: var(--brand); background: var(--brand-50); color: var(--brand-800); }
+.unit-chip.is-active span { color: var(--brand-800); }
