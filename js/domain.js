@@ -721,15 +721,62 @@ LS.domain = (function () {
       breakFrom: '11:30', breakTo: '13:30', holidays: base.holidays || [] };
   }
 
+  /** Phải khớp CLOCK_RUNNING_ trong Code.gs. */
+  var CLOCK_RUNNING = ['DANG_THUC_HIEN', 'DA_SOAN_XONG', 'CHO_KS_DUYET'];
+
+  function clockPaused(item) {
+    var log = (item && item.pause_log) || [];
+    return !!(log.length && !log[log.length - 1][1]);
+  }
+
+  /** Ghi khoảng dừng khi chuyển trạng thái — cùng luật với nextPauseLog_ phía máy chủ. */
+  function applyClock(item, to, ts) {
+    if (!item.processing_started_at) return;
+    var log = (item.pause_log || []).map(function (x) { return x.slice(); });
+    var open = log.length && !log[log.length - 1][1];
+    var running = CLOCK_RUNNING.indexOf(to) !== -1;
+    if (running && open) log[log.length - 1][1] = ts;
+    else if (!running && !open) log.push([ts, '']);
+    else return;
+    item.pause_log = log;
+  }
+
+  /**
+   * Các khoảng đồng hồ thật sự chạy, dạng [[msTừ, msĐến], ...]: từ lúc bấm bắt
+   * đầu xử lý tới lúc hoàn thành (hoặc bây giờ), trừ các khoảng dừng.
+   */
+  function activeSpans(item, now) {
+    if (!item || !item.processing_started_at) return [];
+    var nowMs = now instanceof Date ? now.getTime() : (now ? new Date(now).getTime() : Date.now());
+    var start = new Date(item.processing_started_at).getTime();
+    var end = item.completed_at ? new Date(item.completed_at).getTime() : nowMs;
+    if (!(end > start)) return [];
+    var spans = [[start, end]];
+    ((item && item.pause_log) || []).forEach(function (p) {
+      var a = new Date(p[0]).getTime(), b = p[1] ? new Date(p[1]).getTime() : end;
+      if (!isFinite(a) || !(b > a)) return;
+      spans = spans.reduce(function (out, s) {
+        if (b <= s[0] || a >= s[1]) { out.push(s); return out; }
+        if (a > s[0]) out.push([s[0], a]);
+        if (b < s[1]) out.push([b, s[1]]);
+        return out;
+      }, []);
+    });
+    return spans;
+  }
+
   function processingHours(item, st, now) {
     if (!item || !item.processing_started_at) return null;
-    var end = item.completed_at || (now instanceof Date ? now.toISOString() : (now || U.now()));
-    return U.workingHours(item.processing_started_at, end, processingCalendar(st));
+    var cal = processingCalendar(st);
+    return Math.round(activeSpans(item, now).reduce(function (sum, s) {
+      return sum + (U.workingMilliseconds(new Date(s[0]).toISOString(), new Date(s[1]).toISOString(), cal) || 0);
+    }, 0) / 360000) / 10;
   }
 
   function processingLabel(item, st, now) {
     var h = processingHours(item, st, now);
-    return h === null ? 'Chưa bắt đầu' : h.toFixed(1) + ' giờ làm';
+    if (h === null) return 'Chưa bắt đầu';
+    return h.toFixed(1) + ' giờ làm' + (!item.completed_at && clockPaused(item) ? ' · đang dừng' : '');
   }
 
   /* ============================ Báo cáo nhiều kỳ ============================ */
@@ -1257,7 +1304,7 @@ LS.domain = (function () {
     usedVars: usedVars, checkTemplate: checkTemplate, renderTemplate: renderTemplate,
     recipientsFor: recipientsFor, contextFor: contextFor,
     queueNotifications: queueNotifications, dispatch: dispatch, outboxHealth: outboxHealth,
-    sla: sla, processingCalendar: processingCalendar, processingHours: processingHours, processingLabel: processingLabel, dueFrom: dueFrom,
+    sla: sla, processingCalendar: processingCalendar, processingHours: processingHours, processingLabel: processingLabel, activeSpans: activeSpans, applyClock: applyClock, clockPaused: clockPaused, dueFrom: dueFrom,
     seed: seed
   };
 })();

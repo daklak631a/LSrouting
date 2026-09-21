@@ -552,6 +552,7 @@ function syncMonthlyPlanWorkbook_(periodId) {
   units.forEach(function (u) {
     var tab = ss.getSheetByName(u.source_tab || u.name || u.unit_id);
     if (!tab) tab = ss.insertSheet(u.source_tab || u.name || u.unit_id);
+    ensurePlanTabHeader_(tab, plan, u, copiedTemplate);
     // Workbook mẫu có sẵn công thức kế hoạch ở G:K; chỉ thay vùng dữ liệu app.
     var clearRows = Math.max(tab.getMaxRows() - 3, 1);
     tab.getRange(4, 1, clearRows, 6).clearContent();
@@ -561,9 +562,14 @@ function syncMonthlyPlanWorkbook_(periodId) {
       return [i.source_stt, r.requestor_name || '', r.cif || '', r.customer_name || '', i.product_name || '', types[i.work_type_code] || i.work_type_code,
         i.occurrence_date || '', i.status || '', users[i.assigned_user_id] || '', i.note || ''];
     });
+    if (!copiedTemplate) tab.getRange(4, 7, clearRows, 3).clearContent();
     if (rows.length) {
       tab.getRange(4, 1, rows.length, 6).setValues(rows.map(function (row) { return row.slice(0, 6); }));
-      tab.getRange(4, 12, rows.length, 1).setValues(rows.map(function (row) { return [row[9] || row[7] || '']; }));
+      tab.getRange(4, 12, rows.length, 1).setValues(rows.map(function (row) { return [row[9] || STATUS_LABEL_[row[7]] || row[7] || '']; }));
+      // File trống không có công thức G:K của mẫu: ghi thẳng ngày, trạng thái, người xử lý.
+      if (!copiedTemplate) tab.getRange(4, 7, rows.length, 3).setValues(rows.map(function (row) {
+        return [row[6], STATUS_LABEL_[row[7]] || row[7], row[8]];
+      }));
     }
     tab.setFrozenRows(Math.max(tab.getFrozenRows(), 3));
   });
@@ -574,6 +580,34 @@ function syncMonthlyPlanWorkbook_(periodId) {
     .map(function (x) { return [x.catalog_key, x.unit_id || '', x.label, x.code || '']; });
   catalog.getRange(1, 1, 1, 4).setValues([['Nhóm', 'Đơn vị', 'Nhãn', 'Mã']]);
   if (options.length) catalog.getRange(2, 1, options.length, 4).setValues(options);
+}
+
+var STATUS_LABEL_ = {
+  CHO_TIEP_NHAN: 'Chờ tiếp nhận', CAN_BO_SUNG: 'Cần bổ sung', CHO_PHAN_CONG: 'Chờ phân công',
+  DA_PHAN_CONG: 'Đã phân công', DANG_THUC_HIEN: 'Đang thực hiện', DA_SOAN_XONG: 'Đã soạn xong',
+  DANG_HEN_KH: 'Đang hẹn khách', CHO_KS_DUYET: 'Chờ kiểm soát duyệt', HOAN_THANH_LS: 'Hoàn thành',
+  TAM_DUNG: 'Tạm dừng', HUY: 'Đã hủy'
+};
+
+/**
+ * Tab phòng/PGD chỉ được ghi dữ liệu từ dòng 4. File tạo trống, hoặc phòng mới
+ * chưa có tab trong mẫu, trước đây ra tab không tiêu đề: đọc không biết cột nào là
+ * gì. Chỉ ghi khi dòng tiêu đề còn trống — không đè tiêu đề/định dạng của mẫu.
+ */
+function ensurePlanTabHeader_(tab, plan, unit, copiedTemplate) {
+  if (!tab.getRange(1, 1).getValue()) {
+    tab.getRange(1, 1, 2, 1).setValues([[(plan.name || 'Kế hoạch hỗ trợ tín dụng') + ' — ' + (unit.name || unit.unit_id)],
+      ['Kỳ: ' + (plan.start_date || '') + ' đến ' + (plan.end_date || '')]]);
+    tab.getRange(1, 1).setFontWeight('bold').setFontSize(13);
+  }
+  var headRow = tab.getRange(3, 1, 1, 12).getValues()[0];
+  var head = ['STT', 'Cán bộ đề nghị', 'CIF', 'Tên khách hàng', 'Sản phẩm', 'Loại việc'];
+  if (!headRow[0]) tab.getRange(3, 1, 1, 6).setValues([head]);
+  if (!copiedTemplate && !headRow[6]) tab.getRange(3, 7, 1, 3).setValues([['Ngày phát sinh', 'Trạng thái', 'Cán bộ LS xử lý']]);
+  if (!headRow[11]) tab.getRange(3, 12).setValue('Ghi chú / trạng thái');
+  if (!headRow[0] || !headRow[11]) {
+    tab.getRange(3, 1, 1, 12).setFontWeight('bold').setBackground('#1f4e79').setFontColor('#ffffff');
+  }
 }
 
 function carryOpenWorkToPlan_(fromPeriodId, toPeriodId, u) {
@@ -610,7 +644,7 @@ function carryOpenWorkToPlan_(fromPeriodId, toPeriodId, u) {
         item_id: newItemId, period_id: toPeriodId, origin_item_id: old.origin_item_id || old.item_id, carryover_from_item_id: old.item_id,
         request_id: newRequestId, work_type_code: old.work_type_code, product_name: old.product_name, occurrence_date: targetPlan.start_date,
         source_stt: prefix + counts[oldReq.unit_id], source_tab: old.source_tab || '', status: 'CHO_TIEP_NHAN', assigned_user_id: '', assigned_by: '', submitted_at: stamp_(),
-        accepted_at: '', assigned_at: '', due_at: '', completed_at: '', processing_started_at: old.processing_started_at || '', appointment_json: '', checklist_json: old.checklist_json || '[]', pending_json: '',
+        accepted_at: '', assigned_at: '', due_at: '', completed_at: '', processing_started_at: old.processing_started_at || '', pause_log_json: nextPauseLog_(old, 'CHO_TIEP_NHAN', stamp_()) || old.pause_log_json || '', appointment_json: '', checklist_json: old.checklist_json || '[]', pending_json: '',
         note: 'Chuyển tiếp từ ' + old.item_id + '.', version: 1, created_at: stamp_(), updated_at: stamp_()
       });
       // Đánh dấu dòng cũ đã sinh ra dòng mới ở kỳ sau. Thiếu dấu này thì việc
@@ -686,7 +720,7 @@ function periodSummaryRows_(periodId) {
   var buckets = {};
 
   function bucket_(dimension, key, label) {
-    var id = dimension + ' ' + key;
+    var id = dimension + '\u0000' + key;
     if (!buckets[id]) {
       buckets[id] = { dimension: dimension, dim_key: key, dim_label: label,
         phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0,
@@ -748,10 +782,10 @@ function writePeriodSummary_(periodId) {
   DataRepository.tx(function (t) {
     var existing = {};
     t.rows('PeriodSummary').forEach(function (r) {
-      if (r.period_id === periodId) existing[r.dimension + ' ' + r.dim_key] = r.summary_id;
+      if (r.period_id === periodId) existing[r.dimension + '\u0000' + r.dim_key] = r.summary_id;
     });
     rows.forEach(function (row) {
-      var key = row.dimension + ' ' + row.dim_key;
+      var key = row.dimension + '\u0000' + row.dim_key;
       var fields = {
         period_id: row.period_id, month_key: row.month_key, dimension: row.dimension,
         dim_key: row.dim_key, dim_label: row.dim_label, phat_sinh: row.phat_sinh,
@@ -1237,6 +1271,8 @@ function transitionItem(itemId, to, opts) {
 
     if ((to === 'CHO_PHAN_CONG' || to === 'DA_PHAN_CONG') && !item.accepted_at) fields.accepted_at = ts;
     if (to === 'DANG_THUC_HIEN' && !item.processing_started_at) fields.processing_started_at = ts;
+    var pauses = nextPauseLog_(item, to, ts);
+    if (pauses !== null) fields.pause_log_json = pauses;
     if (to === 'HOAN_THANH_LS') {
       // Loại việc cần khách ký thì phải có lịch hẹn trước khi đóng việc.
       var doneType = t.find('WorkTypes', 'type_code', item.work_type_code);
@@ -1278,6 +1314,34 @@ function transitionItem(itemId, to, opts) {
   return result;
 }
 
+/* ---------------------------- Đồng hồ xử lý ---------------------------- */
+
+/**
+ * Đồng hồ chỉ chạy khi cán bộ LS đang thật sự làm hồ sơ. Tạm dừng, chờ khách lên
+ * ký, chờ người mới nhận việc, đã hủy/hoàn thành đều mở một khoảng dừng; quay lại
+ * trạng thái đang làm thì đóng khoảng đó. Lưu mốc thô, giờ làm tính ở giao diện
+ * theo lịch làm việc — đổi lịch thì số liệu cũ vẫn tính đúng.
+ */
+var CLOCK_RUNNING_ = ['DANG_THUC_HIEN', 'DA_SOAN_XONG', 'CHO_KS_DUYET'];
+
+function pauseLog_(item) {
+  var log = [];
+  try { log = JSON.parse(item.pause_log_json || '[]'); } catch (ignore) { log = []; }
+  return Array.isArray(log) ? log.filter(function (x) { return Array.isArray(x) && x[0]; }) : [];
+}
+
+/** Trả chuỗi JSON mới khi nhật ký dừng thay đổi, null nếu giữ nguyên. */
+function nextPauseLog_(item, to, ts) {
+  if (!item.processing_started_at) return null;
+  var log = pauseLog_(item);
+  var open = log.length && !log[log.length - 1][1];
+  var running = CLOCK_RUNNING_.indexOf(to) !== -1;
+  if (running && open) log[log.length - 1][1] = ts;
+  else if (!running && !open) log.push([ts, '']);
+  else return null;
+  return JSON.stringify(log);
+}
+
 /** Lưu trạng thái tick các nhóm việc, không đổi trạng thái hồ sơ. */
 function saveChecklist(itemId, checklist, expectedVersion) {
   var u = requireActor_();
@@ -1298,6 +1362,65 @@ function saveChecklist(itemId, checklist, expectedVersion) {
     t.append('Events', { event_id: id_('EVT'), item_id: itemId, type: 'CAP_NHAT_CHECKLIST', by: u.user_id, at: ts,
       reason: normalized.filter(Boolean).length + '/' + defs.length + ' nhóm việc đã hoàn thành.', before_json: item.checklist_json || '[]', after_json: fields.checklist_json });
     return { ok: true, version: fields.version, checklist: normalized, period_id: item.period_id };
+  });
+  syncMonthlyPlanWorkbook_(result.period_id);
+  return result;
+}
+
+/* ---------------------------- Việc kèm ---------------------------- */
+
+var LINKABLE_STATUS_ = ['DA_PHAN_CONG', 'DANG_THUC_HIEN', 'DA_SOAN_XONG', 'DANG_HEN_KH', 'TAM_DUNG'];
+
+/**
+ * Cán bộ đang làm một việc (vd. vay món) phát hiện phải làm thêm hồ sơ TSĐB mới:
+ * tạo một dòng việc thật thứ hai cùng hồ sơ khách, giao luôn cho người đang làm và
+ * bắt đầu tính giờ ngay. Là dòng WorkItems riêng nên mọi báo cáo, file kế hoạch và
+ * dashboard tự đếm thành 2 việc — không cần cờ phụ nào để cộng thêm.
+ */
+function addLinkedItem(parentId, workTypeCode) {
+  var u = requireActor_();
+  if (['CAN_BO_LS', 'KS_LS', 'QUAN_LY_LS'].indexOf(u.role) === -1) throw new Error('Vai trò không được thêm việc kèm.');
+  var result = DataRepository.tx(function (t) {
+    var found = t.find('WorkItems', 'item_id', parentId);
+    if (!found) throw new Error('Không tìm thấy việc ' + parentId + '.');
+    var parent = found.object;
+    if (u.role === 'CAN_BO_LS' && parent.assigned_user_id !== u.user_id) throw new Error('Chỉ người được giao mới thêm việc kèm.');
+    if (LINKABLE_STATUS_.indexOf(parent.status) === -1 || !parent.assigned_user_id) throw new Error('Chỉ thêm việc kèm khi việc chính đang được cán bộ LS xử lý.');
+    var wt = t.find('WorkTypes', 'type_code', workTypeCode);
+    if (!wt || !truthy_(wt.object.is_active)) throw new Error('Loại việc kèm không hợp lệ.');
+    if (workTypeCode === parent.work_type_code) throw new Error('Việc kèm phải khác sản phẩm của việc chính.');
+    var dup = t.rows('WorkItems').filter(function (i) {
+      return i.parent_item_id === parentId && i.work_type_code === workTypeCode && i.status !== 'HUY';
+    })[0];
+    if (dup) throw new Error('Đã có việc kèm ' + (wt.object.display_name || workTypeCode) + ' cho việc này.');
+
+    var req = t.find('Requests', 'request_id', parent.request_id);
+    var unitId = req ? req.object.unit_id : '';
+    var unit = unitId ? t.find('Units', 'unit_id', unitId) : null;
+    var defs = [];
+    try { defs = JSON.parse(wt.object.checklist_json || '[]'); } catch (ignore) { defs = []; }
+    var ts = stamp_();
+    var itemId = id_('ITEM');
+    t.append('WorkItems', {
+      item_id: itemId, period_id: parent.period_id, origin_item_id: '', carryover_from_item_id: '',
+      parent_item_id: parentId, request_id: parent.request_id,
+      work_type_code: workTypeCode, product_name: wt.object.display_name || workTypeCode,
+      occurrence_date: ts.substring(0, 10),
+      source_stt: nextSourceStt_(t, unitId, parent.period_id),
+      source_tab: unit ? (unit.object.source_tab || unit.object.name || unitId) : (parent.source_tab || unitId),
+      status: 'DANG_THUC_HIEN', assigned_user_id: parent.assigned_user_id, assigned_by: u.user_id,
+      submitted_at: ts, accepted_at: ts, assigned_at: ts,
+      due_at: dueAt_(t, ts, Number(wt.object.sla_hours) || 8),
+      completed_at: '', processing_started_at: ts, appointment_json: '',
+      checklist_json: JSON.stringify(defs.map(function () { return false; })),
+      pending_json: '', note: '', version: 1, created_at: ts, updated_at: ts
+    });
+    t.append('Events', {
+      event_id: id_('EVT'), item_id: itemId, type: 'TAO_VIEC', by: u.user_id, at: ts,
+      reason: 'Việc kèm của ' + (parent.source_stt || parentId) + ' — bắt đầu xử lý ngay.',
+      before_json: '', after_json: JSON.stringify({ parent_item_id: parentId, work_type_code: workTypeCode })
+    });
+    return { ok: true, item_id: itemId, period_id: parent.period_id };
   });
   syncMonthlyPlanWorkbook_(result.period_id);
   return result;

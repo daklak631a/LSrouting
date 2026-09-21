@@ -43,6 +43,11 @@ var SCHEMA = {
     // Việc mở sang kỳ sau được nhân thành dòng mới ở kỳ đó. Không đánh dấu dòng
     // cũ thì báo cáo nhiều kỳ đếm một việc thành nhiều việc.
     'carried_to_item_id',
+    // Việc kèm (vd. hồ sơ TSĐB mới phát sinh khi đang làm vay món) trỏ về việc chính.
+    'parent_item_id',
+    // Các khoảng dừng đồng hồ xử lý [[từ, đến], ...]: tạm dừng, chờ khách ký, chờ
+    // người mới nhận, đã hủy/hoàn thành. Đến rỗng nghĩa là đang dừng.
+    'pause_log_json',
     'version', 'created_at', 'updated_at'],
 
   Events: ['event_id', 'item_id', 'type', 'by', 'at', 'reason', 'before_json', 'after_json'],

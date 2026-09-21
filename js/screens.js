@@ -710,7 +710,8 @@ LS.screens = (function () {
       case 'code':
         if (item.syncing) return '<div class="tid">—</div>' + ui.tag('Đang gửi…', 'info');
         return '<div class="tid">' + U.esc(itemRef(item)) + '</div>' +
-          (item.pending ? ui.tag('Chờ duyệt sửa', 'gold') : '');
+          (item.pending ? ui.tag('Chờ duyệt sửa', 'gold') : '') +
+          (item.parent_item_id ? ui.tag('Việc kèm', 'violet') : '');
       case 'customer':
         // Quản trị hệ thống xem được vận hành nhưng không xem hồ sơ khách,
         // giống hệt quy tắc đã áp trong hộp thoại chi tiết.
@@ -1046,12 +1047,21 @@ LS.screens = (function () {
     });
     var doneToday = items.filter(function (i) { return i.status === 'HOAN_THANH_LS' && String(i.completed_at || '').substring(0, 10) === today; });
     var running = items.filter(function (i) { return D.STATUS[i.status] && D.STATUS[i.status].open; });
-    var hours = touched.reduce(function (sum, i) {
-      if (!i.processing_started_at) return sum;
-      var start = new Date(i.processing_started_at), end = i.completed_at ? new Date(i.completed_at) : now;
-      if (start < todayStart) start = todayStart;
-      if (end > now) end = now;
-      var h = U.workingHours(start.toISOString(), end.toISOString(), D.processingCalendar(st()));
+    // Gộp các khoảng chồng nhau trước khi cộng: làm song song vay món và TSĐB
+    // trong cùng một giờ vẫn chỉ là một giờ làm của cán bộ, không phải hai.
+    // Khoảng tạm dừng / chờ khách ký đã bị trừ sẵn trong activeSpans.
+    var spans = touched.reduce(function (all, i) {
+      return all.concat(D.activeSpans(i, now).map(function (x) {
+        return [Math.max(x[0], todayStart.getTime()), Math.min(x[1], now.getTime())];
+      }));
+    }, []).filter(function (x) { return x[1] > x[0]; }).sort(function (a, b) { return a[0] - b[0]; });
+    var merged = spans.reduce(function (out, x) {
+      var last = out[out.length - 1];
+      if (last && x[0] <= last[1]) last[1] = Math.max(last[1], x[1]); else out.push(x.slice());
+      return out;
+    }, []);
+    var hours = merged.reduce(function (sum, x) {
+      var h = U.workingHours(new Date(x[0]).toISOString(), new Date(x[1]).toISOString(), D.processingCalendar(st()));
       return sum + (h || 0);
     }, 0);
     var rows = touched.slice().sort(function (a, b) { return new Date(b.completed_at || b.processing_started_at || 0) - new Date(a.completed_at || a.processing_started_at || 0); }).slice(0, 30);
@@ -1489,17 +1499,8 @@ LS.screens = (function () {
         ['Phiên bản', 'v' + i.version]
       ]) + '</div>';
 
-    if (wt && wt.checklist.length) {
-      var checklistValues = Array.isArray(i.checklist) ? i.checklist : [];
-      var checklistDone = wt.checklist.filter(function (_, idx) { return checklistValues[idx] === true; }).length;
-      body += '<div style="margin-top:1.125rem">' + ui.sectionTitle('Việc cần làm') +
-        '<p class="t2">Đã hoàn thành ' + checklistDone + '/' + wt.checklist.length + ' nhóm. Tích từng nhóm để ghi nhận phần việc và giờ xử lý.</p>' +
-        '<div class="f-stack">' + wt.checklist.map(function (c, idx) {
-          var canTick = i.assigned_user_id === u.user_id || ['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1;
-          return '<label class="chan-check"><input type="checkbox" data-act="checklist-toggle" data-id="' + U.attr(i.item_id) + '" data-index="' + idx + '"' + (checklistValues[idx] === true ? ' checked' : '') + (canTick ? '' : ' disabled') + '><span>' + U.esc(c) + '</span></label>';
-        }).join('') + '</div>' +
-        (checklistDone === wt.checklist.length ? ui.banner('ok', 'Đã ghi nhận đủ các nhóm việc', 'Bạn có thể bấm nút hoàn thành theo đúng bước của luồng để đóng toàn bộ hồ sơ.') : '') + '</div>';
-    }
+    body += '<div data-checklist-box="' + U.attr(i.item_id) + '">' + checklistSection(i) + '</div>';
+    body += linkedSection(i);
 
     if (i.appointment) {
       var ap = i.appointment;
@@ -1566,31 +1567,211 @@ LS.screens = (function () {
         });
       }).join('') + '</div>';
 
-    ui.openDialog('Việc ' + itemRef(i), body, { size: 'md', sub: (wt ? (wt.group || wt.name) : '') + ' · ' + i.product_name });
+    ui.openDialog('Việc ' + itemRef(i), '<div data-detail="' + U.attr(i.item_id) + '">' + body + '</div>',
+      { size: 'md', sub: (wt ? (wt.group || wt.name) : '') + ' · ' + i.product_name });
+  }
+
+  /** Hộp thoại chi tiết của việc này còn đang mở trên màn hình. */
+  function detailShowing(itemId) {
+    return ui.dialogOpen() && !!document.querySelector('#dialog [data-detail="' + String(itemId).replace(/["\\]/g, '') + '"]');
+  }
+
+  function checklistSection(i) {
+    var wt = wtOf(i), u = me();
+    if (!wt || !wt.checklist.length) return '';
+    var values = Array.isArray(i.checklist) ? i.checklist : [];
+    var done = wt.checklist.filter(function (_, idx) { return values[idx] === true; }).length;
+    var canTick = i.assigned_user_id === u.user_id || ['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1;
+    return '<div style="margin-top:1.125rem">' + ui.sectionTitle('Việc cần làm') +
+      '<p class="t2">Đã hoàn thành ' + done + '/' + wt.checklist.length + ' nhóm. Tích từng nhóm để ghi nhận phần việc.</p>' +
+      '<div class="f-stack">' + wt.checklist.map(function (c, idx) {
+        return '<label class="chan-check"><input type="checkbox" data-act="checklist-toggle" data-id="' + U.attr(i.item_id) + '" data-index="' + idx + '"' + (values[idx] === true ? ' checked' : '') + (canTick ? '' : ' disabled') + '><span>' + U.esc(c) + '</span></label>';
+      }).join('') + '</div>' +
+      (done === wt.checklist.length ? ui.banner('ok', 'Đã ghi nhận đủ các nhóm việc', 'Bạn có thể bấm nút hoàn thành theo đúng bước của luồng để đóng toàn bộ hồ sơ.') : '') + '</div>';
+  }
+
+  function refreshChecklistBox(itemId) {
+    if (!detailShowing(itemId)) return;
+    var box = document.querySelector('#dialog [data-checklist-box="' + String(itemId).replace(/["\\]/g, '') + '"]');
+    var i = U.byId(st().items, 'item_id', itemId);
+    if (box && i) box.innerHTML = checklistSection(i);
+  }
+
+  /*
+   * Tích nhiều ô liên tiếp: trước đây ô thứ hai bị bỏ qua trong lúc ô đầu còn
+   * đang lưu, nhưng trên màn hình vẫn hiện đã tích — người dùng tưởng đã lưu.
+   * Giờ mỗi lần tích chỉ đổi dữ liệu tại chỗ; sau một nhịp ngắn gửi nguyên mảng
+   * hiện tại lên máy chủ, các lần gửi nối đuôi nhau nên phiên bản luôn khớp.
+   */
+  var checklistQueue = {};
+
+  function checklistPending(itemId) {
+    var q = checklistQueue[itemId];
+    return !!(q && (q.timer || q.busy));
+  }
+
+  function flushChecklist(itemId) {
+    var q = checklistQueue[itemId];
+    if (!q) return Promise.resolve();
+    if (q.timer) {
+      clearTimeout(q.timer);
+      q.timer = null;
+      q.chain = q.chain.then(function () { return sendChecklist(itemId); });
+    }
+    return q.chain;
+  }
+
+  function sendChecklist(itemId) {
+    var q = checklistQueue[itemId], i = U.byId(st().items, 'item_id', itemId);
+    if (!q || !i) return null;
+    var values = (i.checklist || []).slice(), json = JSON.stringify(values);
+    if (json === q.saved) return null;
+    q.busy += 1;
+    return LS.app.background(LS.api.saveChecklist(itemId, values, i.version), {
+      label: 'Ghi nhận nhóm việc',
+      onOk: function (result) {
+        q.busy -= 1;
+        q.saved = json;
+        var live = U.byId(st().items, 'item_id', itemId);
+        if (live && result && result.version) live.version = result.version;
+      },
+      rollback: function () {
+        q.busy -= 1;
+        var live = U.byId(st().items, 'item_id', itemId);
+        if (live) live.checklist = JSON.parse(q.saved);
+        refreshChecklistBox(itemId);
+      }
+    });
   }
 
   function saveChecklistToggle(itemId, index, checked) {
     var i = U.byId(st().items, 'item_id', itemId), wt = i && wtOf(i);
     if (!i || !wt || !wt.checklist.length || i.syncing) return;
-    var before = JSON.parse(JSON.stringify(i)), expected = i.version;
     var values = Array.isArray(i.checklist) ? i.checklist.slice() : [];
+    var saved = JSON.stringify(values);
     values[index] = !!checked;
     while (values.length < wt.checklist.length) values.push(false);
     i.checklist = values.slice(0, wt.checklist.length);
-    i.version = Number(i.version || 1) + 1;
-    i.syncing = true;
+    refreshChecklistBox(itemId);
+
     if (U.isGas()) {
-      LS.app.background(LS.api.saveChecklist(i.item_id, i.checklist, expected), {
-        label: 'Ghi nhận nhóm việc',
-        onOk: function (result) { i.syncing = false; if (result && result.version) i.version = result.version; detail(i.item_id); },
-        rollback: function () { Object.keys(before).forEach(function (k) { i[k] = before[k]; }); detail(i.item_id); }
+      var q = checklistQueue[itemId] || (checklistQueue[itemId] = { chain: Promise.resolve(), busy: 0, timer: null, saved: saved });
+      if (q.timer) clearTimeout(q.timer);
+      q.timer = setTimeout(function () { flushChecklist(itemId); }, 500);
+      return;
+    }
+    i.version = Number(i.version || 1) + 1;
+    logEvent(i.item_id, 'CAP_NHAT_CHECKLIST', i.checklist.filter(Boolean).length + '/' + wt.checklist.length + ' nhóm việc đã hoàn thành.');
+    U.save();
+  }
+
+  /* ============================ Việc kèm (vd. hồ sơ TSĐB mới) ============================ */
+
+  var LINKABLE_STATUS = ['DA_PHAN_CONG', 'DANG_THUC_HIEN', 'DA_SOAN_XONG', 'DANG_HEN_KH', 'TAM_DUNG'];
+  var LINKED_GROUP = 'TSĐB';
+
+  function linkedChildren(i) {
+    return st().items.filter(function (x) { return x.parent_item_id && x.parent_item_id === i.item_id && x.status !== 'HUY'; });
+  }
+
+  function linkedOptions(i) {
+    var taken = linkedChildren(i).map(function (x) { return x.work_type_code; });
+    return st().workTypes.filter(function (w) {
+      return w.active && w.group === LINKED_GROUP && w.code !== i.work_type_code && taken.indexOf(w.code) === -1;
+    });
+  }
+
+  function canAddLinked(i) {
+    var u = me();
+    if (!u || i.syncing || i.parent_item_id || !i.assigned_user_id || LINKABLE_STATUS.indexOf(i.status) === -1) return false;
+    if (u.role === 'CAN_BO_LS') return i.assigned_user_id === u.user_id;
+    return ['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1;
+  }
+
+  /**
+   * Đang làm vay món mà có thêm tài sản mới: tích một ô là thành việc thứ hai
+   * (dòng việc riêng, giao luôn cho người đang làm), nên báo cáo đếm 2 việc.
+   */
+  function linkedSection(i) {
+    var parent = i.parent_item_id ? U.byId(st().items, 'item_id', i.parent_item_id) : null;
+    var kids = linkedChildren(i);
+    var html = '';
+    if (parent) {
+      html += ui.banner('info', 'Đây là việc kèm',
+        'Phát sinh trong lúc xử lý việc ' + itemRef(parent) + ' (' + productLabel(parent) + '). Được tính là một việc riêng.') ;
+      html += '<div class="form-end" style="margin-top:.5rem">' +
+        ui.btn('Mở việc chính', { sm: true, act: 'detail', data: ' data-id="' + U.attr(parent.item_id) + '"' }) + '</div>';
+    }
+    if (kids.length) {
+      html += '<div class="f-stack" style="margin-top:.5rem">' + kids.map(function (k) {
+        return '<div class="act-row"><span class="tid">' + U.esc(k.syncing ? 'Đang tạo…' : itemRef(k)) + '</span>' +
+          '<span class="t2">' + U.esc(productLabel(k)) + '</span>' + ui.statusTag(k.status) +
+          (k.syncing ? '' : ui.btn('Mở', { sm: true, kind: 'line', act: 'detail', data: ' data-id="' + U.attr(k.item_id) + '"' })) + '</div>';
+      }).join('') + '</div>';
+    }
+    var opts = canAddLinked(i) ? linkedOptions(i) : [];
+    if (opts.length) {
+      var def = opts.filter(function (w) { return /nhập mới/i.test(w.name); })[0] || opts[0];
+      html += '<label class="chan-check" style="margin-top:.625rem"><input type="checkbox" data-act="linked-toggle">' +
+        '<span>Có làm kèm hồ sơ TSĐB (tài sản mới) — tính thêm 1 việc</span></label>' +
+        '<div data-linked-box hidden style="margin-top:.5rem">' +
+        '<div class="f-row">' + ui.field('Sản phẩm TSĐB', ui.select('linked_type', opts.map(function (w) { return [w.code, w.name]; }), def.code, { attrs: ' data-role="linked-type"' })) + '</div>' +
+        '<p class="t2">Việc TSĐB được giao luôn cho ' + U.esc(userName(i.assigned_user_id) || 'cán bộ đang xử lý') + ' và bắt đầu tính giờ từ lúc thêm.</p>' +
+        '<div class="form-end">' + ui.btn('Thêm việc TSĐB', { kind: 'primary', sm: true, act: 'add-linked', data: ' data-id="' + U.attr(i.item_id) + '"' }) + '</div></div>';
+    }
+    if (!html) return '';
+    return '<div style="margin-top:1.125rem">' + ui.sectionTitle('Việc kèm') + html + '</div>';
+  }
+
+  function toggleLinkedBox(on) {
+    var box = document.querySelector('#dialog [data-linked-box]');
+    if (box) box.hidden = !on;
+  }
+
+  function addLinked(parentId) {
+    var parent = U.byId(st().items, 'item_id', parentId);
+    var sel = document.querySelector('#dialog [data-role="linked-type"]');
+    var wt = sel ? U.byId(st().workTypes, 'code', sel.value) : null;
+    if (!parent || !canAddLinked(parent)) { ui.toast('Không thể thêm việc kèm ở trạng thái này.', 'err'); return; }
+    if (!wt || linkedOptions(parent).indexOf(wt) === -1) { ui.toast('Chọn sản phẩm TSĐB hợp lệ.', 'err'); return; }
+    var ts = U.now();
+    var child = {
+      item_id: U.isGas() ? 'TAM_' + Date.now().toString(36).toUpperCase() : U.uid('ITEM'),
+      period_id: parent.period_id || '', parent_item_id: parent.item_id, request_id: parent.request_id,
+      work_type_code: wt.code, product_name: wt.name, occurrence_date: U.localDate(),
+      source_tab: parent.source_tab || '', status: 'DANG_THUC_HIEN',
+      assigned_user_id: parent.assigned_user_id, assigned_by: st().session,
+      submitted_at: ts, accepted_at: ts, assigned_at: ts, due_at: D.dueFrom(ts, wt.code, st()),
+      completed_at: '', processing_started_at: ts, appointment: null,
+      checklist: wt.checklist.map(function () { return false; }), note: '', pending: null, version: 1
+    };
+    st().items.unshift(child);
+
+    if (U.isGas()) {
+      var tmp = child.item_id;
+      child.syncing = true;
+      detail(parentId);
+      LS.app.render();
+      LS.app.background(LS.api.addLinkedItem(parentId, wt.code), {
+        label: 'Thêm việc kèm',
+        onOk: function (result) {
+          var row = U.byId(st().items, 'item_id', tmp);
+          if (row) { row.item_id = result.item_id; row.syncing = false; }
+          if (detailShowing(parentId)) detail(parentId); else if (!ui.dialogOpen()) LS.app.render();
+          ui.toast('Đã thêm việc ' + wt.name + ' — tính thành việc riêng.', 'ok');
+        },
+        rollback: function () {
+          st().items = st().items.filter(function (x) { return x.item_id !== tmp; });
+          if (detailShowing(parentId)) detail(parentId);
+        }
       });
       return;
     }
-    i.syncing = false;
-    logEvent(i.item_id, 'CAP_NHAT_CHECKLIST', i.checklist.filter(Boolean).length + '/' + wt.checklist.length + ' nhóm việc đã hoàn thành.');
+    logEvent(child.item_id, 'TAO_VIEC', 'Việc kèm của ' + itemRef(parent) + ' — bắt đầu xử lý ngay.');
     U.save();
-    detail(i.item_id);
+    detail(parentId);
+    LS.app.render();
+    ui.toast('Đã thêm việc ' + wt.name + ' — tính thành việc riêng.', 'ok');
   }
 
   /* ============================ Hộp thoại: chuyển trạng thái ============================ */
@@ -1712,7 +1893,19 @@ LS.screens = (function () {
     // Một lần bấm đã gửi lên GAS thì không cho form/dialog cũ gửi lại lần hai.
     // Trước đây lần bấm thứ hai thấy trạng thái lạc quan đã đổi và hiện
     // "Thao tác không hợp lệ", dù lần đầu vẫn đang được lưu đúng.
-    if (i.syncing) return;
+    if (i.syncing || form.getAttribute('data-waiting')) return;
+    // Ô checklist vừa tích còn đang chờ lưu: chờ lưu xong rồi mới chuyển bước,
+    // nếu không máy chủ thấy lệch phiên bản hoặc thấy chưa tích đủ.
+    if (U.isGas() && checklistPending(i.item_id)) {
+      form.setAttribute('data-waiting', '1');
+      flushChecklist(i.item_id).then(function () {
+        form.removeAttribute('data-waiting');
+        var live = U.byId(st().items, 'item_id', i.item_id);
+        if (live) form.setAttribute('data-version', String(live.version));
+        submitFlow(form);
+      });
+      return;
+    }
     var fromStatus = form.getAttribute('data-from') || i.status;
     var tr = actionsFor(i).filter(function (a) { return a.to === to; })[0];
     if (!tr) {
@@ -1791,6 +1984,7 @@ LS.screens = (function () {
 
     if ((to === 'CHO_PHAN_CONG' || to === 'DA_PHAN_CONG') && !i.accepted_at) i.accepted_at = ts;
     if (to === 'DANG_THUC_HIEN' && !i.processing_started_at) i.processing_started_at = ts;
+    D.applyClock(i, to, ts);
     if (to === 'HOAN_THANH_LS') i.completed_at = ts;
     if (to === 'DANG_THUC_HIEN' && i.status === 'HOAN_THANH_LS') i.completed_at = '';
     if (tr.note && reason) i.note = reason;
@@ -1812,7 +2006,15 @@ LS.screens = (function () {
         }),
         {
           label: tr.label,
-          onOk: function () { i.syncing = false; },
+          onOk: function (result) {
+            // Trước đây chỉ gỡ cờ mà không vẽ lại: dòng việc cứ hiện "đang gửi",
+            // không có nút bước kế tiếp cho tới khi người dùng tự tải lại trang.
+            var live = U.byId(st().items, 'item_id', i.item_id) || i;
+            live.syncing = false;
+            if (result && result.version) live.version = result.version;
+            if (!ui.dialogOpen()) LS.app.render();
+            else if (detailShowing(live.item_id)) detail(live.item_id);
+          },
           rollback: function () {
             var live = U.byId(st().items, 'item_id', before.item_id);
             if (live) Object.keys(before).forEach(function (k) { live[k] = before[k]; });
@@ -2197,7 +2399,7 @@ LS.screens = (function () {
     work: work, room: room, roomBoard: roomBoard, queue: queue, mine: mine, personalDashboard: personalDashboard, board: board, periods: periods, audit: audit,
     report: report, exportReport: exportReport, refreshReport: refreshReport, setReportFilter: setReportFilter,
     headerSummary: headerSummary,
-    detail: detail, saveChecklistToggle: saveChecklistToggle, flow: flow, quickAssign: quickAssign, submitFlow: submitFlow,
+    detail: detail, saveChecklistToggle: saveChecklistToggle, addLinked: addLinked, toggleLinkedBox: toggleLinkedBox, flow: flow, quickAssign: quickAssign, submitFlow: submitFlow,
     editItem: editItem, submitEdit: submitEdit, revision: revision,
     newRequest: newRequest, submitNewRequest: submitNewRequest, rowForm: rowForm, syncProductOptions: syncProductOptions,
     exportCsv: exportCsv, downloadDailyImage: downloadDailyImage, sweepOverdue: sweepOverdue,

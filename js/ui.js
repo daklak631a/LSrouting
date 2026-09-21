@@ -199,6 +199,10 @@ LS.ui = (function () {
   /* ---------------------------- Hộp thoại ---------------------------- */
 
   var lastFocus = null;
+  var closeHooks = [];
+
+  /** Gọi lại mỗi khi hộp thoại đóng — để lượt tải lại bị hoãn được chạy bù. */
+  function onDialogClose(fn) { closeHooks.push(fn); }
 
   function openDialog(title, body, o) {
     o = o || {};
@@ -221,6 +225,7 @@ LS.ui = (function () {
     el.sub.textContent = '';
     if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
     lastFocus = null;
+    closeHooks.forEach(function (fn) { try { fn(); } catch (ignore) { /* không chặn việc đóng */ } });
   }
 
   function dialogOpen() { return el.scrim.classList.contains('on'); }
@@ -274,7 +279,7 @@ LS.ui = (function () {
     field: field, input: input, textarea: textarea, select: select,
     switchBox: switchBox, checkbox: checkbox, search: search,
     btn: btn, iconBtn: iconBtn, formEnd: formEnd,
-    openDialog: openDialog, closeDialog: closeDialog, dialogOpen: dialogOpen,
+    openDialog: openDialog, closeDialog: closeDialog, dialogOpen: dialogOpen, onDialogClose: onDialogClose,
     trapTab: trapTab, confirm: confirm, runConfirm: runConfirm, toast: toast
   };
 })();

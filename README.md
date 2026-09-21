@@ -41,6 +41,31 @@ nhóm sẽ ghi sự kiện `CAP_NHAT_CHECKLIST`; chỉ được báo soạn xong
 đã tích đủ. Nếu hộp thoại bị đồng bộ lại trong lúc đang mở, giao diện báo rõ
 xung đột trạng thái và yêu cầu tải lại thay vì hiện lỗi chung.
 
+**Việc kèm TSĐB.** Đang làm một việc (vd. vay món) mà phát sinh hồ sơ TSĐB mới, cán bộ
+LS (hoặc kiểm soát) tích ô *Có làm kèm hồ sơ TSĐB* trong chi tiết việc và chọn sản phẩm
+TSĐB. Hệ thống (`addLinkedItem`) tạo một dòng việc riêng cùng hồ sơ khách, trỏ về việc
+chính qua cột `parent_item_id`, giao luôn cho người đang làm và bắt đầu tính giờ ngay —
+nên báo cáo, file kế hoạch và dashboard đếm thành 2 việc. Kho cũ cần chạy lại
+`setupSheetDB()` một lần để thêm cột `parent_item_id`. Dashboard cá nhân gộp các khoảng
+làm song song, nên hai việc làm cùng lúc không bị cộng giờ hai lần.
+
+**Đồng hồ xử lý dừng khi không làm.** Đồng hồ bắt đầu khi LS bấm *Bắt đầu xử lý* và
+chỉ chạy ở *Đang thực hiện*, *Đã soạn xong*, *Chờ kiểm soát duyệt*. Tạm dừng, đang hẹn
+khách ký, đổi người (chờ người mới bắt đầu), chuyển tiếp sang tháng mới, hủy hay hoàn
+thành đều mở một khoảng dừng, lưu ở cột `pause_log_json`; giao diện hiện "· đang dừng".
+Kho cũ cần chạy lại `setupSheetDB()` để thêm cột. Việc đã dừng trước bản này không có
+nhật ký dừng nên vẫn tính như cũ.
+
+Tab từng phòng trong file kế hoạch tháng tự có tiêu đề (dòng 1–3) khi còn trống — file
+tạo trống hoặc phòng mới chưa có tab trong mẫu; tiêu đề sẵn có của mẫu không bị ghi đè.
+
+Bản xem thử trên trình duyệt đăng nhập bằng nút tài khoản mẫu, hoặc gõ mật khẩu `demo`.
+Mật khẩu khởi tạo thật không còn nằm trong mã gửi xuống trình duyệt.
+
+Sau mỗi thao tác, giao diện tự vẽ lại ngay khi máy chủ lưu xong (không cần tải lại
+trang); lượt đồng bộ bị hoãn vì đang mở hộp thoại sẽ chạy bù khi đóng hộp thoại, và
+quay lại tab sau hơn 1 phút cũng tự lấy dữ liệu mới.
+
 Khi mở trên trình duyệt có nhiều tài khoản Google, giữ nguyên URL trên và không
 chèn thêm đoạn `/macros/u/4/` (hoặc chỉ số tài khoản khác). Biến thể đó có thể
 trả về trang Page Not Found dù deployment đang hoạt động.

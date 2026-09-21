@@ -187,12 +187,12 @@ LS.app = (function () {
     }).catch(function (error) { ui.toast(error.message || 'Không đổi được mật khẩu.', 'err'); });
   }
 
-  function login(code, password) {
+  function login(code, password, demoPick) {
     var loginCode = String(code || '').trim();
     if (!loginCode) { ui.toast('Nhập mã cán bộ hoặc user admin.', 'err'); return; }
     if (U.isGas()) {
       LS.api.authenticate(loginCode, password || '').then(function (snapshot) {
-        U.replace(snapshot); current = null; S.resetFilters(); render();
+        U.replace(snapshot); lastRefresh = Date.now(); current = null; S.resetFilters(); render();
         ui.toast('Xin chào ' + (me() ? me().full_name : '') + '.');
       }).catch(function (error) { ui.toast(error.message || 'Không thể đăng nhập.', 'err'); });
       return;
@@ -200,9 +200,10 @@ LS.app = (function () {
     var u = st().users.filter(function (x) { return String(x.login_code || x.user_id).toLowerCase() === loginCode.toLowerCase(); })[0];
     if (!u) { ui.toast('Mã cán bộ chưa được cấp quyền vào hệ thống.', 'err'); return; }
     if (!u.active) { ui.toast('Tài khoản đang bị khóa.', 'err'); return; }
-    if (String(u.auth_group || (u.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL')).toUpperCase() === 'INTERNAL') {
-      var expected = u.role === 'ADMIN' ? 'D@kl@k631' : 'D@klak631';
-      if (String(password || '') !== expected) { ui.toast('Mật khẩu không đúng.', 'err'); return; }
+    // Bản xem thử dùng mật khẩu riêng "demo". Không đưa mật khẩu khởi tạo thật vào
+    // đây: file này được đóng gói nguyên vào trang GAS, ai mở mã nguồn trang cũng đọc được.
+    if (!demoPick && String(u.auth_group || (u.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL')).toUpperCase() === 'INTERNAL') {
+      if (String(password || '') !== 'demo') { ui.toast('Mật khẩu không đúng (bản xem thử dùng "demo").', 'err'); return; }
     }
 
     st().session = u.user_id;
@@ -314,12 +315,13 @@ LS.app = (function () {
     logout: logout,
     account: accountDialog,
     inbox: inboxDialog,
-    'login-as': function (el) { login(el.getAttribute('data-code'), ''); },
+    'login-as': function (el) { login(el.getAttribute('data-code'), '', true); },
 
     'new-request': S.newRequest,
     detail: function (el) { S.detail(el.getAttribute('data-id')); },
     'edit-item': function (el) { S.editItem(el.getAttribute('data-id')); },
     flow: function (el) { S.flow(el.getAttribute('data-id'), el.getAttribute('data-to')); },
+    'add-linked': function (el) { S.addLinked(el.getAttribute('data-id')); },
     'quick-assign': function (el) { S.quickAssign(el.getAttribute('data-id')); },
     'open-filter': function (el) { S.openFilter(el.getAttribute('data-screen') || current); },
     'reset-filter': function (el) { S.resetFilter(el.getAttribute('data-screen') || current); },
@@ -494,6 +496,7 @@ LS.app = (function () {
         S.saveChecklistToggle(act.getAttribute('data-id'), Number(act.getAttribute('data-index')), !!t.checked);
         return;
       }
+      if (a === 'linked-toggle') { S.toggleLinkedBox(!!t.checked); return; }
       if (a === 'chan-toggle') { A.toggleChannel(act.getAttribute('data-code')); return; }
       if (a === 'rule-toggle') { A.toggleRule(act.getAttribute('data-id')); return; }
     }
@@ -521,6 +524,16 @@ LS.app = (function () {
 
     if (LS.api && LS.api.available()) {
       U.setBackend('GAS');
+      ui.onDialogClose(function () { if (refreshOnClose && !syncing) scheduleRefresh(300); });
+      // Quay lại tab sau một lúc thì lấy dữ liệu mới (việc vừa được giao, KS vừa
+      // duyệt…). Chỉ chạy khi người dùng quay lại, không có vòng hẹn giờ ngầm.
+      var onReturn = function () {
+        if (document.visibilityState !== 'visible' || !st().session || syncing || ui.dialogOpen()) return;
+        if (Date.now() - lastRefresh < 60000) return;
+        refreshServer('', true).catch(function () { /* giữ nguyên màn hình đang xem */ });
+      };
+      document.addEventListener('visibilitychange', onReturn);
+      window.addEventListener('focus', onReturn);
       // Luôn hiển thị màn mã cán bộ để không phụ thuộc email Google của người mở webapp.
       // Sau khi authenticateUser() thành công, toàn bộ bootstrap vẫn chạy phía GAS.
       root.innerHTML = authView();
@@ -536,8 +549,12 @@ LS.app = (function () {
    * Giữ nguyên bộ lọc, sắp xếp và trang đang xem — xóa chúng sau mỗi lần lưu
    * làm người dùng mất chỗ đang đứng.
    */
+  var lastRefresh = 0;
+
   function refreshServer(message, silent) {
     if (!U.isGas()) return Promise.resolve();
+    lastRefresh = Date.now();
+    refreshOnClose = false;
     return LS.api.bootstrap().then(function (snapshot) {
       U.replace(snapshot);
       if (!ui.dialogOpen()) render();
@@ -552,6 +569,7 @@ LS.app = (function () {
 
   var syncing = 0;
   var refreshTimer = null;
+  var refreshOnClose = false;
 
   function setSyncFlag(on) {
     syncing = Math.max(0, syncing + (on ? 1 : -1));
@@ -581,7 +599,9 @@ LS.app = (function () {
       refreshTimer = setTimeout(runScheduledRefresh, 1500);
       return;
     }
-    if (ui.dialogOpen()) return;  // bỏ qua lượt này, lệnh ghi sau sẽ hẹn lại
+    // Hộp thoại vẫn mở: chạy bù ngay khi người dùng đóng nó, thay vì bỏ lượt
+    // và để màn hình đứng ở dữ liệu cũ tới khi phải tự tải lại trang.
+    if (ui.dialogOpen()) { refreshOnClose = true; return; }
     refreshServer('', true).catch(function () { /* giữ nguyên màn hình đang xem */ });
   }
 
