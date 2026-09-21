@@ -37,7 +37,7 @@ const required = [
   [screens, 'function personalDashboard', 'Phải có dashboard cá nhân cho cán bộ LS.'],
   [screens, 'function saveChecklist', 'UI phải có thao tác lưu tick nhóm việc.'],
   [screens, 'processing_started_at', 'UI phải hiển thị bộ đếm thời gian xử lý khách hàng.'],
-  [screens, 'Đang xử lý (giờ làm)', 'Dashboard cá nhân phải hiện số giờ làm thực tế.'],
+  [screens, 'Giờ làm hôm nay', 'Dashboard cá nhân phải hiện số giờ làm thực tế.'],
   [app, "case 'my-dashboard'", 'App phải định tuyến tới dashboard cá nhân.'],
   [gasApi, 'saveChecklist', 'Adapter GAS phải gọi API lưu checklist.']
 ];

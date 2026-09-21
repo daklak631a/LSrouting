@@ -19,7 +19,7 @@ Bản trình duyệt không gửi ra ngoài; chỉ GAS gọi provider thật.
 
 ### URL web app đang dùng
 
-Deployment chuẩn đã được cập nhật lên **Version 20**, chạy dưới tài khoản
+Deployment chuẩn đã được cập nhật lên **Version 21**, chạy dưới tài khoản
 `daklak631a@gmail.com`, quyền truy cập `Anyone`:
 
 `https://script.google.com/macros/s/AKfycbylljXwRUkxUCL_wnxztLAzotSNi9iiOvgpGtXPCwzIQHjCgpPz6d_zvG_XC1urUlCH/exec`
@@ -61,6 +61,20 @@ tạo trống hoặc phòng mới chưa có tab trong mẫu; tiêu đề sẵn c
 
 Bản xem thử trên trình duyệt đăng nhập bằng nút tài khoản mẫu, hoặc gõ mật khẩu `demo`.
 Mật khẩu khởi tạo thật không còn nằm trong mã gửi xuống trình duyệt.
+
+**Dashboard và đồ thị.** `js/charts.js` vẽ đồ thị bằng HTML/CSS (không thư viện ngoài):
+Tổng hợp có cột phát sinh/hoàn thành theo ngày–tuần–tháng (tự chọn theo độ dài kỳ) và
+thanh tải việc theo cán bộ; các tab loại việc, đơn vị, trạng thái có thanh ngang; dashboard
+cá nhân có giờ làm và việc xong 7 ngày; dashboard phòng có gửi/hoàn thành và LS đang xử lý.
+Rê chuột hoặc Tab vào cột để xem số, mỗi đồ thị có "Xem bảng số liệu". Các cột giờ trong
+bảng Kết quả giờ là **giờ làm** (bỏ đêm, nghỉ trưa, cuối tuần); giờ xử lý lấy từ đồng hồ
+khách hàng (đã trừ tạm dừng/chờ ký); trung bình tổng tính trên từng hồ sơ.
+
+**Phím tắt** (bấm `?` hoặc nút bàn phím trên thanh đầu để xem): `1–9` chuyển màn, `/` tìm,
+`F` bộ lọc, `N` tạo việc, `R` tải lại, `[` `]` đổi tab/trang; trong danh sách `J`/`K` chọn
+dòng, `Enter` mở chi tiết, `A` bấm thao tác chính; trong chi tiết việc `1–9` bấm nút theo
+số, `E` sửa; `Ctrl+Enter` lưu biểu mẫu, `Esc` đóng. Có liên kết "Bỏ qua tới nội dung" cho
+người dùng Tab.
 
 Sau mỗi thao tác, giao diện tự vẽ lại ngay khi máy chủ lưu xong (không cần tải lại
 trang); lượt đồng bộ bị hoãn vì đang mở hộp thoại sẽ chạy bù khi đóng hộp thoại, và

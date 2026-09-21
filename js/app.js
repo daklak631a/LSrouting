@@ -25,6 +25,7 @@ LS.app = (function () {
     var unread = st().inbox.filter(function (n) { return n.user_id === u.user_id && !n.read; }).length;
 
     root.innerHTML =
+      '<a class="skip-link" href="#main">Bỏ qua tới nội dung</a>' +
       '<div class="shell">' +
       rail(u, nav) +
       '<div class="workspace">' +
@@ -33,11 +34,12 @@ LS.app = (function () {
       '<div class="appbar-actions">' +
       (st().activePlan ? ui.tag(st().activePlan.name || st().activePlan.month_key, 'info') : '') +
       (st().settings.env === 'THU_NGHIEM' ? ui.tag('Môi trường thử nghiệm', 'gold') : '') +
+      '<button class="btn btn-quiet btn-icon" data-act="shortcuts" aria-label="Phím tắt" title="Phím tắt (?)" aria-keyshortcuts="Shift+?">' + U.icon('keyboard', 18) + '</button>' +
       '<button class="btn btn-quiet btn-icon" data-act="inbox" aria-label="Thông báo" style="position:relative">' +
       U.icon('bell', 18) + (unread ? '<span class="rail-badge" style="top:-2px;right:-2px">' + unread + '</span>' : '') +
       '</button>' +
       '</div></header>' +
-      '<main class="view">' + body() + '</main>' +
+      '<main class="view" id="main" tabindex="-1">' + body() + '</main>' +
       '</div></div>' +
       tabbar(u, nav);
   }
@@ -45,10 +47,11 @@ LS.app = (function () {
   function rail(u, nav) {
     return '<aside class="rail">' +
       '<div class="rail-mark">LS</div>' +
-      nav.map(function (id) {
+      nav.map(function (id, idx) {
         var s = D.SCREENS[id];
         var n = badge(id);
         return '<button class="rail-btn" data-act="go" data-screen="' + id + '"' +
+          ' title="' + U.attr(s.title + ' (phím ' + (idx + 1) + ')') + '" aria-keyshortcuts="' + (idx + 1) + '"' +
           (id === current ? ' aria-current="page"' : '') + '>' +
           U.icon(s.icon, 20) + '<span>' + U.esc(s.short) + '</span>' +
           (n ? '<span class="rail-badge">' + n + '</span>' : '') + '</button>';
@@ -312,6 +315,7 @@ LS.app = (function () {
   var CLICK = {
     go: function (el) { current = el.getAttribute('data-screen'); render(); window.scrollTo(0, 0); },
     'close-dialog': ui.closeDialog,
+    shortcuts: shortcutHelp,
     logout: logout,
     account: accountDialog,
     inbox: inboxDialog,
@@ -504,9 +508,144 @@ LS.app = (function () {
     onFilter(ev);
   }
 
+  /* ============================ Phím tắt ============================ */
+
+  /**
+   * Phím đơn chỉ chạy khi không gõ chữ. Ctrl/⌘ + Enter gửi biểu mẫu đang mở,
+   * Esc đóng hộp thoại hoặc rời ô nhập. Mọi phím chỉ bấm hộ đúng nút đang hiện
+   * trên màn — không có đường tắt nào vượt quyền của vai trò.
+   */
+  var SHORTCUTS = [
+    ['Chung', [
+      ['?', 'Mở bảng phím tắt này'],
+      ['1 – 9', 'Chuyển màn theo thứ tự thanh bên trái'],
+      ['/', 'Tìm trong danh sách'],
+      ['F', 'Mở bộ lọc'],
+      ['N', 'Tạo việc mới (khi màn có nút này)'],
+      ['R', 'Tải lại dữ liệu'],
+      ['[  ]', 'Tab tổng hợp trước / sau, hoặc trang trước / sau']
+    ]],
+    ['Danh sách việc', [
+      ['J  ↓', 'Xuống dòng kế'],
+      ['K  ↑', 'Lên dòng trước'],
+      ['Enter  O', 'Mở chi tiết dòng đang chọn'],
+      ['A', 'Bấm thao tác chính của dòng (Bắt đầu, Soạn xong…)'],
+      ['Tab', 'Đi qua các nút trong dòng']
+    ]],
+    ['Hộp thoại', [
+      ['1 – 9', 'Bấm thao tác theo số trên nút (chi tiết việc)'],
+      ['E', 'Sửa thông tin việc'],
+      ['Ctrl + Enter', 'Lưu / gửi biểu mẫu'],
+      ['Esc', 'Đóng hộp thoại, hoặc rời ô đang gõ'],
+      ['Tab  Shift+Tab', 'Đi qua các ô, vòng trong hộp thoại']
+    ]]
+  ];
+
+  function shortcutHelp() {
+    ui.openDialog('Phím tắt', SHORTCUTS.map(function (g) {
+      return ui.sectionTitle(g[0]) + '<dl class="keys">' + g[1].map(function (k) {
+        return '<dt>' + k[0].split(/\s{2}/).map(function (x) { return '<kbd>' + U.esc(x) + '</kbd>'; }).join(' ') + '</dt><dd>' + U.esc(k[1]) + '</dd>';
+      }).join('') + '</dl>';
+    }).join(''), { sub: 'Chỉ hoạt động khi không gõ trong ô nhập' });
+  }
+
+  function typing(el) {
+    if (!el || !el.tagName) return false;
+    if (el.isContentEditable) return true;
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
+    return el.tagName === 'INPUT' && ['checkbox', 'radio', 'button', 'submit'].indexOf(el.type) === -1;
+  }
+
+  function clickFirst(selector, scope) {
+    var el = (scope || document).querySelector(selector);
+    if (el && !el.disabled) { el.click(); return true; }
+    return false;
+  }
+
+  function rows() { return Array.prototype.slice.call(document.querySelectorAll('#main tr[data-row]')); }
+
+  function moveRow(step) {
+    var list = rows();
+    if (!list.length) return false;
+    var at = list.indexOf(document.activeElement && document.activeElement.closest ? document.activeElement.closest('tr[data-row]') : null);
+    var next = list[at === -1 ? (step > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, at + step))];
+    next.focus();
+    next.scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+
+  function focusedRow() {
+    var a = document.activeElement;
+    return a && a.closest ? a.closest('#main tr[data-row]') : null;
+  }
+
+  function stepTabs(step) {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('#main .dashboard-tab'));
+    if (tabs.length) {
+      var at = tabs.findIndex(function (t) { return t.classList.contains('is-active'); });
+      var next = tabs[(at + step + tabs.length) % tabs.length];
+      next.click();
+      var again = document.querySelector('#main .dashboard-tab.is-active');
+      if (again) again.focus();
+      return true;
+    }
+    return clickFirst(step > 0 ? '#main [data-act="queue-page"][data-dir="next"]:not([disabled])' : '#main [data-act="queue-page"][data-dir="prev"]:not([disabled])');
+  }
+
   function onKey(ev) {
-    if (ev.key === 'Escape' && ui.dialogOpen()) { ui.closeDialog(); return; }
+    var k = ev.key;
+    if (k === 'Escape' && ui.dialogOpen()) { ui.closeDialog(); return; }
+    if (k === 'Enter' && (ev.ctrlKey || ev.metaKey) && ui.dialogOpen()) {
+      var form = document.querySelector('#dialog form');
+      if (form) { ev.preventDefault(); if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); }
+      return;
+    }
     ui.trapTab(ev);
+    if (ev.defaultPrevented || ev.ctrlKey || ev.metaKey || ev.altKey || !me()) return;
+    if (typing(ev.target)) { if (k === 'Escape') ev.target.blur(); return; }
+
+    // Mũi tên trái/phải trong dải tab tổng hợp (mẫu tablist của WAI-ARIA).
+    if ((k === 'ArrowLeft' || k === 'ArrowRight') && ev.target.classList && ev.target.classList.contains('dashboard-tab')) {
+      ev.preventDefault(); stepTabs(k === 'ArrowRight' ? 1 : -1); return;
+    }
+
+    if (ui.dialogOpen()) {
+      var dlg = document.getElementById('dialog');
+      if (/^[1-9]$/.test(k) && clickFirst('[data-hotkeys] [data-hotkey="' + k + '"]', dlg)) { ev.preventDefault(); return; }
+      if ((k === 'e' || k === 'E') && clickFirst('[data-hotkeys] [data-act="edit-item"]', dlg)) { ev.preventDefault(); }
+      return;
+    }
+
+    var row = focusedRow();
+    var handled = true;
+    switch (k) {
+      case '?': shortcutHelp(); break;
+      case '/': var q = document.querySelector('#main .list-search input'); if (q) { q.focus(); q.select(); } else handled = false; break;
+      case 'j': case 'J': handled = moveRow(1); break;
+      case 'k': case 'K': handled = moveRow(-1); break;
+      case 'ArrowDown': handled = !!row && moveRow(1); break;
+      case 'ArrowUp': handled = !!row && moveRow(-1); break;
+      case 'Enter': case 'o': case 'O':
+        if (row && (k !== 'Enter' || ev.target === row)) S.detail(row.getAttribute('data-row')); else handled = false;
+        break;
+      case 'a': case 'A':
+        handled = !!row && (clickFirst('.act-row .btn-primary', row) || clickFirst('.act-row [data-act="flow"], .act-row [data-act="quick-assign"]', row));
+        break;
+      case 'n': case 'N': handled = clickFirst('#main [data-act="new-request"]'); break;
+      case 'f': case 'F': handled = clickFirst('#main [data-act="open-filter"]'); break;
+      case 'r': case 'R':
+        if (U.isGas()) refreshServer('Đã tải lại dữ liệu.').catch(function () {}); else { render(); ui.toast('Đã vẽ lại màn hình.'); }
+        break;
+      case '[': handled = stepTabs(-1); break;
+      case ']': handled = stepTabs(1); break;
+      default:
+        if (/^[1-9]$/.test(k)) {
+          var nav = D.ROLES[me().role].nav, target = nav[Number(k) - 1];
+          if (target) { current = target; render(); var main = document.getElementById('main'); if (main) main.focus({ preventScroll: true }); window.scrollTo(0, 0); }
+          else handled = false;
+        } else handled = false;
+    }
+    if (handled) ev.preventDefault();
   }
 
   /* ============================ Khởi động ============================ */
@@ -514,6 +653,7 @@ LS.app = (function () {
   function init() {
     root = document.getElementById('root');
     ui.bind();
+    LS.charts.bind();
     U.load(D.seed);
 
     document.addEventListener('click', onClick);

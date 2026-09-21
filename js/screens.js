@@ -118,6 +118,18 @@ LS.screens = (function () {
     return isFinite(a) && isFinite(b) && b >= a ? (b - a) / 3600000 : null;
   }
 
+  /**
+   * Giờ làm việc giữa hai mốc (bỏ đêm, nghỉ trưa, cuối tuần, ngày lễ). Trước đây
+   * bảng kết quả dùng giờ đồng hồ: hồ sơ nhận chiều thứ Sáu, xong sáng thứ Hai bị
+   * tính ~64 giờ thay vì vài giờ làm.
+   */
+  function workHours(from, to) {
+    if (!from || !to) return null;
+    return U.workingHours(from, to, D.processingCalendar(st()));
+  }
+
+  function mean(list) { return list.length ? list.reduce(function (a, b) { return a + b; }, 0) / list.length : null; }
+
   /** Báo cáo xuyên kỳ: giao, hoàn thành, tồn, quá hạn và thời gian xử lý từng cán bộ. */
   function performanceReport(range) {
     var all = visibleItems(), events = visibleEvents();
@@ -129,27 +141,27 @@ LS.screens = (function () {
       var done = mine.filter(function (i) { return inRange(i.completed_at, range); });
       var open = mine.filter(function (i) { return D.STATUS[i.status].open; });
       var late = open.filter(function (i) { var s = D.sla(i, st()); return s && s.late; });
-      var hours = done.map(function (i) {
-        return elapsedHours(i.assigned_at, i.completed_at);
-      }).filter(function (x) { return x !== null; });
-      var receiveHours = received.map(function (i) { return elapsedHours(i.submitted_at, i.accepted_at); }).filter(function (x) { return x !== null; });
-      var totalHours = done.map(function (i) { return elapsedHours(i.submitted_at, i.completed_at); }).filter(function (x) { return x !== null; });
+      // Xử lý = đồng hồ khách hàng (từ Bắt đầu xử lý, đã trừ tạm dừng/chờ ký).
+      var hours = done.map(function (i) { return D.processingHours(i, st()); }).filter(function (x) { return x !== null; });
+      var receiveHours = received.map(function (i) { return workHours(i.submitted_at, i.accepted_at); }).filter(function (x) { return x !== null; });
+      var totalHours = done.map(function (i) { return workHours(i.submitted_at, i.completed_at); }).filter(function (x) { return x !== null; });
       var onTime = done.filter(function (i) { return i.due_at && new Date(i.completed_at) <= new Date(i.due_at); }).length;
       var touched = {};
       events.forEach(function (e) { if (e.by === u.user_id && inRange(e.at, range)) touched[e.item_id] = true; });
       var workloadRow = workload.rows.filter(function (x) { return x.user.user_id === u.user_id; })[0] || { byGroup: {}, total: 0 };
       return { user: u, assigned: assigned.length, done: done.length, open: open.length, late: late.length,
-        touched: Object.keys(touched).length, avgHours: hours.length ? hours.reduce(function (a, b) { return a + b; }, 0) / hours.length : null,
-        avgReceiveHours: receiveHours.length ? receiveHours.reduce(function (a, b) { return a + b; }, 0) / receiveHours.length : null,
-        avgTotalHours: totalHours.length ? totalHours.reduce(function (a, b) { return a + b; }, 0) / totalHours.length : null,
+        touched: Object.keys(touched).length, avgHours: mean(hours), avgReceiveHours: mean(receiveHours), avgTotalHours: mean(totalHours),
+        _receive: receiveHours, _total: totalHours,
         maxHours: hours.length ? Math.max.apply(null, hours) : null, onTime: done.length ? Math.round(onTime * 100 / done.length) : null,
         byGroup: workloadRow.byGroup, workloadTotal: workloadRow.total };
     });
     return { range: range, rows: rows,
       assigned: rows.reduce(function (n, x) { return n + x.assigned; }, 0), done: rows.reduce(function (n, x) { return n + x.done; }, 0),
       open: rows.reduce(function (n, x) { return n + x.open; }, 0), late: rows.reduce(function (n, x) { return n + x.late; }, 0),
-      avgReceiveHours: rows.filter(function (x) { return x.avgReceiveHours !== null; }).reduce(function (sum, x, _, a) { return sum + x.avgReceiveHours / a.length; }, 0) || null,
-      avgTotalHours: rows.filter(function (x) { return x.avgTotalHours !== null; }).reduce(function (sum, x, _, a) { return sum + x.avgTotalHours / a.length; }, 0) || null,
+      // Trung bình gộp trên từng hồ sơ; trung bình của các trung bình cán bộ lệch
+      // về phía người làm ít hồ sơ.
+      avgReceiveHours: mean([].concat.apply([], rows.map(function (x) { return x._receive; }))),
+      avgTotalHours: mean([].concat.apply([], rows.map(function (x) { return x._total; }))),
       workload: workload };
   }
 
@@ -190,8 +202,9 @@ LS.screens = (function () {
       ui.btn('Tải ảnh', { act: 'download-daily-image', icon: 'download', sm: true, title: 'Tải ảnh PNG vùng kết quả đang xem' }) +
       '</div></div>';
     var body = dashboardTabs(active) + (active === 'report' ? ui.strip([ui.metric('Đã phân công', report.assigned), ui.metric('Hoàn thành kỳ', report.done, 'ok'), ui.metric('Đang mở', report.open, 'info'), ui.metric('Quá hạn', report.late, report.late ? 'danger' : ''), ui.metric('Nhận hồ sơ TB', report.avgReceiveHours === null ? '—' : report.avgReceiveHours.toFixed(1) + 'h'), ui.metric('Toàn trình TB', report.avgTotalHours === null ? '—' : report.avgTotalHours.toFixed(1) + 'h')]) +
+      resultCharts(report) +
       ui.table(
-        [{ label: 'Cán bộ LS' }, { label: 'Đã giao', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }, { label: 'TB nhận (giờ)', cls: 'num' }, { label: 'TB xử lý (giờ)', cls: 'num' }, { label: 'TB toàn trình (giờ)', cls: 'num' }, { label: 'Đúng hạn', cls: 'num' }],
+        [{ label: 'Cán bộ LS' }, { label: 'Đã giao', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }, { label: 'TB nhận (giờ làm)', cls: 'num' }, { label: 'TB xử lý (giờ làm)', cls: 'num' }, { label: 'TB toàn trình (giờ làm)', cls: 'num' }, { label: 'Đúng hạn', cls: 'num' }],
         report.rows.map(function (x) { return { cls: x.late ? 'flag' : '', cells: [
           '<div class="t1">' + U.esc(x.user.full_name) + '</div><div class="t2">' + U.esc(unitName(x.user.unit_id)) + (D.userOff(x.user) ? ' · ' + U.esc('Đang nghỉ') : '') + '</div>',
           '<span class="tid">' + x.assigned + '</span>', '<span class="tid">' + x.done + '</span>', '<span class="tid">' + x.open + '</span>',
@@ -212,6 +225,34 @@ LS.screens = (function () {
     });
   }
 
+  /** Hai đồ thị đầu tab Kết quả: nhịp phát sinh/hoàn thành và tải theo cán bộ. */
+  function resultCharts(report) {
+    var range = report.range, b = LS.charts.buckets(range.fromDate, range.toDate);
+    var inflow = b.labels.map(function () { return 0; }), outflow = inflow.slice();
+    visibleItems().forEach(function (i) {
+      var k = b.keyOf(i.occurrence_date);
+      if (k !== -1 && i.status !== 'HUY') inflow[k] += 1;
+      var d = i.status === 'HOAN_THANH_LS' ? b.keyOf(i.completed_at) : -1;
+      if (d !== -1) outflow[d] += 1;
+    });
+    var unitWord = { day: 'ngày', week: 'tuần', month: 'tháng' }[b.mode];
+    var staffRows = report.rows.filter(function (x) { return x.done || x.open; });
+    return '<div class="viz-pair">' +
+      LS.charts.columns({
+        title: 'Phát sinh và hoàn thành theo ' + unitWord, sub: reportLabel(range), labelHead: 'Mốc',
+        labels: b.labels, integer: true,
+        series: [{ name: 'Phát sinh', values: inflow }, { name: 'Hoàn thành', values: outflow, slot: 2 }],
+        emptyText: 'Chưa có hồ sơ phát sinh hay hoàn thành trong kỳ.'
+      }) +
+      LS.charts.bars({
+        title: 'Tải việc theo cán bộ LS', sub: 'Hoàn thành trong kỳ + đang mở hiện tại', labelHead: 'Cán bộ LS', sort: true,
+        rows: staffRows.map(function (x) { return { label: x.user.full_name, note: x.late ? x.late + ' việc quá hạn' : '' }; }),
+        series: [{ name: 'Hoàn thành', values: staffRows.map(function (x) { return x.done; }) },
+          { name: 'Đang mở', values: staffRows.map(function (x) { return x.open; }), slot: 2 }],
+        emptyText: 'Chưa có cán bộ nào có việc trong kỳ.'
+      }) + '</div>';
+  }
+
   function typeSummaryBlock(range) {
     var items = visibleItems().filter(function (i) { return inRange(i.occurrence_date + 'T12:00:00', range); });
     var rows = st().workTypes.map(function (w) {
@@ -226,7 +267,15 @@ LS.screens = (function () {
         late ? ui.tag(String(late), 'danger') : '<span class="tid">0</span>'
       ] };
     }).filter(function (x) { return x.n; });
-    return ui.block({ title: 'Tổng hợp theo loại việc', icon: 'activity', note: 'Số liệu theo ngày phát sinh trong kỳ đã chọn.', body: ui.table(
+    var byGroup = {};
+    items.forEach(function (i) { if (i.status === 'HUY') return; var g = wtGroup(i.work_type_code); byGroup[g] = (byGroup[g] || 0) + 1; });
+    var groupNames = Object.keys(byGroup);
+    var chart = LS.charts.bars({
+      title: 'Phát sinh theo nhóm loại việc', sub: reportLabel(range), labelHead: 'Nhóm', sort: true,
+      rows: groupNames.map(function (g) { return { label: g }; }),
+      series: [{ name: 'Phát sinh', values: groupNames.map(function (g) { return byGroup[g]; }) }]
+    });
+    return ui.block({ title: 'Tổng hợp theo loại việc', icon: 'activity', note: 'Số liệu theo ngày phát sinh trong kỳ đã chọn.', body: chart + ui.table(
       [{ label: 'Loại việc' }, { label: 'Phát sinh', cls: 'num' }, { label: 'Đã phân công', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }], rows,
       { icon: 'activity', title: 'Chưa có hồ sơ trong kỳ', text: 'Chọn kỳ khác rồi bấm Tìm kiếm.' }) });
   }
@@ -759,6 +808,8 @@ LS.screens = (function () {
         var s = D.sla(i, st());
         return {
           cls: (i.syncing ? 'is-pending ' : '') + priorityRowClass(i) + ' ' + (s && s.late ? 'flag' : (s && s.soon ? 'flag-warn' : '')),
+          // Dòng nhận tiêu điểm bằng phím J/K (tabindex -1: không chen vào vòng Tab).
+          attrs: i.syncing ? '' : ' data-row="' + U.attr(i.item_id) + '" tabindex="-1"',
           cells: keys.map(function (k) { return cell(k, i); })
         };
       }),
@@ -870,7 +921,7 @@ LS.screens = (function () {
       title: 'Dashboard ' + unitName(u.unit_id), count: U.fmtDate(range.from) + ' → ' + U.fmtDate(range.to), icon: 'chart',
       note: '',
       filters: listToolbar('room', { dates: true }, false),
-      body: ui.sectionTitle('Theo nhóm cấp độ / loại việc') + ui.table(
+      body: roomCharts(current, range, byStaff) + ui.sectionTitle('Theo nhóm cấp độ / loại việc') + ui.table(
         [{ label: 'Loại việc' }, { label: 'Tổng', cls: 'num' }, { label: 'Đang mở', cls: 'num' }],
         byType.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.name) + '</div>', '<span class="tid">' + x.n + '</span>', '<span class="tid">' + x.open + '</span>'] }; }),
         { icon: 'chart', title: 'Chưa có nhóm việc trong kỳ', text: 'Chưa có hồ sơ phù hợp khoảng ngày.' }
@@ -880,6 +931,24 @@ LS.screens = (function () {
         { icon: 'users', title: 'Chưa có LS xử lý cho phòng', text: 'Hồ sơ sẽ xuất hiện sau khi kiểm soát phân công.' }
       ) + '</div>'
     });
+  }
+
+  function roomCharts(current, range, byStaff) {
+    var from = String(range.from || '').substring(0, 10), to = String(range.to || '').substring(0, 10);
+    if (!from || !to) return '';
+    var b = LS.charts.buckets(from, to);
+    var sent = b.labels.map(function () { return 0; }), done = sent.slice();
+    current.forEach(function (i) {
+      var k = b.keyOf(i.occurrence_date); if (k !== -1 && i.status !== 'HUY') sent[k] += 1;
+      var d = i.status === 'HOAN_THANH_LS' ? b.keyOf(i.completed_at) : -1; if (d !== -1) done[d] += 1;
+    });
+    return '<div class="viz-pair viz-bleed">' +
+      LS.charts.columns({ title: 'Phòng gửi và LS hoàn thành', labels: b.labels, labelHead: 'Mốc',
+        series: [{ name: 'Đã gửi', values: sent }, { name: 'Hoàn thành', values: done, slot: 2 }] }) +
+      LS.charts.bars({ title: 'LS đang xử lý cho phòng', labelHead: 'Cán bộ LS', sort: true,
+        rows: byStaff.map(function (x) { return { label: x.s.full_name }; }),
+        series: [{ name: 'Hoàn thành', values: byStaff.map(function (x) { return x.done; }) },
+          { name: 'Đang mở', values: byStaff.map(function (x) { return x.open; }), slot: 2 }] }) + '</div>';
   }
 
   /* ============================ Màn: hàng chờ ============================ */
@@ -929,9 +998,9 @@ LS.screens = (function () {
   function pageControls(pagination) {
     if (pagination.total <= 1) return '';
     return '<div class="btn-row" style="justify-content:flex-end;padding: .75rem 1rem">' +
-      ui.btn('‹ Trước', { sm: true, act: 'queue-page', disabled: pagination.page <= 1, data: ' data-page="' + (pagination.page - 1) + '"' }) +
+      ui.btn('‹ Trước', { sm: true, act: 'queue-page', disabled: pagination.page <= 1, data: ' data-dir="prev" data-page="' + (pagination.page - 1) + '"' }) +
       '<span class="t2">Trang ' + pagination.page + '/' + pagination.total + '</span>' +
-      ui.btn('Sau ›', { sm: true, act: 'queue-page', disabled: pagination.page >= pagination.total, data: ' data-page="' + (pagination.page + 1) + '"' }) + '</div>';
+      ui.btn('Sau ›', { sm: true, act: 'queue-page', disabled: pagination.page >= pagination.total, data: ' data-dir="next" data-page="' + (pagination.page + 1) + '"' }) + '</div>';
   }
 
   function queue() {
@@ -1041,9 +1110,11 @@ LS.screens = (function () {
     if (!u || u.role !== 'CAN_BO_LS') return ui.banner('warn', 'Không có quyền xem dashboard cá nhân', 'Màn này chỉ dành cho cán bộ LS.');
     var now = new Date(), today = U.localDate(now), todayStart = new Date(today + 'T00:00:00');
     var items = visibleItems();
+    // "Đã chạm hôm nay" = có giờ làm thật trong hôm nay hoặc xong hôm nay. Bản cũ lấy
+    // mọi việc từng bắt đầu, kể cả việc đã xong từ nhiều tháng trước.
     var touched = items.filter(function (i) {
-      return (i.processing_started_at && String(i.processing_started_at).substring(0, 10) <= today) ||
-        (i.completed_at && String(i.completed_at).substring(0, 10) === today);
+      return (i.completed_at && U.localDate(new Date(i.completed_at)) === today) ||
+        D.activeSpans(i, now).some(function (x) { return x[1] > todayStart.getTime(); });
     });
     var doneToday = items.filter(function (i) { return i.status === 'HOAN_THANH_LS' && String(i.completed_at || '').substring(0, 10) === today; });
     var running = items.filter(function (i) { return D.STATUS[i.status] && D.STATUS[i.status].open; });
@@ -1070,9 +1141,9 @@ LS.screens = (function () {
       body: ui.strip([
         ui.metric('Hoàn thành hôm nay', doneToday.length, 'ok'),
         ui.metric('Đang mở', running.length, 'info'),
-        ui.metric('Đang xử lý (giờ làm)', hours.toFixed(1) + 'h'),
+        ui.metric('Giờ làm hôm nay', hours.toFixed(1) + 'h'),
         ui.metric('Đã chạm hôm nay', touched.length)
-      ]) + '<div style="margin-top:1.125rem">' + ui.sectionTitle('Chi tiết việc trong ngày') +
+      ]) + personalWeekChart(items, now) + '<div style="margin-top:1.125rem">' + ui.sectionTitle('Chi tiết việc trong ngày') +
       ui.table([{ label: 'Mã việc' }, { label: 'Khách hàng' }, { label: 'Loại việc' }, { label: 'Trạng thái' }, { label: 'Giờ xử lý KH', cls: 'num' }],
         rows.map(function (i) { var r = reqOf(i); return { cells: [
           '<button class="btn btn-quiet btn-sm tid" data-act="detail" data-id="' + U.attr(i.item_id) + '">' + U.esc(itemRef(i)) + '</button>',
@@ -1082,6 +1153,27 @@ LS.screens = (function () {
         ] }; }),
         { icon: 'briefcase', title: 'Chưa có hoạt động hôm nay', text: 'Khi bạn bấm “Bắt đầu xử lý”, thời gian làm việc sẽ được ghi nhận tại đây.' }) + '</div>'
     });
+  }
+
+  /** Giờ làm và số việc xong mỗi ngày trong 7 ngày gần nhất (đã gộp khoảng song song). */
+  function personalWeekChart(items, now) {
+    var labels = [], hours = [], done = [], cal = D.processingCalendar(st());
+    var spans = items.reduce(function (all, i) { return all.concat(D.activeSpans(i, now)); }, []);
+    for (var k = 6; k >= 0; k--) {
+      var day = new Date(now.getFullYear(), now.getMonth(), now.getDate() - k);
+      var a = day.getTime(), b = Math.min(a + 86400000, now.getTime()), key = U.localDate(day);
+      var parts = spans.map(function (x) { return [Math.max(x[0], a), Math.min(x[1], b)]; })
+        .filter(function (x) { return x[1] > x[0]; }).sort(function (p, q) { return p[0] - q[0]; })
+        .reduce(function (out, x) { var l = out[out.length - 1]; if (l && x[0] <= l[1]) l[1] = Math.max(l[1], x[1]); else out.push(x.slice()); return out; }, []);
+      labels.push(U.pad(day.getDate()) + '/' + U.pad(day.getMonth() + 1));
+      hours.push(Math.round(parts.reduce(function (s, x) { return s + (U.workingHours(new Date(x[0]).toISOString(), new Date(x[1]).toISOString(), cal) || 0); }, 0) * 10) / 10);
+      done.push(items.filter(function (i) { return i.status === 'HOAN_THANH_LS' && i.completed_at && U.localDate(new Date(i.completed_at)) === key; }).length);
+    }
+    return '<div class="viz-pair">' +
+      LS.charts.columns({ title: 'Giờ làm 7 ngày gần nhất', sub: 'Đã trừ tạm dừng, chờ khách ký, ngoài giờ', labels: labels, labelHead: 'Ngày',
+        integer: false, unit: 'h', series: [{ name: 'Giờ làm', values: hours }], emptyText: 'Chưa có giờ làm trong 7 ngày qua.' }) +
+      LS.charts.columns({ title: 'Việc hoàn thành 7 ngày gần nhất', labels: labels, labelHead: 'Ngày',
+        series: [{ name: 'Hoàn thành', values: done, slot: 2 }], emptyText: 'Chưa hoàn thành việc nào trong 7 ngày qua.' }) + '</div>';
   }
 
   /* ============================ Màn: điều hành ============================ */
@@ -1111,8 +1203,10 @@ LS.screens = (function () {
 
     var maxLoad = Math.max.apply(null, [1].concat(load.map(function (x) { return x.open; })));
 
+    // Theo đơn vị: lọc đúng kỳ đang chọn — trước đây đếm toàn bộ lịch sử dù thanh lọc
+    // phía trên ghi một kỳ cụ thể.
     var byUnit = st().units.filter(function (x) { return x.kind === 'DON_VI_GUI' || x.kind === 'PGD'; }).map(function (unit) {
-      var m = all.filter(function (i) { var r = reqOf(i); return r && r.unit_id === unit.unit_id; });
+      var m = all.filter(function (i) { var r = reqOf(i); return r && r.unit_id === unit.unit_id && inRange(i.occurrence_date + 'T12:00:00', report.range); });
       return {
         unit: unit, total: m.length,
         open: m.filter(function (i) { return D.STATUS[i.status].open; }).length,
@@ -1132,7 +1226,7 @@ LS.screens = (function () {
     var panels = {
       type: function () { return typeSummaryBlock(report.range); },
       staff: function () { return ui.block({
-        title: 'Tải việc theo cán bộ', icon: 'users',
+        title: 'Tải việc theo cán bộ', icon: 'users', note: 'Ảnh chụp hiện tại, không phụ thuộc kỳ đang chọn.',
         body: ui.table(
           [{ label: 'Cán bộ' }, { label: 'Đang mở', cls: 'num' }, { label: 'Phân bổ' }, { label: 'Quá hạn', cls: 'num' }, { label: 'Đã xong', cls: 'num' }],
           load.map(function (x) {
@@ -1151,8 +1245,13 @@ LS.screens = (function () {
         )
       }); },
       unit: function () { return ui.block({
-        title: 'Theo đơn vị gửi', icon: 'building',
-        body: ui.table(
+        title: 'Theo đơn vị gửi', icon: 'building', note: 'Hồ sơ có ngày phát sinh trong kỳ đã chọn.',
+        body: LS.charts.bars({
+          title: 'Hồ sơ theo đơn vị gửi', sub: reportLabel(report.range), labelHead: 'Đơn vị', sort: true,
+          rows: byUnit.map(function (x) { return { label: x.unit.name }; }),
+          series: [{ name: 'Hoàn thành', values: byUnit.map(function (x) { return x.done; }) },
+            { name: 'Chưa xong', values: byUnit.map(function (x) { return x.total - x.done; }), slot: 2 }]
+        }) + ui.table(
           [{ label: 'Đơn vị' }, { label: 'Tổng việc', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Tỷ lệ xong', cls: 'num' }],
           byUnit.map(function (x) {
             var p = U.pct(x.done, x.total);
@@ -1170,10 +1269,12 @@ LS.screens = (function () {
         )
       }); },
       status: function () { return ui.block({
-        title: 'Phân bố trạng thái', icon: 'activity',
-        body: ui.pad('<div class="btn-row">' + spread.map(function (x) {
-          return ui.tag(D.STATUS[x.k].label + ' · ' + x.n, D.STATUS[x.k].tone);
-        }).join('') + '</div>')
+        title: 'Phân bố trạng thái', icon: 'activity', note: 'Ảnh chụp hiện tại, xếp theo thứ tự của luồng xử lý.',
+        body: LS.charts.bars({
+          title: 'Số việc ở từng trạng thái', labelHead: 'Trạng thái',
+          rows: spread.map(function (x) { return { label: D.STATUS[x.k].label }; }),
+          series: [{ name: 'Số việc', values: spread.map(function (x) { return x.n; }) }]
+        })
       }); },
       late: function () { return ui.block({
         title: 'Việc quá hạn', count: late.length, icon: 'clock',
@@ -1558,13 +1659,13 @@ LS.screens = (function () {
         return { title: D.label(e.type), time: U.fmtDT(e.at) + ' · ' + (userName(e.by) || e.by), text: e.reason };
       })) + '</div>';
 
-    body += '<div class="form-end">' +
-      (canEdit(i) ? ui.btn('Sửa thông tin', { act: 'edit-item', data: ' data-id="' + U.attr(i.item_id) + '"', icon: 'pencil' }) : '') +
-      acts.map(function (a) {
-        return ui.btn(a.label, {
-          kind: a.primary ? 'primary' : 'line', act: 'flow',
-          data: ' data-id="' + U.attr(i.item_id) + '" data-to="' + a.to + '"'
-        });
+    body += '<div class="form-end" data-hotkeys>' +
+      (canEdit(i) ? ui.btn('Sửa thông tin', { act: 'edit-item', data: ' data-id="' + U.attr(i.item_id) + '" aria-keyshortcuts="E"', icon: 'pencil', title: 'Phím E' }) : '') +
+      acts.map(function (a, n) {
+        return n < 9 ? ui.btn(a.label, {
+          kind: a.primary ? 'primary' : 'line', act: 'flow', title: 'Phím ' + (n + 1),
+          data: ' data-id="' + U.attr(i.item_id) + '" data-to="' + a.to + '" data-hotkey="' + (n + 1) + '" aria-keyshortcuts="' + (n + 1) + '"'
+        }) : ui.btn(a.label, { kind: 'line', act: 'flow', data: ' data-id="' + U.attr(i.item_id) + '" data-to="' + a.to + '"' });
       }).join('') + '</div>';
 
     ui.openDialog('Việc ' + itemRef(i), '<div data-detail="' + U.attr(i.item_id) + '">' + body + '</div>',

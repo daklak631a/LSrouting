@@ -72,7 +72,7 @@ LS.ui = (function () {
       cols.map(function (c) { return '<th' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + (c.header !== undefined ? c.header : U.esc(c.label || '')) + '</th>'; }).join('') +
       '</tr></thead><tbody>' +
       rows.map(function (r) {
-        return '<tr' + (r.cls ? ' class="' + r.cls + '"' : '') + '>' +
+        return '<tr' + (r.cls ? ' class="' + r.cls + '"' : '') + (r.attrs || '') + '>' +
           r.cells.map(function (cell, i) {
             var c = cols[i] || {};
             return '<td' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + cell + '</td>';

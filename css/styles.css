@@ -12,7 +12,9 @@
   --brand-800: #005d5a;
   --brand: #006b68;
   --brand-600: #0d8a86;
+  --brand-300: #7fbcb8;
   --brand-100: #cfe5e3;
+  --teal: var(--brand-600);
   --brand-50: #eaf4f3;
   --gold: #ffc62f;
   --gold-700: #8a6000;
@@ -46,6 +48,11 @@
   --violet-bg: #ece7f8;
   --neutral: #4e6b6c;
   --neutral-bg: #e8eeed;
+
+  /* Đồ thị: bộ ba đã kiểm tra mù màu trên nền trắng. Gán theo vai trò, không xoay vòng. */
+  --viz-1: #0f9a94;
+  --viz-2: #eb6834;
+  --viz-3: #2a78d6;
 
   /* Hình khối */
   --r: 10px;
@@ -1026,3 +1033,70 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
   .view { padding: 0; }
   .block { border-color: #999; }
 }
+
+/* ============================ Đồ thị ============================ */
+
+.viz-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 0; border-top: 1px solid var(--line); }
+.viz-pair > .viz { border-right: 1px solid var(--line-2); }
+.viz-pair > .viz:last-child { border-right: none; }
+.viz { margin: 0; padding: 1rem; min-width: 0; }
+.viz + .viz { border-top: 1px solid var(--line-2); }
+.viz-pair > .viz + .viz { border-top: none; }
+.viz-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.35rem 1rem; margin-bottom: 0.85rem; }
+.viz-title { font-size: 0.84rem; font-weight: 700; color: var(--ink); }
+.viz-sub { font-size: 0.74rem; color: var(--ink-3); margin-top: 0.1rem; }
+.viz-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.85rem; font-size: 0.74rem; color: var(--ink-2); }
+.viz-key { display: inline-flex; align-items: center; gap: 0.35rem; }
+.viz-sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.viz-empty { padding: 1.5rem 0; text-align: center; color: var(--ink-4); font-size: 0.82rem; }
+
+.viz-cols { position: relative; height: 196px; padding-left: 2.1rem; }
+.viz-plot { position: absolute; left: 2.1rem; right: 0; top: 0.9rem; bottom: 20px; }
+.viz-grid { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line-2); }
+.viz-grid span { position: absolute; right: calc(100% + 0.4rem); top: -0.5rem; font: 500 0.66rem/1 'IBM Plex Mono', monospace; color: var(--ink-4); }
+.viz-groups { position: absolute; left: 2.1rem; right: 0; top: 0.9rem; bottom: 0; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); }
+.viz-g { display: flex; flex-direction: column; min-width: 0; outline: none; border-radius: 4px; }
+.viz-g:hover, .viz-g:focus-visible { background: rgba(0, 107, 104, 0.06); }
+.viz-g:focus-visible { box-shadow: var(--ring); }
+.viz-bars { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; padding: 0 12%; }
+.viz-col { position: relative; flex: 1 1 0; max-width: 24px; min-height: 0; border-radius: 4px 4px 0 0; }
+.viz-cap { position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); font: 600 0.68rem/1 'IBM Plex Mono', monospace; color: var(--ink-2); white-space: nowrap; }
+.viz-xl { height: 20px; padding-top: 5px; text-align: center; font-size: 0.64rem; color: var(--ink-3); white-space: nowrap; overflow: visible; }
+
+.viz-hbars { display: flex; flex-direction: column; gap: 0.2rem; }
+.viz-row { display: grid; grid-template-columns: minmax(96px, 34%) minmax(0, 1fr); align-items: center; gap: 0.75rem; padding: 0.25rem 0.35rem; border-radius: 6px; }
+.viz-row:hover { background: rgba(0, 107, 104, 0.05); }
+.viz-rl { min-width: 0; display: flex; flex-direction: column; font-size: 0.8rem; }
+.viz-rl .t1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viz-rl .t2 { font-size: 0.7rem; }
+.viz-track { display: flex; align-items: center; gap: 0.45rem; min-width: 0; }
+.viz-fill { display: flex; gap: 2px; height: 14px; min-width: 3px; }
+.viz-seg { height: 100%; min-width: 3px; }
+.viz-seg:last-child { border-radius: 0 4px 4px 0; }
+.viz-val { font: 600 0.74rem/1 'IBM Plex Mono', monospace; color: var(--ink-2); white-space: nowrap; }
+
+.viz-table { margin-top: 0.75rem; font-size: 0.78rem; }
+.viz-table summary { cursor: pointer; color: var(--brand-800); font-weight: 600; width: max-content; border-radius: 4px; }
+.viz-table .tw { margin-top: 0.5rem; max-height: 260px; overflow: auto; border: 1px solid var(--line-2); border-radius: var(--r-sm); }
+
+.viz-tip { position: fixed; z-index: 90; pointer-events: none; opacity: 0; transform: translateY(2px); transition: opacity var(--fast) var(--ease), transform var(--fast) var(--ease);
+  max-width: 240px; padding: 0.45rem 0.6rem; border-radius: var(--r-sm); background: var(--ink); color: #fff; font-size: 0.74rem; line-height: 1.45; box-shadow: var(--shadow-2); white-space: normal; }
+.viz-tip.on { opacity: 1; transform: none; }
+.viz-tip b { display: block; font-weight: 700; margin-bottom: 0.1rem; }
+
+@media print { .viz-table, .viz-tip { display: none !important; } }
+
+/* ============================ Bàn phím ============================ */
+
+.skip-link { position: absolute; left: 0.75rem; top: -3rem; z-index: 100; padding: 0.5rem 0.85rem; border-radius: var(--r-sm); background: var(--brand-900); color: #fff; font-weight: 600; text-decoration: none; }
+.skip-link:focus { top: 0.75rem; }
+.view:focus { outline: none; }
+tr[data-row]:focus { outline: none; }
+tr[data-row]:focus > td { background: var(--brand-50); }
+tr[data-row]:focus > td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+[data-hotkeys] [data-hotkey]::after { content: attr(data-hotkey); margin-left: 0.4rem; padding: 0 0.3rem; border: 1px solid currentColor; border-radius: 4px; font: 600 0.62rem/1.35 'IBM Plex Mono', monospace; opacity: 0.6; }
+kbd { display: inline-block; min-width: 1.5em; padding: 0.08rem 0.4rem; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--surface-2); color: var(--ink); font: 600 0.72rem/1.4 'IBM Plex Mono', monospace; text-align: center; }
+.keys { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 0.45rem 1rem; margin: 0 0 1.1rem; align-items: center; font-size: 0.84rem; }
+.keys dt { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.keys dd { margin: 0; color: var(--ink-2); }
+@media (hover: none) { [data-hotkeys] [data-hotkey]::after { display: none; } }
