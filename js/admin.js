@@ -957,7 +957,7 @@ LS.admin = (function () {
       if (!targetCode) { ui.toast('Cần mã loại việc.', 'err'); return; }
       LS.api.saveCatalog('workType', targetCode, {
         group_name: patch.group, display_name: patch.name, sla_hours: patch.sla_hours,
-        requires_appointment: patch.needs_appointment, requires_ks_approval: true,
+        requires_appointment: patch.needs_appointment, requires_ks_approval: patch.needs_ks_approval,
         is_active: patch.active, checklist_json: JSON.stringify(patch.checklist)
       }).then(function () { ui.closeDialog(); return LS.app.refreshServer('Đã lưu loại việc.'); })
         .catch(function (error) { ui.toast(error.message || 'Không thể lưu loại việc.', 'err'); });
@@ -1054,7 +1054,7 @@ LS.admin = (function () {
         ui.btn('Nhập Excel/CSV', { sm: true, act: 'user-import', icon: 'upload' }),
       body: '<p class="t2" style="margin:0 0 .75rem">Mã cán bộ gắn với đúng một phòng/PGD. Phòng/PGD đăng nhập bằng mã; LS, kiểm soát và quản trị dùng mã kèm mật khẩu. Có thể xuất Excel thành CSV UTF-8 để nhập nhiều dòng.</p>' + ui.table(
         [{ label: 'Mã đăng nhập', cls: 'fit' }, { label: 'Họ tên' }, { label: 'Email' }, { label: 'Đơn vị' },
-        { label: 'Vai trò', cls: 'fit' }, { label: 'Việc đang mở', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: '', cls: 'fit' }],
+        { label: 'Vai trò', cls: 'fit' }, { label: 'Việc đang mở', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: 'Nghỉ', cls: 'fit' }, { label: '', cls: 'fit' }],
         st().users.map(function (u) {
           var open = st().items.filter(function (i) {
             return i.assigned_user_id === u.user_id && D.STATUS[i.status].open;
@@ -1067,7 +1067,8 @@ LS.admin = (function () {
               '<div class="t2">' + U.esc(LS.screens.unitName(u.unit_id)) + '</div>',
               ui.tag(D.ROLES[u.role].label, 'info'),
               open ? '<span class="tid">' + open + '</span>' : '<span class="t2">—</span>',
-              u.active ? ui.tag('Hoạt động', 'ok') : ui.tag('Đã khóa', 'neutral'),
+              !u.active ? ui.tag('Đã khóa', 'neutral') : D.userOff(u) ? ui.tag('Đang nghỉ', 'warn') : ui.tag('Hoạt động', 'ok'),
+              u.active && D.userOff(u) ? '<div class="t2">' + U.esc((u.off_from || '') + (u.off_to ? ' → ' + u.off_to : '')) + '</div>' : '',
               ui.iconBtn('pencil', { act: 'user-edit', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Sửa người dùng' })
             ]
           };
@@ -1078,7 +1079,7 @@ LS.admin = (function () {
 
   function userDialog(id) {
     var u = id ? U.byId(st().users, 'user_id', id) : null;
-    var cur = u || { user_id: '', login_code: '', auth_group: 'INTERNAL', full_name: '', email: '', unit_id: 'PHONG_LS', role: 'CAN_BO_LS', active: true, zalo_name: '', zalo_phone: '', telegram_chat_id: '' };
+    var cur = u || { user_id: '', login_code: '', auth_group: 'INTERNAL', full_name: '', email: '', unit_id: 'PHONG_LS', role: 'CAN_BO_LS', active: true, availability_status: 'AVAILABLE', off_from: '', off_to: '', off_reason: '', replacement_user_id: '', zalo_name: '', zalo_phone: '', telegram_chat_id: '' };
 
     ui.openDialog(u ? 'Sửa người dùng' : 'Thêm người dùng',
       '<form data-form="user"' + (u ? ' data-id="' + U.attr(u.user_id) + '"' : '') + '>' +
@@ -1090,6 +1091,10 @@ LS.admin = (function () {
         return [x.unit_id, x.name];
       }), cur.unit_id)) +
       ui.field('Vai trò', ui.select('role', Object.keys(D.ROLES).map(function (k) { return [k, D.ROLES[k].label]; }), cur.role)) +
+      ui.field('Khả năng nhận việc', ui.select('availability_status', [['AVAILABLE', 'Có thể nhận việc'], ['OFF', 'Đang nghỉ']], cur.availability_status || 'AVAILABLE')) +
+      ui.field('Nghỉ từ', ui.input('off_from', cur.off_from || '', { type: 'date' })) +
+      ui.field('Nghỉ đến', ui.input('off_to', cur.off_to || '', { type: 'date' })) +
+      ui.field('Cán bộ thay thế', ui.select('replacement_user_id', st().users.filter(function (x) { return x.role === 'CAN_BO_LS' && x.active && x.user_id !== cur.user_id; }).map(function (x) { return [x.user_id, x.full_name]; }), cur.replacement_user_id || '', { blank: 'Không chỉ định' }), 'Nếu đổi khỏi Cán bộ LS khi còn việc mở, chọn cán bộ thay thế; hệ thống sẽ bàn giao trong cùng thao tác.') +
       ui.field('Tên trong nhóm Zalo', ui.input('zalo_name', cur.zalo_name || ''), 'dùng để gắn thẻ khi nhắn nhóm') +
       ui.field('Số Zalo', ui.input('zalo_phone', cur.zalo_phone || '', { type: 'tel' })) +
       ui.field('Chat ID Telegram', ui.input('telegram_chat_id', cur.telegram_chat_id || ''), 'bot chỉ nhắn được cho người đã bắt đầu trò chuyện') +
@@ -1097,6 +1102,7 @@ LS.admin = (function () {
       ui.field('Mật khẩu mới', ui.input('new_password', '', { type: 'password', placeholder: 'Để trống để giữ nguyên; phòng/PGD không cần nhập' })) +
       '<div style="margin-top:1rem">' +
       ui.checkbox('active', cur.active, 'Tài khoản đang hoạt động', 'khóa tài khoản khi nghỉ hoặc chuyển công tác') + '</div>' +
+      ui.field('Lý do nghỉ', ui.textarea('off_reason', cur.off_reason || '', { placeholder: 'Ví dụ: nghỉ phép, nghỉ ốm, đi công tác' })) +
       ui.formEnd('Lưu') + '</form>');
   }
 
@@ -1115,6 +1121,9 @@ LS.admin = (function () {
       unit_id: String(d.get('unit_id')), role: String(d.get('role')), active: d.get('active') !== null,
       auth_group: String(d.get('role')) === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL',
       new_password: String(d.get('new_password') || ''),
+      availability_status: String(d.get('availability_status') || 'AVAILABLE').toUpperCase(),
+      off_from: String(d.get('off_from') || ''), off_to: String(d.get('off_to') || ''),
+      off_reason: String(d.get('off_reason') || '').trim(), replacement_user_id: String(d.get('replacement_user_id') || ''),
       zalo_name: String(d.get('zalo_name') || '').trim(), zalo_phone: String(d.get('zalo_phone') || '').trim(),
       telegram_chat_id: String(d.get('telegram_chat_id') || '').trim()
     };
@@ -1123,6 +1132,8 @@ LS.admin = (function () {
       LS.api.saveCatalog('user', targetId, {
         full_name: patch.full_name, email: patch.email, login_code: patch.login_code, auth_group: patch.auth_group,
         new_password: patch.new_password, unit_id: patch.unit_id, role: patch.role, is_active: patch.active,
+        availability_status: patch.availability_status, off_from: patch.off_from, off_to: patch.off_to,
+        off_reason: patch.off_reason, replacement_user_id: patch.replacement_user_id,
         zalo_name: patch.zalo_name, zalo_phone: patch.zalo_phone, telegram_chat_id: patch.telegram_chat_id
       }).then(function () { ui.closeDialog(); return LS.app.refreshServer('Đã lưu người dùng.'); })
         .catch(function (error) { ui.toast(error.message || 'Không thể lưu người dùng.', 'err'); });
@@ -1135,8 +1146,25 @@ LS.admin = (function () {
         return i.assigned_user_id === id && D.STATUS[i.status].open;
       }).length;
       if (u.role === 'CAN_BO_LS' && (patch.role !== 'CAN_BO_LS' || !patch.active) && open) {
-        ui.toast('Còn ' + open + ' việc đang mở — bàn giao trước khi đổi vai trò hoặc khóa.', 'err');
-        return;
+        if (!patch.replacement_user_id) {
+          ui.toast('Còn ' + open + ' việc đang mở — chọn cán bộ thay thế trước khi đổi vai trò hoặc khóa.', 'err');
+          return;
+        }
+        var replacement = U.byId(st().users, 'user_id', patch.replacement_user_id);
+        if (!replacement || replacement.role !== 'CAN_BO_LS' || !replacement.active) {
+          ui.toast('Cán bộ thay thế phải là cán bộ LS đang hoạt động.', 'err');
+          return;
+        }
+        var handedAt = new Date().toISOString();
+        st().items.filter(function (i) {
+          return i.assigned_user_id === id && D.STATUS[i.status].open;
+        }).forEach(function (i) {
+          i.assigned_user_id = patch.replacement_user_id;
+          i.assigned_by = 'ADMIN';
+          i.assigned_at = handedAt;
+          i.updated_at = handedAt;
+          i.version = Number(i.version || 0) + 1;
+        });
       }
       Object.keys(patch).forEach(function (k) { u[k] = patch[k]; });
       commit('Người dùng', 'Sửa ' + id + ' (' + patch.role + ').');

@@ -101,6 +101,7 @@ LS.app = (function () {
       case 'room-board': return S.roomBoard();
       case 'queue': return S.queue();
       case 'mine': return S.mine();
+      case 'my-dashboard': return S.personalDashboard();
       case 'board': return S.board();
       case 'report': return S.report();
       case 'periods': return S.periods();
@@ -152,7 +153,7 @@ LS.app = (function () {
     return '<div class="auth"><div class="auth-side">' +
       '<div><div class="rail-mark" style="width:44px;height:44px">LS</div></div>' +
       '<div><h2 class="auth-lead">Mật khẩu tạm chỉ dùng được <em>một lần</em>.</h2>' +
-      '<p class="auth-note">Mật khẩu do quản trị cấp không gắn với riêng ai. Đặt mật khẩu của bạn trước khi vào hệ thống.</p>' +
+      '<p class="auth-note">Mật khẩu do quản trị cấp không gắn với riêng ai. Đặt mật khẩu của bạn trước khi vào hệ thống; tài khoản quản trị phải hoàn tất bước này trước khi đổi quyền người dùng.</p>' +
       '</div></div>' +
       '<div class="auth-main"><div class="auth-form">' +
       '<h1>Đổi mật khẩu</h1><p>' + U.esc(u.full_name) + '</p>' +
@@ -489,6 +490,10 @@ LS.app = (function () {
     var act = t.closest('[data-act]');
     if (act && t.tagName === 'INPUT') {
       var a = act.getAttribute('data-act');
+      if (a === 'checklist-toggle') {
+        S.saveChecklistToggle(act.getAttribute('data-id'), Number(act.getAttribute('data-index')), !!t.checked);
+        return;
+      }
       if (a === 'chan-toggle') { A.toggleChannel(act.getAttribute('data-code')); return; }
       if (a === 'rule-toggle') { A.toggleRule(act.getAttribute('data-id')); return; }
     }

@@ -18,7 +18,7 @@ var SCHEMA = {
   // hoặc INTERNAL (LS/KS/quản trị, bắt buộc mật khẩu).
   Users: ['user_id', 'full_name', 'email', 'login_code', 'auth_group', 'password_hash', 'must_change_password',
     'unit_id', 'role', 'sort_order', 'source_tab', 'is_active', 'zalo_name', 'zalo_phone',
-    'telegram_chat_id'],
+    'telegram_chat_id', 'availability_status', 'off_from', 'off_to', 'off_reason', 'replacement_user_id'],
 
   // Danh mục nguồn của các dropdown trong Sheet kế hoạch (VRM/PRM, sản phẩm,
   // LS). Không xoá dòng đã dùng; chỉ đổi is_active để giữ lịch sử hồ sơ.
@@ -39,7 +39,7 @@ var SCHEMA = {
 
   WorkItems: ['item_id', 'period_id', 'origin_item_id', 'carryover_from_item_id', 'request_id', 'work_type_code', 'product_name', 'occurrence_date',
     'source_stt', 'source_tab', 'status', 'assigned_user_id', 'assigned_by', 'submitted_at', 'accepted_at', 'assigned_at',
-    'due_at', 'completed_at', 'appointment_json', 'checklist_json', 'pending_json', 'note',
+    'due_at', 'completed_at', 'processing_started_at', 'appointment_json', 'checklist_json', 'pending_json', 'note',
     // Việc mở sang kỳ sau được nhân thành dòng mới ở kỳ đó. Không đánh dấu dòng
     // cũ thì báo cáo nhiều kỳ đếm một việc thành nhiều việc.
     'carried_to_item_id',
@@ -71,10 +71,11 @@ var SCHEMA = {
 
   // Số liệu chốt của từng kỳ. Các cột đếm cộng dồn được qua nhiều kỳ vì mỗi việc
   // chỉ tính ở kỳ nó phát sinh; `ton_cuoi_ky` là ảnh chụp nên lấy theo kỳ cuối,
-  // không cộng. Giữ `tong_gio_xu_ly` thay vì trung bình để gộp nhiều kỳ vẫn đúng.
+  // không cộng. Giữ tổng giờ và số mẫu của từng đoạn để gộp nhiều kỳ vẫn đúng.
   PeriodSummary: ['summary_id', 'period_id', 'month_key', 'dimension', 'dim_key', 'dim_label',
     'phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'ton_cuoi_ky', 'qua_han',
-    'tong_gio_xu_ly', 'updated_at'],
+    'tong_gio_tiep_nhan', 'so_tiep_nhan', 'tong_gio_phan_cong', 'so_phan_cong',
+    'tong_gio_xu_ly', 'so_xu_ly', 'tong_gio_toan_trinh', 'so_toan_trinh', 'updated_at'],
 
   // --- Vận hành ---
   ConfigLog: ['id', 'at', 'by', 'area', 'detail'],
@@ -331,7 +332,8 @@ function seedCatalog_(ss, report) {
   var adminAdded = appendIfMissingRow_(users, 'user_id', 'ADMIN', {
     user_id: 'ADMIN', full_name: 'Quản trị hệ thống', email: '', login_code: 'admin', auth_group: 'INTERNAL',
     password_hash: '', must_change_password: false, unit_id: 'HE_THONG', role: 'ADMIN', sort_order: 1,
-    source_tab: 'Cấu hình khởi tạo', is_active: true, zalo_name: '', zalo_phone: ''
+    source_tab: 'Cấu hình khởi tạo', is_active: true, zalo_name: '', zalo_phone: '',
+    availability_status: 'AVAILABLE', off_from: '', off_to: '', off_reason: '', replacement_user_id: ''
   }, report, 'tài khoản quản trị khởi tạo');
   if (adminAdded) report.push('Đã tạo tài khoản admin khởi tạo; mật khẩu mặc định chỉ được kiểm tra phía máy chủ và phải đổi sau khi đăng nhập');
 
@@ -481,9 +483,9 @@ function seedCatalog_(ss, report) {
       ['timezone', 'Asia/Ho_Chi_Minh', 'Múi giờ mốc thời gian và báo cáo', t],
       ['week_start', 'MONDAY', 'Ngày đầu tuần của kỳ báo cáo', t],
       ['work_days', '1,2,3,4,5', 'Ngày làm việc, 1 là thứ Hai', t],
-      ['work_open', '08:00', 'Giờ bắt đầu làm việc', t],
-      ['work_close', '17:30', 'Giờ kết thúc làm việc', t],
-      ['work_break', '11:30-13:00', 'Khoảng nghỉ trưa', t],
+      ['work_open', '07:30', 'Giờ bắt đầu làm việc', t],
+      ['work_close', '18:00', 'Giờ kết thúc làm việc', t],
+      ['work_break', '11:30-13:30', 'Khoảng nghỉ trưa', t],
       ['holidays', '', 'Ngày nghỉ, cách nhau bằng dấu phẩy', t],
       ['backlog_alert', '20', 'Ngưỡng cảnh báo tồn hàng đợi gửi', t],
       ['export_row_limit', '5000', 'Giới hạn dòng mỗi lần xuất báo cáo', t],

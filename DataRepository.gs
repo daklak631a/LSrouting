@@ -65,7 +65,7 @@ var DataRepository = (function () {
 
   // Cột chỉ chứa ngày, không chứa giờ. Sheet trả chúng về dạng Date nên phải
   // dựng lại đúng chuỗi đã ghi, nếu không mọi phép so sánh chuỗi đều sai.
-  var DATE_ONLY = ['start_date', 'end_date', 'activation_at', 'occurrence_date', 'quota_date'];
+  var DATE_ONLY = ['start_date', 'end_date', 'activation_at', 'occurrence_date', 'quota_date', 'off_from', 'off_to'];
 
   /**
    * Google Sheet tự diễn giải chuỗi giống ngày tháng: ghi "2026-09" vào ô thì

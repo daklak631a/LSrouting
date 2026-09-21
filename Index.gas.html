@@ -1175,6 +1175,44 @@ var LS = (function () {
   }
 
   /**
+   * Tính số mili-giây làm việc thực tế giữa hai mốc. Không dùng phép trừ
+   * Date đơn giản vì hồ sơ có thể chạy qua giờ nghỉ trưa, buổi tối, cuối tuần
+   * hoặc ngày lễ. Mốc ngày/giờ được giữ theo múi giờ trình duyệt của ứng dụng
+   * (GAS luôn chạy theo Asia/Ho_Chi_Minh).
+   */
+  function workingMilliseconds(fromIso, toIso, cal) {
+    if (!fromIso || !toIso) return null;
+    var from = new Date(fromIso), to = new Date(toIso);
+    if (!isFinite(from.getTime()) || !isFinite(to.getTime()) || to < from) return null;
+    cal = cal || { days: [1, 2, 3, 4, 5], open: '07:30', close: '18:00', breakFrom: '11:30', breakTo: '13:30', holidays: [] };
+    var total = 0, cursor = new Date(from.getTime()), guard = 0, segs = segments(cal);
+    while (cursor < to && guard++ < 10000) {
+      if (!isWorkday(cursor, cal)) {
+        cursor.setDate(cursor.getDate() + 1); cursor.setHours(0, 0, 0, 0); continue;
+      }
+      var dayStart = new Date(cursor.getTime()); dayStart.setHours(0, 0, 0, 0);
+      var nextDay = new Date(dayStart.getTime()); nextDay.setDate(nextDay.getDate() + 1);
+      var moved = false;
+      segs.forEach(function (seg) {
+        if (cursor >= to || moved && cursor >= nextDay) return;
+        var start = new Date(dayStart.getTime()); start.setMinutes(seg[0]);
+        var end = new Date(dayStart.getTime()); end.setMinutes(seg[1]);
+        var a = cursor > start ? cursor : start;
+        var b = to < end ? to : end;
+        if (b > a) total += b.getTime() - a.getTime();
+        if (cursor < end) { cursor = new Date(end.getTime()); moved = true; }
+      });
+      if (cursor < nextDay && cursor < to) { cursor = nextDay; }
+    }
+    return total;
+  }
+
+  function workingHours(fromIso, toIso, cal) {
+    var ms = workingMilliseconds(fromIso, toIso, cal);
+    return ms === null ? null : Math.round((ms / 3600000) * 10) / 10;
+  }
+
+  /**
    * Cộng giờ làm việc thật vào một mốc, bỏ qua ngoài giờ, nghỉ trưa, cuối tuần và ngày lễ.
    * Giao lúc 16h chiều thứ Sáu với SLA 4 giờ phải ra sáng thứ Hai, không phải 20h thứ Sáu.
    */
@@ -1353,7 +1391,8 @@ var LS = (function () {
     esc: esc, attr: attr, now: now, localDate: localDate, pad: pad, uid: uid,
     fmtDate: fmtDate, fmtTime: fmtTime, fmtDT: fmtDT, fmtGap: fmtGap,
     initials: initials, mask: mask, pct: pct, byId: byId, where: where, sum: sum,
-    addWorkingHours: addWorkingHours, isWorkday: isWorkday, periodRange: periodRange,
+    addWorkingHours: addWorkingHours, workingMilliseconds: workingMilliseconds, workingHours: workingHours,
+    isWorkday: isWorkday, periodRange: periodRange,
     icon: icon,
     load: load, save: save, reset: reset, db: db,
     replace: replace, setBackend: setBackend, isGas: isGas
@@ -1375,7 +1414,7 @@ LS.domain = (function () {
   var ROLES = {
     PHONG_PGD: { label: 'Phòng / PGD', nav: ['work', 'room', 'room-board', 'audit'] },
     KS_LS: { label: 'Kiểm soát LS', nav: ['queue', 'work', 'board', 'report', 'periods', 'audit'] },
-    CAN_BO_LS: { label: 'Cán bộ LS', nav: ['mine', 'audit'] },
+    CAN_BO_LS: { label: 'Cán bộ LS', nav: ['my-dashboard', 'mine', 'audit'] },
     QUAN_LY_LS: { label: 'Quản lý LS', nav: ['board', 'queue', 'work', 'report', 'periods', 'audit'] },
     ADMIN: { label: 'Quản trị hệ thống', nav: ['admin', 'board', 'report', 'periods', 'audit'] }
   };
@@ -1386,6 +1425,7 @@ LS.domain = (function () {
     'room-board': { icon: 'chart', short: 'Dashboard phòng', title: 'Dashboard phòng', sub: 'Khối lượng hồ sơ và LS đang xử lý cho phòng' },
     queue: { icon: 'shield', short: 'Hàng chờ', title: 'Tiếp nhận & phân công', sub: 'Kiểm tra hồ sơ, giao việc cho cán bộ LS' },
     mine: { icon: 'briefcase', short: 'Việc tôi', title: 'Việc của tôi', sub: 'Việc đang được giao cho bạn' },
+    'my-dashboard': { icon: 'chart', short: 'Dashboard tôi', title: 'Dashboard cá nhân', sub: 'Kết quả và giờ xử lý thực tế trong ngày' },
     board: { icon: 'chart', short: 'Tổng hợp', title: 'Tổng hợp', sub: 'Kết quả theo kỳ, loại việc và cán bộ LS' },
     report: { icon: 'chart', short: 'Báo cáo', title: 'Báo cáo nhiều kỳ', sub: 'Tổng hợp theo tháng, quý, năm hoặc khoảng tùy chọn' },
     periods: { icon: 'calendar', short: 'Kỳ tháng', title: 'Kế hoạch tháng', sub: 'Kỳ đang vận hành và lịch sử các tháng trước' },
@@ -2074,6 +2114,26 @@ LS.domain = (function () {
     return { due: item.due_at, left: left, late: left < 0, soon: left >= 0 && left < 2 * 3600000 };
   }
 
+  /** Số giờ làm thực tế kể từ lúc cán bộ bấm bắt đầu xử lý hồ sơ. */
+  function processingCalendar(st) {
+    var base = (st && st.calendar) || {};
+    // Đồng hồ khách hàng dùng giờ vận hành LS đã thống nhất, không phụ thuộc
+    // SLA cũ của workbook: 07:30–11:30 và 13:30–18:00 các ngày làm việc.
+    return { days: base.days || [1, 2, 3, 4, 5], open: '07:30', close: '18:00',
+      breakFrom: '11:30', breakTo: '13:30', holidays: base.holidays || [] };
+  }
+
+  function processingHours(item, st, now) {
+    if (!item || !item.processing_started_at) return null;
+    var end = item.completed_at || (now instanceof Date ? now.toISOString() : (now || U.now()));
+    return U.workingHours(item.processing_started_at, end, processingCalendar(st));
+  }
+
+  function processingLabel(item, st, now) {
+    var h = processingHours(item, st, now);
+    return h === null ? 'Chưa bắt đầu' : h.toFixed(1) + ' giờ làm';
+  }
+
   /* ============================ Báo cáo nhiều kỳ ============================ */
 
   var REPORT_PRESETS = [
@@ -2103,6 +2163,65 @@ LS.domain = (function () {
     return out;
   }
 
+  function dateOnly(value) {
+    if (!value) return '';
+    if (Object.prototype.toString.call(value) === '[object Date]') {
+      if (isNaN(value.getTime())) return '';
+      return value.getFullYear() + '-' + String(value.getMonth() + 1).padStart(2, '0') + '-' + String(value.getDate()).padStart(2, '0');
+    }
+    var text = String(value);
+    var match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : '';
+  }
+
+  function userOff(user, onDate) {
+    if (!user) return false;
+    var status = String(user.availability_status || 'AVAILABLE').toUpperCase();
+    var day = dateOnly(onDate || new Date());
+    var from = dateOnly(user.off_from), to = dateOnly(user.off_to);
+    if (status !== 'OFF' && !from && !to) return false;
+    return !!day && (!from || day >= from) && (!to || day <= to);
+  }
+
+  function userAvailable(user, onDate) {
+    return !!(user && user.role === 'CAN_BO_LS' && user.active && !userOff(user, onDate));
+  }
+
+  /** Ma trận khối lượng theo cán bộ và nhóm việc, luôn giữ cả dòng số 0. */
+  function staffWorkloadByGroup(items, st, fromDate, toDate) {
+    var from = dateOnly(fromDate), to = dateOnly(toDate);
+    var groups = [];
+    (st.workTypes || []).forEach(function (w) {
+      var group = String(w.group || w.name || w.code || '').trim();
+      if (group && groups.indexOf(group) === -1) groups.push(group);
+    });
+    var users = (st.users || []).filter(function (u) { return u.role === 'CAN_BO_LS'; }).sort(function (a, b) {
+      return (Number(a.sort_order) || 9999) - (Number(b.sort_order) || 9999) || String(a.full_name || '').localeCompare(String(b.full_name || ''));
+    });
+    var byUser = {};
+    users.forEach(function (u) {
+      var byGroup = {};
+      groups.forEach(function (g) { byGroup[g] = 0; });
+      byUser[u.user_id] = { user: u, byGroup: byGroup, total: 0, done: 0 };
+    });
+    (items || []).forEach(function (item) {
+      var day = dateOnly(item.occurrence_date || item.submitted_at);
+      if (!day || (from && day < from) || (to && day > to)) return;
+      var row = byUser[item.assigned_user_id];
+      if (!row) return;
+      var wt = U.byId(st.workTypes || [], 'code', item.work_type_code) || {};
+      var group = String(wt.group || wt.name || item.work_type_code || 'Chưa rõ nhóm việc').trim();
+      if (groups.indexOf(group) === -1) {
+        groups.push(group);
+        users.forEach(function (u) { if (byUser[u.user_id]) byUser[u.user_id].byGroup[group] = 0; });
+      }
+      row.byGroup[group] = Number(row.byGroup[group] || 0) + 1;
+      row.total += 1;
+      if (item.status === 'HOAN_THANH_LS') row.done += 1;
+    });
+    return { groups: groups, rows: users.map(function (u) { return byUser[u.user_id]; }) };
+  }
+
   /**
    * Bản tính báo cáo của trình duyệt. Định nghĩa chỉ số phải khớp `getReport`
    * trong Code.gs, nếu không bản xem thử và bản chạy thật nói hai con số khác nhau.
@@ -2119,14 +2238,22 @@ LS.domain = (function () {
     var now = U.now();
     var months = {}, totals = {}, snapshot = {}, lastMonth = '';
 
+    function elapsedHours(from, to) {
+      if (!from || !to) return null;
+      var a = new Date(from).getTime(), b = new Date(to).getTime();
+      return isFinite(a) && isFinite(b) && b >= a ? (b - a) / 3600000 : null;
+    }
+
     st.items.forEach(function (i) {
       var key = String(i.occurrence_date || '').substring(0, 7);
       if (!inRange[key]) return;
 
       var req = U.byId(st.requests, 'request_id', i.request_id) || {};
       var done = i.status === 'HOAN_THANH_LS';
-      var hours = done && i.assigned_at && i.completed_at
-        ? Math.max(0, (new Date(i.completed_at).getTime() - new Date(i.assigned_at).getTime()) / 3600000) : 0;
+      var receiveHours = elapsedHours(i.submitted_at, i.accepted_at);
+      var assignmentHours = elapsedHours(i.accepted_at, i.assigned_at);
+      var processHours = elapsedHours(i.assigned_at, i.completed_at);
+      var totalHours = elapsedHours(i.submitted_at, i.completed_at);
       // Việc đã chuyển sang kỳ sau được chấm trễ ở dòng cuối của nó, không
       // phải ở mỗi kỳ nó đi qua — nếu không một việc trễ đếm thành ba lần trễ.
       var late = i.due_at && !i.carried_to_item_id
@@ -2150,14 +2277,20 @@ LS.domain = (function () {
 
       function add(acc) {
         if (i.carryover_from_item_id) acc.chuyen_tiep_vao += 1; else acc.phat_sinh += 1;
-        if (done) { acc.hoan_thanh += 1; acc.tong_gio_xu_ly += hours; }
+        if (receiveHours !== null) { acc.tong_gio_tiep_nhan += receiveHours; acc.so_tiep_nhan += 1; }
+        if (assignmentHours !== null) { acc.tong_gio_phan_cong += assignmentHours; acc.so_phan_cong += 1; }
+        if (processHours !== null) { acc.tong_gio_xu_ly += processHours; acc.so_xu_ly += 1; }
+        if (totalHours !== null) { acc.tong_gio_toan_trinh += totalHours; acc.so_toan_trinh += 1; }
+        if (done) acc.hoan_thanh += 1;
         if (i.status === 'HUY') acc.huy += 1;
         if (late) acc.qua_han += 1;
         return acc;
       }
       function blank(extra) {
         return Object.assign({ phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0,
-          ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 }, extra || {});
+          ton_cuoi_ky: 0, qua_han: 0, tong_gio_tiep_nhan: 0, so_tiep_nhan: 0,
+          tong_gio_phan_cong: 0, so_phan_cong: 0, tong_gio_xu_ly: 0, so_xu_ly: 0,
+          tong_gio_toan_trinh: 0, so_toan_trinh: 0 }, extra || {});
       }
 
       var m = months[key] || (months[key] = blank({ month_key: key, name: 'Tháng ' + Number(key.substring(5)) + '/' + key.substring(0, 4) }));
@@ -2178,22 +2311,34 @@ LS.domain = (function () {
       var r = totals[k];
       // Tồn là ảnh chụp cuối kỳ, không phải tổng cộng dồn qua các tháng.
       r.ton_cuoi_ky = Number(last[k] || 0);
-      r.gio_xu_ly_tb = r.hoan_thanh ? Math.round((r.tong_gio_xu_ly / r.hoan_thanh) * 10) / 10 : 0;
+      r.gio_tiep_nhan_tb = r.so_tiep_nhan ? Math.round((r.tong_gio_tiep_nhan / r.so_tiep_nhan) * 10) / 10 : 0;
+      r.gio_phan_cong_tb = r.so_phan_cong ? Math.round((r.tong_gio_phan_cong / r.so_phan_cong) * 10) / 10 : 0;
+      r.gio_xu_ly_tb = r.so_xu_ly ? Math.round((r.tong_gio_xu_ly / r.so_xu_ly) * 10) / 10 : 0;
+      r.gio_toan_trinh_tb = r.so_toan_trinh ? Math.round((r.tong_gio_toan_trinh / r.so_toan_trinh) * 10) / 10 : 0;
       return r;
     }).sort(function (a, b) { return b.phat_sinh - a.phat_sinh || String(a.label).localeCompare(String(b.label)); });
 
     var monthRows = wanted.map(function (k) {
       return months[k] || { month_key: k, name: 'Tháng ' + Number(k.substring(5)) + '/' + k.substring(0, 4),
-        phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 };
+        phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0,
+        tong_gio_tiep_nhan: 0, so_tiep_nhan: 0, tong_gio_phan_cong: 0, so_phan_cong: 0,
+        tong_gio_xu_ly: 0, so_xu_ly: 0, tong_gio_toan_trinh: 0, so_toan_trinh: 0 };
     });
 
     var total = monthRows.reduce(function (acc, m) {
-      ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'qua_han', 'tong_gio_xu_ly']
+      ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'qua_han',
+        'tong_gio_tiep_nhan', 'so_tiep_nhan', 'tong_gio_phan_cong', 'so_phan_cong',
+        'tong_gio_xu_ly', 'so_xu_ly', 'tong_gio_toan_trinh', 'so_toan_trinh']
         .forEach(function (k) { acc[k] += Number(m[k] || 0); });
       acc.ton_cuoi_ky = Number(m.ton_cuoi_ky || 0);
       return acc;
-    }, { phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 });
-    total.gio_xu_ly_tb = total.hoan_thanh ? Math.round((total.tong_gio_xu_ly / total.hoan_thanh) * 10) / 10 : 0;
+    }, { phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0,
+      tong_gio_tiep_nhan: 0, so_tiep_nhan: 0, tong_gio_phan_cong: 0, so_phan_cong: 0,
+      tong_gio_xu_ly: 0, so_xu_ly: 0, tong_gio_toan_trinh: 0, so_toan_trinh: 0 });
+    total.gio_tiep_nhan_tb = total.so_tiep_nhan ? Math.round((total.tong_gio_tiep_nhan / total.so_tiep_nhan) * 10) / 10 : 0;
+    total.gio_phan_cong_tb = total.so_phan_cong ? Math.round((total.tong_gio_phan_cong / total.so_phan_cong) * 10) / 10 : 0;
+    total.gio_xu_ly_tb = total.so_xu_ly ? Math.round((total.tong_gio_xu_ly / total.so_xu_ly) * 10) / 10 : 0;
+    total.gio_toan_trinh_tb = total.so_toan_trinh ? Math.round((total.tong_gio_toan_trinh / total.so_toan_trinh) * 10) / 10 : 0;
 
     return { from: from, to: to, group: group, months: monthRows, rows: rows, total: total,
       periods: monthRows.length, generated_at: U.now() };
@@ -2225,8 +2370,8 @@ LS.domain = (function () {
       },
 
       calendar: {
-        days: [1, 2, 3, 4, 5], open: '08:00', close: '17:30',
-        breakFrom: '11:30', breakTo: '13:00',
+        days: [1, 2, 3, 4, 5], open: '07:30', close: '18:00',
+        breakFrom: '11:30', breakTo: '13:30',
         holidays: ['2026-09-02', '2026-01-01']
       },
 
@@ -2506,6 +2651,7 @@ LS.domain = (function () {
     addressFor: addressFor, templateFor: templateFor, emailUsedToday: emailUsedToday,
     REPORT_PRESETS: REPORT_PRESETS, presetRange: presetRange, monthsInRange: monthsInRange,
     reportFromItems: reportFromItems, monthKey: monthKey,
+    dateOnly: dateOnly, userOff: userOff, userAvailable: userAvailable, staffWorkloadByGroup: staffWorkloadByGroup,
     VARS: VARS, FORBIDDEN: FORBIDDEN, TPL_STATUS: TPL_STATUS,
     NOTIFY_EVENTS: NOTIFY_EVENTS, AUDIENCE: AUDIENCE, OUT_STATUS: OUT_STATUS,
     label: label, tone: tone,
@@ -2513,7 +2659,7 @@ LS.domain = (function () {
     usedVars: usedVars, checkTemplate: checkTemplate, renderTemplate: renderTemplate,
     recipientsFor: recipientsFor, contextFor: contextFor,
     queueNotifications: queueNotifications, dispatch: dispatch, outboxHealth: outboxHealth,
-    sla: sla, dueFrom: dueFrom,
+    sla: sla, processingCalendar: processingCalendar, processingHours: processingHours, processingLabel: processingLabel, dueFrom: dueFrom,
     seed: seed
   };
 })();
@@ -2557,7 +2703,9 @@ LS.api = (function () {
       return { user_id: u.user_id, full_name: u.full_name, email: u.email || '', role: u.role, unit_id: u.unit_id,
         sort_order: Number(u.sort_order) || 9999, source_tab: u.source_tab || '', active: truth(u.is_active),
         login_code: u.login_code || u.user_id || '', auth_group: u.auth_group || (u.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL'),
-        zalo_name: u.zalo_name || '', zalo_phone: u.zalo_phone || '', telegram_chat_id: u.telegram_chat_id || '' };
+        zalo_name: u.zalo_name || '', zalo_phone: u.zalo_phone || '', telegram_chat_id: u.telegram_chat_id || '',
+        availability_status: String(u.availability_status || 'AVAILABLE').toUpperCase(),
+        off_from: u.off_from || '', off_to: u.off_to || '', off_reason: u.off_reason || '', replacement_user_id: u.replacement_user_id || '' };
     });
     if (raw.me && !LS.byId(out.users, 'user_id', raw.me.user_id)) {
       out.users.push({ user_id: raw.me.user_id, login_code: raw.me.user_id, auth_group: raw.me.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL', full_name: raw.me.full_name, email: raw.me.email, role: raw.me.role, unit_id: raw.me.unit_id, active: true });
@@ -2580,7 +2728,7 @@ LS.api = (function () {
     out.workTypes = (raw.workTypes || []).map(function (w) {
       return {
         code: w.type_code, name: w.display_name, group: w.group_name || '', sla_hours: Number(w.sla_hours) || 8,
-        needs_appointment: truth(w.requires_appointment), needs_ks_approval: true,
+        needs_appointment: truth(w.requires_appointment), needs_ks_approval: truth(w.requires_ks_approval),
         active: truth(w.is_active), sort_order: Number(w.sort_order) || 9999, checklist: json(w.checklist_json, [])
       };
     });
@@ -2600,7 +2748,7 @@ LS.api = (function () {
         item_id: i.item_id, period_id: i.period_id || '', carryover_from_item_id: i.carryover_from_item_id || '', carried_to_item_id: i.carried_to_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
         occurrence_date: i.occurrence_date, status: i.status, assigned_user_id: i.assigned_user_id || '', assigned_by: i.assigned_by || '',
         submitted_at: i.submitted_at || '', accepted_at: i.accepted_at || '', assigned_at: i.assigned_at || '', due_at: i.due_at || '',
-        completed_at: i.completed_at || '', appointment: json(i.appointment_json, null), checklist: json(i.checklist_json, []),
+        completed_at: i.completed_at || '', processing_started_at: i.processing_started_at || '', appointment: json(i.appointment_json, null), checklist: json(i.checklist_json, []),
         pending: json(i.pending_json, null), note: i.note || '', version: Number(i.version) || 1
       };
     });
@@ -2673,6 +2821,7 @@ LS.api = (function () {
     createNextMonthlyPlan: function () { return call('createNextMonthlyPlan'); },
     createRequest: function (payload) { return call('createRequest', payload); },
     transitionItem: function (id, to, opts) { return call('transitionItem', id, to, opts || {}); },
+    saveChecklist: function (id, checklist, expectedVersion) { return call('saveChecklist', id, checklist, expectedVersion); },
     proposeRevision: function (id, fields, reason) { return call('proposeRevision', id, fields, reason); },
     resolveRevision: function (id, approve, reason) { return call('resolveRevision', id, approve, reason || ''); },
     saveCatalog: function (kind, code, data) { return call('adminSaveCatalog', kind, code, data); },
@@ -3044,13 +3193,19 @@ LS.screens = (function () {
   }
 
   function visibleEvents() {
+    var u = me();
+    if (u && u.role === 'CAN_BO_LS') {
+      return st().events.filter(function (e) { return e.by === u.user_id; });
+    }
     var ids = {};
     visibleItems().forEach(function (i) { ids[i.item_id] = true; });
     return st().events.filter(function (e) { return ids[e.item_id]; });
   }
 
-  function staffList() {
-    return st().users.filter(function (u) { return u.role === 'CAN_BO_LS' && u.active; });
+  function staffList(includeUnavailable) {
+    return st().users.filter(function (u) {
+      return D.userAvailable(u) || (includeUnavailable && u.role === 'CAN_BO_LS' && u.active);
+    });
   }
 
   function reportRange() {
@@ -3080,30 +3235,45 @@ LS.screens = (function () {
     return t >= range.from && t <= range.to;
   }
 
+  function elapsedHours(from, to) {
+    if (!from || !to) return null;
+    var a = new Date(from).getTime(), b = new Date(to).getTime();
+    return isFinite(a) && isFinite(b) && b >= a ? (b - a) / 3600000 : null;
+  }
+
   /** Báo cáo xuyên kỳ: giao, hoàn thành, tồn, quá hạn và thời gian xử lý từng cán bộ. */
   function performanceReport(range) {
     var all = visibleItems(), events = visibleEvents();
-    var rows = staffList().map(function (u) {
+    var workload = D.staffWorkloadByGroup(all, st(), range.fromDate, range.toDate);
+    var rows = staffList(true).map(function (u) {
       var mine = all.filter(function (i) { return i.assigned_user_id === u.user_id; });
       var assigned = mine.filter(function (i) { return inRange(i.assigned_at || i.accepted_at || i.submitted_at, range); });
+      var received = mine.filter(function (i) { return inRange(i.accepted_at, range); });
       var done = mine.filter(function (i) { return inRange(i.completed_at, range); });
       var open = mine.filter(function (i) { return D.STATUS[i.status].open; });
       var late = open.filter(function (i) { var s = D.sla(i, st()); return s && s.late; });
       var hours = done.map(function (i) {
-        var a = new Date(i.assigned_at || i.accepted_at || i.submitted_at).getTime();
-        var b = new Date(i.completed_at).getTime();
-        return isFinite(a) && isFinite(b) && b >= a ? (b - a) / 3600000 : null;
+        return elapsedHours(i.assigned_at, i.completed_at);
       }).filter(function (x) { return x !== null; });
+      var receiveHours = received.map(function (i) { return elapsedHours(i.submitted_at, i.accepted_at); }).filter(function (x) { return x !== null; });
+      var totalHours = done.map(function (i) { return elapsedHours(i.submitted_at, i.completed_at); }).filter(function (x) { return x !== null; });
       var onTime = done.filter(function (i) { return i.due_at && new Date(i.completed_at) <= new Date(i.due_at); }).length;
       var touched = {};
       events.forEach(function (e) { if (e.by === u.user_id && inRange(e.at, range)) touched[e.item_id] = true; });
+      var workloadRow = workload.rows.filter(function (x) { return x.user.user_id === u.user_id; })[0] || { byGroup: {}, total: 0 };
       return { user: u, assigned: assigned.length, done: done.length, open: open.length, late: late.length,
         touched: Object.keys(touched).length, avgHours: hours.length ? hours.reduce(function (a, b) { return a + b; }, 0) / hours.length : null,
-        maxHours: hours.length ? Math.max.apply(null, hours) : null, onTime: done.length ? Math.round(onTime * 100 / done.length) : null };
+        avgReceiveHours: receiveHours.length ? receiveHours.reduce(function (a, b) { return a + b; }, 0) / receiveHours.length : null,
+        avgTotalHours: totalHours.length ? totalHours.reduce(function (a, b) { return a + b; }, 0) / totalHours.length : null,
+        maxHours: hours.length ? Math.max.apply(null, hours) : null, onTime: done.length ? Math.round(onTime * 100 / done.length) : null,
+        byGroup: workloadRow.byGroup, workloadTotal: workloadRow.total };
     });
     return { range: range, rows: rows,
       assigned: rows.reduce(function (n, x) { return n + x.assigned; }, 0), done: rows.reduce(function (n, x) { return n + x.done; }, 0),
-      open: rows.reduce(function (n, x) { return n + x.open; }, 0), late: rows.reduce(function (n, x) { return n + x.late; }, 0) };
+      open: rows.reduce(function (n, x) { return n + x.open; }, 0), late: rows.reduce(function (n, x) { return n + x.late; }, 0),
+      avgReceiveHours: rows.filter(function (x) { return x.avgReceiveHours !== null; }).reduce(function (sum, x, _, a) { return sum + x.avgReceiveHours / a.length; }, 0) || null,
+      avgTotalHours: rows.filter(function (x) { return x.avgTotalHours !== null; }).reduce(function (sum, x, _, a) { return sum + x.avgTotalHours / a.length; }, 0) || null,
+      workload: workload };
   }
 
   function reportLabel(range) {
@@ -3142,17 +3312,22 @@ LS.screens = (function () {
       '<button type="button" class="btn btn-primary btn-sm" data-act="apply-report">' + U.icon('search', 15) + ' Xem</button>' +
       ui.btn('Tải ảnh', { act: 'download-daily-image', icon: 'download', sm: true, title: 'Tải ảnh PNG vùng kết quả đang xem' }) +
       '</div></div>';
-    var body = dashboardTabs(active) + (active === 'report' ? ui.strip([ui.metric('Đã phân công', report.assigned), ui.metric('Hoàn thành kỳ', report.done, 'ok'), ui.metric('Đang mở', report.open, 'info'), ui.metric('Quá hạn', report.late, report.late ? 'danger' : '')]) +
+    var body = dashboardTabs(active) + (active === 'report' ? ui.strip([ui.metric('Đã phân công', report.assigned), ui.metric('Hoàn thành kỳ', report.done, 'ok'), ui.metric('Đang mở', report.open, 'info'), ui.metric('Quá hạn', report.late, report.late ? 'danger' : ''), ui.metric('Nhận hồ sơ TB', report.avgReceiveHours === null ? '—' : report.avgReceiveHours.toFixed(1) + 'h'), ui.metric('Toàn trình TB', report.avgTotalHours === null ? '—' : report.avgTotalHours.toFixed(1) + 'h')]) +
       ui.table(
-        [{ label: 'Cán bộ LS' }, { label: 'Đã giao', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }, { label: 'TB xử lý (giờ)', cls: 'num' }, { label: 'Đúng hạn', cls: 'num' }],
+        [{ label: 'Cán bộ LS' }, { label: 'Đã giao', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }, { label: 'TB nhận (giờ)', cls: 'num' }, { label: 'TB xử lý (giờ)', cls: 'num' }, { label: 'TB toàn trình (giờ)', cls: 'num' }, { label: 'Đúng hạn', cls: 'num' }],
         report.rows.map(function (x) { return { cls: x.late ? 'flag' : '', cells: [
-          '<div class="t1">' + U.esc(x.user.full_name) + '</div><div class="t2">' + U.esc(unitName(x.user.unit_id)) + '</div>',
+          '<div class="t1">' + U.esc(x.user.full_name) + '</div><div class="t2">' + U.esc(unitName(x.user.unit_id)) + (D.userOff(x.user) ? ' · ' + U.esc('Đang nghỉ') : '') + '</div>',
           '<span class="tid">' + x.assigned + '</span>', '<span class="tid">' + x.done + '</span>', '<span class="tid">' + x.open + '</span>',
-          x.late ? ui.tag(String(x.late), 'danger') : '<span class="tid">0</span>', x.avgHours === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.avgHours.toFixed(1) + '</span>',
+          x.late ? ui.tag(String(x.late), 'danger') : '<span class="tid">0</span>', x.avgReceiveHours === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.avgReceiveHours.toFixed(1) + '</span>', x.avgHours === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.avgHours.toFixed(1) + '</span>',
+          x.avgTotalHours === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.avgTotalHours.toFixed(1) + '</span>',
           x.onTime === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '%</span>'
         ] }; }),
         { icon: 'users', title: 'Chưa có dữ liệu cán bộ LS', text: 'Chọn kỳ khác hoặc thêm cán bộ trong Quản trị hệ thống.' }
-      ) : '');
+      ) + (report.workload && report.workload.groups.length ? '<div style="margin-top:1rem">' + ui.sectionTitle('Số lượng theo cán bộ và nhóm việc') +
+        '<p class="t2">Đếm toàn bộ việc phát sinh trong kỳ, kể cả cán bộ chưa có việc; không tự chuyển các việc đang mở khi cán bộ nghỉ.</p>' +
+        ui.table([{ label: 'Cán bộ LS' }].concat(report.workload.groups.map(function (g) { return { label: g, cls: 'num' }; })).concat([{ label: 'Tổng', cls: 'num' }]),
+          report.workload.rows.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.user.full_name) + '</div>'].concat(report.workload.groups.map(function (g) { return '<span class="tid">' + Number(x.byGroup[g] || 0) + '</span>'; })).concat(['<span class="tid">' + x.total + '</span>']) }; }),
+          { icon: 'users', title: 'Chưa có cán bộ LS', text: 'Thêm cán bộ trong Quản trị hệ thống.' }) + '</div>' : '') : '');
     return ui.block({
       title: 'Kết quả thực hiện', icon: 'chart',
       filters: filtersHtml,
@@ -3316,8 +3491,14 @@ LS.screens = (function () {
       var score = function (x) { return (x.unit_id ? 4 : 0) + (x.work_type_code ? 2 : 0) + (x.product_name ? 1 : 0); };
       return score(b) - score(a) || a.priority - b.priority;
     });
-    var rec = matched.map(function (x) { return U.byId(st().users, 'user_id', x.assignee_id); }).filter(function (u) { return u && u.active && u.role === 'CAN_BO_LS'; })[0];
-    return rec ? { user: rec, rule: matched.filter(function (x) { return x.assignee_id === rec.user_id; })[0] } : null;
+    var candidates = matched.map(function (x) { return { user: U.byId(st().users, 'user_id', x.assignee_id), rule: x }; }).filter(function (x) { return D.userAvailable(x.user); });
+    if (candidates.length) return { user: candidates[0].user, rule: candidates[0].rule };
+    var replacement = matched.map(function (x) {
+      var original = U.byId(st().users, 'user_id', x.assignee_id);
+      var replacementId = original && original.replacement_user_id;
+      return replacementId ? { user: U.byId(st().users, 'user_id', replacementId), rule: x, original: original } : null;
+    }).filter(function (x) { return x && D.userAvailable(x.user); })[0];
+    return replacement ? { user: replacement.user, rule: replacement.rule, replacementFor: replacement.original } : null;
   }
 
   /* ============================ Quyền thao tác ============================ */
@@ -3594,6 +3775,7 @@ LS.screens = (function () {
     staff: { label: 'Cán bộ' },
     progress: { label: 'Tiến độ', cls: 'fit' },
     sla: { label: 'Hạn xử lý', cls: 'fit' },
+    time: { label: 'Giờ xử lý KH', cls: 'fit' },
     act: { label: '', cls: 'fit' }
   };
 
@@ -3679,6 +3861,8 @@ LS.screens = (function () {
         return progressCell(item) || '<span class="t2">—</span>';
       case 'sla':
         return slaCell(item);
+      case 'time':
+        return '<span class="tid">' + U.esc(D.processingLabel(item, st())) + '</span>';
       case 'act':
         return actionRow(item);
       default: return '';
@@ -3967,10 +4151,50 @@ LS.screens = (function () {
         title: 'Việc được giao', count: list.length + '/' + all.length, icon: 'briefcase',
         filters: listToolbar('mine', { status: true, type: true }, true),
         // Bỏ cột cán bộ: mọi dòng ở đây đều là việc của chính người đang xem.
-        body: itemTable(list, ['code', 'customer', 'contact', 'work', 'progress', 'sla', 'status', 'act'], {
+        body: itemTable(list, ['code', 'customer', 'contact', 'work', 'progress', 'time', 'status', 'act'], {
           icon: 'briefcase', title: 'Chưa có việc nào được giao', text: 'Kiểm soát LS sẽ phân công việc cho bạn từ hàng chờ.'
         }, 'mine')
       });
+  }
+
+  /** Dashboard riêng của cán bộ LS: việc đã chạm trong ngày và giờ làm thực tế. */
+  function personalDashboard() {
+    var u = me();
+    if (!u || u.role !== 'CAN_BO_LS') return ui.banner('warn', 'Không có quyền xem dashboard cá nhân', 'Màn này chỉ dành cho cán bộ LS.');
+    var now = new Date(), today = U.localDate(now), todayStart = new Date(today + 'T00:00:00');
+    var items = visibleItems();
+    var touched = items.filter(function (i) {
+      return (i.processing_started_at && String(i.processing_started_at).substring(0, 10) <= today) ||
+        (i.completed_at && String(i.completed_at).substring(0, 10) === today);
+    });
+    var doneToday = items.filter(function (i) { return i.status === 'HOAN_THANH_LS' && String(i.completed_at || '').substring(0, 10) === today; });
+    var running = items.filter(function (i) { return D.STATUS[i.status] && D.STATUS[i.status].open; });
+    var hours = touched.reduce(function (sum, i) {
+      if (!i.processing_started_at) return sum;
+      var start = new Date(i.processing_started_at), end = i.completed_at ? new Date(i.completed_at) : now;
+      if (start < todayStart) start = todayStart;
+      if (end > now) end = now;
+      var h = U.workingHours(start.toISOString(), end.toISOString(), D.processingCalendar(st()));
+      return sum + (h || 0);
+    }, 0);
+    var rows = touched.slice().sort(function (a, b) { return new Date(b.completed_at || b.processing_started_at || 0) - new Date(a.completed_at || a.processing_started_at || 0); }).slice(0, 30);
+    return ui.block({ title: 'Dashboard cá nhân', count: U.fmtDate(today), icon: 'chart',
+      note: 'Chỉ hiển thị việc của ' + U.esc(u.full_name) + '. Giờ xử lý đã loại trừ 11:30–13:30 và 18:00–07:30.',
+      body: ui.strip([
+        ui.metric('Hoàn thành hôm nay', doneToday.length, 'ok'),
+        ui.metric('Đang mở', running.length, 'info'),
+        ui.metric('Đang xử lý (giờ làm)', hours.toFixed(1) + 'h'),
+        ui.metric('Đã chạm hôm nay', touched.length)
+      ]) + '<div style="margin-top:1.125rem">' + ui.sectionTitle('Chi tiết việc trong ngày') +
+      ui.table([{ label: 'Mã việc' }, { label: 'Khách hàng' }, { label: 'Loại việc' }, { label: 'Trạng thái' }, { label: 'Giờ xử lý KH', cls: 'num' }],
+        rows.map(function (i) { var r = reqOf(i); return { cells: [
+          '<button class="btn btn-quiet btn-sm tid" data-act="detail" data-id="' + U.attr(i.item_id) + '">' + U.esc(itemRef(i)) + '</button>',
+          '<div class="t1">' + U.esc(r ? r.customer.name : '—') + '</div>',
+          '<div class="t2">' + U.esc(wtName(i.work_type_code)) + '</div>', ui.statusTag(i.status),
+          '<span class="tid">' + U.esc(D.processingLabel(i, st(), now)) + '</span>'
+        ] }; }),
+        { icon: 'briefcase', title: 'Chưa có hoạt động hôm nay', text: 'Khi bạn bấm “Bắt đầu xử lý”, thời gian làm việc sẽ được ghi nhận tại đây.' }) + '</div>'
+    });
   }
 
   /* ============================ Màn: điều hành ============================ */
@@ -4202,7 +4426,10 @@ LS.screens = (function () {
       ui.metric('Hoàn thành', num(t.hoan_thanh), t.hoan_thanh ? 'ok' : ''),
       ui.metric('Quá hạn', num(t.qua_han), t.qua_han ? 'danger' : ''),
       ui.metric('Tồn cuối kỳ', num(t.ton_cuoi_ky), t.ton_cuoi_ky ? 'warn' : '', 'ảnh chụp kỳ cuối'),
-      ui.metric('Giờ xử lý TB', t.gio_xu_ly_tb ? t.gio_xu_ly_tb + 'h' : '—')
+      ui.metric('Nhận hồ sơ TB', t.gio_tiep_nhan_tb ? t.gio_tiep_nhan_tb + 'h' : '—', '', 'gửi → tiếp nhận'),
+      ui.metric('Phân công TB', t.gio_phan_cong_tb ? t.gio_phan_cong_tb + 'h' : '—', '', 'tiếp nhận → giao'),
+      ui.metric('Xử lý TB', t.gio_xu_ly_tb ? t.gio_xu_ly_tb + 'h' : '—', '', 'giao → hoàn thành'),
+      ui.metric('Toàn trình TB', t.gio_toan_trinh_tb ? t.gio_toan_trinh_tb + 'h' : '—', '', 'gửi → hoàn thành')
     ]);
 
     var groupLabel = (REPORT_GROUPS.filter(function (g) { return g[0] === data.group; })[0] || [])[1] || '';
@@ -4213,7 +4440,9 @@ LS.screens = (function () {
       body: ui.table(
         [{ label: groupLabel }, { label: 'Phát sinh', cls: 'num' }, { label: 'Chuyển tiếp vào', cls: 'num' },
           { label: 'Hoàn thành', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }, { label: 'Hủy', cls: 'num' },
-          { label: 'Tồn cuối kỳ', cls: 'num' }, { label: 'Giờ TB', cls: 'num' }],
+          { label: 'Tồn cuối kỳ', cls: 'num' }, { label: 'Nhận TB', cls: 'num' },
+          { label: 'Phân công TB', cls: 'num' }, { label: 'Xử lý TB', cls: 'num' },
+          { label: 'Toàn trình TB', cls: 'num' }],
         data.rows.map(function (r) {
           return { cls: r.qua_han ? 'flag-warn' : '', cells: [
             '<div class="t1">' + U.esc(r.label) + '</div>',
@@ -4223,7 +4452,10 @@ LS.screens = (function () {
             '<span class="tid">' + num(r.qua_han) + '</span>',
             '<span class="tid">' + num(r.huy) + '</span>',
             '<span class="tid">' + num(r.ton_cuoi_ky) + '</span>',
-            '<span class="tid">' + (r.gio_xu_ly_tb ? r.gio_xu_ly_tb + 'h' : '—') + '</span>'
+            '<span class="tid">' + (r.gio_tiep_nhan_tb ? r.gio_tiep_nhan_tb + 'h' : '—') + '</span>',
+            '<span class="tid">' + (r.gio_phan_cong_tb ? r.gio_phan_cong_tb + 'h' : '—') + '</span>',
+            '<span class="tid">' + (r.gio_xu_ly_tb ? r.gio_xu_ly_tb + 'h' : '—') + '</span>',
+            '<span class="tid">' + (r.gio_toan_trinh_tb ? r.gio_toan_trinh_tb + 'h' : '—') + '</span>'
           ] };
         }),
         { icon: 'chart', title: 'Chưa có việc nào trong khoảng này', text: 'Đổi khoảng thời gian rồi xem lại.' }
@@ -4257,9 +4489,11 @@ LS.screens = (function () {
     var data = reportCache && reportCache.data;
     if (!data) { ui.toast('Chưa có số liệu để xuất.', 'err'); return; }
     var groupLabel = (REPORT_GROUPS.filter(function (g) { return g[0] === data.group; })[0] || [])[1] || 'Nhóm';
-    var rows = [[groupLabel, 'Phát sinh', 'Chuyển tiếp vào', 'Hoàn thành', 'Quá hạn', 'Hủy', 'Tồn cuối kỳ', 'Giờ xử lý TB']];
+    var rows = [[groupLabel, 'Phát sinh', 'Chuyển tiếp vào', 'Hoàn thành', 'Quá hạn', 'Hủy', 'Tồn cuối kỳ',
+      'Nhận hồ sơ TB (giờ)', 'Phân công TB (giờ)', 'Xử lý TB (giờ)', 'Toàn trình TB (giờ)']];
     data.rows.forEach(function (r) {
-      rows.push([r.label, r.phat_sinh, r.chuyen_tiep_vao, r.hoan_thanh, r.qua_han, r.huy, r.ton_cuoi_ky, r.gio_xu_ly_tb]);
+      rows.push([r.label, r.phat_sinh, r.chuyen_tiep_vao, r.hoan_thanh, r.qua_han, r.huy, r.ton_cuoi_ky,
+        r.gio_tiep_nhan_tb, r.gio_phan_cong_tb, r.gio_xu_ly_tb, r.gio_toan_trinh_tb]);
     });
     rows.push([]);
     rows.push(['Tháng', 'Phát sinh', 'Chuyển tiếp vào', 'Hoàn thành', 'Quá hạn', 'Tồn cuối kỳ']);
@@ -4348,11 +4582,10 @@ LS.screens = (function () {
     var evts = st().events.filter(function (e) { return e.item_id === itemId; });
     var sends = st().outbox.filter(function (o) { return o.item_id === itemId; });
     var acts = actionsFor(i);
-    var s = D.sla(i, st());
-
     var body = '';
 
-    if (s && s.late) body += ui.banner('danger', 'Quá hạn ' + U.fmtGap(s.left), 'Hạn xử lý: ' + U.fmtDT(s.due));
+    // Không đưa SLA/hạn xử lý lên màn hồ sơ khách; cán bộ xem bộ đếm giờ làm
+    // thực tế ở phần Công việc bên dưới.
     if (i.pending) body += ui.banner('warn', 'Có đề nghị sửa chờ kiểm soát duyệt', i.pending.reason);
 
     body += ui.sectionTitle('Khách hàng') +
@@ -4374,16 +4607,21 @@ LS.screens = (function () {
         ['Ngày phát sinh', U.fmtDate(i.occurrence_date)],
         ['Trạng thái', ui.statusTag(i.status), true],
         ['Cán bộ xử lý', userName(i.assigned_user_id) || 'Chưa giao'],
-        ['Hạn xử lý', i.due_at ? U.fmtDT(i.due_at) : 'Chưa phân công'],
+        ['Thời gian xử lý khách hàng', D.processingLabel(i, st())],
         ['Hoàn thành', i.completed_at ? U.fmtDT(i.completed_at) : '—'],
         ['Phiên bản', 'v' + i.version]
       ]) + '</div>';
 
     if (wt && wt.checklist.length) {
+      var checklistValues = Array.isArray(i.checklist) ? i.checklist : [];
+      var checklistDone = wt.checklist.filter(function (_, idx) { return checklistValues[idx] === true; }).length;
       body += '<div style="margin-top:1.125rem">' + ui.sectionTitle('Việc cần làm') +
-        '<div class="f-stack">' + wt.checklist.map(function (c) {
-          return '<div class="chan-check"><span>' + U.esc(c) + '</span></div>';
-        }).join('') + '</div></div>';
+        '<p class="t2">Đã hoàn thành ' + checklistDone + '/' + wt.checklist.length + ' nhóm. Tích từng nhóm để ghi nhận phần việc và giờ xử lý.</p>' +
+        '<div class="f-stack">' + wt.checklist.map(function (c, idx) {
+          var canTick = i.assigned_user_id === u.user_id || ['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1;
+          return '<label class="chan-check"><input type="checkbox" data-act="checklist-toggle" data-id="' + U.attr(i.item_id) + '" data-index="' + idx + '"' + (checklistValues[idx] === true ? ' checked' : '') + (canTick ? '' : ' disabled') + '><span>' + U.esc(c) + '</span></label>';
+        }).join('') + '</div>' +
+        (checklistDone === wt.checklist.length ? ui.banner('ok', 'Đã ghi nhận đủ các nhóm việc', 'Bạn có thể bấm nút hoàn thành theo đúng bước của luồng để đóng toàn bộ hồ sơ.') : '') + '</div>';
     }
 
     if (i.appointment) {
@@ -4454,6 +4692,30 @@ LS.screens = (function () {
     ui.openDialog('Việc ' + itemRef(i), body, { size: 'md', sub: (wt ? (wt.group || wt.name) : '') + ' · ' + i.product_name });
   }
 
+  function saveChecklistToggle(itemId, index, checked) {
+    var i = U.byId(st().items, 'item_id', itemId), wt = i && wtOf(i);
+    if (!i || !wt || !wt.checklist.length || i.syncing) return;
+    var before = JSON.parse(JSON.stringify(i)), expected = i.version;
+    var values = Array.isArray(i.checklist) ? i.checklist.slice() : [];
+    values[index] = !!checked;
+    while (values.length < wt.checklist.length) values.push(false);
+    i.checklist = values.slice(0, wt.checklist.length);
+    i.version = Number(i.version || 1) + 1;
+    i.syncing = true;
+    if (U.isGas()) {
+      LS.app.background(LS.api.saveChecklist(i.item_id, i.checklist, expected), {
+        label: 'Ghi nhận nhóm việc',
+        onOk: function (result) { i.syncing = false; if (result && result.version) i.version = result.version; detail(i.item_id); },
+        rollback: function () { Object.keys(before).forEach(function (k) { i[k] = before[k]; }); detail(i.item_id); }
+      });
+      return;
+    }
+    i.syncing = false;
+    logEvent(i.item_id, 'CAP_NHAT_CHECKLIST', i.checklist.filter(Boolean).length + '/' + wt.checklist.length + ' nhóm việc đã hoàn thành.');
+    U.save();
+    detail(i.item_id);
+  }
+
   /* ============================ Hộp thoại: chuyển trạng thái ============================ */
 
   function flow(itemId, to, opts) {
@@ -4461,10 +4723,17 @@ LS.screens = (function () {
     var i = U.byId(st().items, 'item_id', itemId);
     if (!i) return;
     var tr = actionsFor(i).filter(function (a) { return a.to === to; })[0];
-    if (!tr) { ui.toast('Thao tác không hợp lệ ở trạng thái hiện tại.', 'err'); return; }
+    if (!tr) {
+      var currentLabel = D.STATUS[i.status] ? D.STATUS[i.status].label : i.status;
+      ui.toast('Không thể thực hiện thao tác này khi hồ sơ đang ở trạng thái ' + currentLabel + '. Hãy tải lại danh sách.', 'err');
+      return;
+    }
 
     var r = reqOf(i), wt = wtOf(i);
-    var body = '<form data-form="flow" data-id="' + U.attr(itemId) + '" data-to="' + U.attr(to) + '">';
+    // Giữ lại trạng thái tại lúc mở hộp thoại để nếu màn hình bị đồng bộ lại
+    // trong lúc người dùng đang nhập, lỗi sẽ được báo là xung đột phiên bản
+    // thay vì rơi vào thông báo mơ hồ "Thao tác không hợp lệ".
+    var body = '<form data-form="flow" data-id="' + U.attr(itemId) + '" data-to="' + U.attr(to) + '" data-from="' + U.attr(i.status) + '" data-version="' + U.attr(i.version) + '">';
 
     body += '<div class="banner banner-info flow-context">' + U.icon('arrow', 17) +
       '<div><div class="flow-title"><b>' + U.esc(r ? r.customer.name : '') + '</b><span class="t2">' + U.esc(wtGroup(i.work_type_code)) + '</span></div>' +
@@ -4474,7 +4743,7 @@ LS.screens = (function () {
       var staff = staffList();
       if (!staff.length) { ui.toast('Chưa có cán bộ LS đang hoạt động.', 'err'); return; }
       var rec = assignmentRecommendation(i);
-      if (opts.quick && rec) body += '<div style="margin-top:.75rem">' + ui.banner('info', 'Đề xuất phân công nhanh', rec.user.full_name + ' · theo cấu hình phụ trách' + (rec.rule && rec.rule.label ? ' — ' + rec.rule.label : '') + '. Bạn vẫn có thể đổi cán bộ trước khi lưu.') + '</div>';
+      if (opts.quick && rec) body += '<div style="margin-top:.75rem">' + ui.banner('info', 'Đề xuất phân công nhanh', rec.user.full_name + (rec.replacementFor ? ' · thay cho ' + rec.replacementFor.full_name + ' đang nghỉ' : ' · theo cấu hình phụ trách') + (rec.rule && rec.rule.label ? ' — ' + rec.rule.label : '') + '. Bạn vẫn có thể đổi cán bộ trước khi lưu.') + '</div>';
       var loadRows = staff.map(function (x) {
         var load = staffLoad(x.user_id);
         return {
@@ -4563,11 +4832,28 @@ LS.screens = (function () {
     var i = U.byId(st().items, 'item_id', form.getAttribute('data-id'));
     var to = form.getAttribute('data-to');
     if (!i) return;
+    // Một lần bấm đã gửi lên GAS thì không cho form/dialog cũ gửi lại lần hai.
+    // Trước đây lần bấm thứ hai thấy trạng thái lạc quan đã đổi và hiện
+    // "Thao tác không hợp lệ", dù lần đầu vẫn đang được lưu đúng.
+    if (i.syncing) return;
+    var fromStatus = form.getAttribute('data-from') || i.status;
     var tr = actionsFor(i).filter(function (a) { return a.to === to; })[0];
-    if (!tr) { ui.toast('Thao tác không hợp lệ.', 'err'); return; }
+    if (!tr) {
+      var expectedFlow = (D.FLOW[fromStatus] || []).filter(function (a) { return a.to === to; })[0];
+      var currentLabel = D.STATUS[i.status] ? D.STATUS[i.status].label : i.status;
+      ui.toast(expectedFlow
+        ? 'Hồ sơ vừa được cập nhật từ lúc mở hộp thoại (hiện là ' + currentLabel + '). Hãy đóng hộp thoại, tải lại rồi thao tác lại.'
+        : 'Không thể thực hiện thao tác này khi hồ sơ đang ở trạng thái ' + currentLabel + '.', 'err');
+      return;
+    }
 
     var d = new FormData(form);
     var wt = wtOf(i), r = reqOf(i);
+    if (wt && wt.checklist.length && ['DA_SOAN_XONG', 'HOAN_THANH_LS'].indexOf(to) !== -1 &&
+        (i.checklist || []).filter(Boolean).length < wt.checklist.length) {
+      ui.toast('Hãy tích đủ các nhóm việc trước khi hoàn thành toàn bộ hồ sơ.', 'err');
+      return;
+    }
     var ts = U.now();
     var reason = String(d.get('reason') || '').trim();
 
@@ -4627,6 +4913,7 @@ LS.screens = (function () {
     if (appointment) i.appointment = appointment;
 
     if ((to === 'CHO_PHAN_CONG' || to === 'DA_PHAN_CONG') && !i.accepted_at) i.accepted_at = ts;
+    if (to === 'DANG_THUC_HIEN' && !i.processing_started_at) i.processing_started_at = ts;
     if (to === 'HOAN_THANH_LS') i.completed_at = ts;
     if (to === 'DANG_THUC_HIEN' && i.status === 'HOAN_THANH_LS') i.completed_at = '';
     if (tr.note && reason) i.note = reason;
@@ -4638,6 +4925,7 @@ LS.screens = (function () {
     ui.closeDialog();
 
     if (U.isGas()) {
+      i.syncing = true;
       LS.app.render();
       ui.toast(tr.label + ' · ' + ref, 'ok');
       LS.app.background(
@@ -4647,6 +4935,7 @@ LS.screens = (function () {
         }),
         {
           label: tr.label,
+          onOk: function () { i.syncing = false; },
           rollback: function () {
             var live = U.byId(st().items, 'item_id', before.item_id);
             if (live) Object.keys(before).forEach(function (k) { live[k] = before[k]; });
@@ -4920,7 +5209,7 @@ LS.screens = (function () {
           item_id: tmpId, request_id: tmpReq, work_type_code: it.work_type_code,
           product_name: it.product_name, occurrence_date: it.occurrence_date,
           status: 'CHO_TIEP_NHAN', assigned_user_id: '', assigned_by: '',
-          submitted_at: U.now(), accepted_at: '', assigned_at: '', due_at: '', completed_at: '',
+          submitted_at: U.now(), accepted_at: '', assigned_at: '', due_at: '', completed_at: '', processing_started_at: '',
           appointment: null, checklist: (wt ? wt.checklist : []).map(function () { return false; }),
           note: '', pending: null, version: 1, syncing: true
         });
@@ -4979,7 +5268,7 @@ LS.screens = (function () {
         item_id: id, request_id: reqId, work_type_code: sel.value,
         product_name: wt ? wt.name : '', occurrence_date: date.value,
         status: 'CHO_TIEP_NHAN', assigned_user_id: '', assigned_by: '',
-        submitted_at: U.now(), accepted_at: '', assigned_at: '', due_at: '', completed_at: '',
+        submitted_at: U.now(), accepted_at: '', assigned_at: '', due_at: '', completed_at: '', processing_started_at: '',
         appointment: null, checklist: (wt ? wt.checklist : []).map(function () { return false; }),
         note: '', pending: null, version: 1
       });
@@ -5028,10 +5317,10 @@ LS.screens = (function () {
   }
 
   return {
-    work: work, room: room, roomBoard: roomBoard, queue: queue, mine: mine, board: board, periods: periods, audit: audit,
+    work: work, room: room, roomBoard: roomBoard, queue: queue, mine: mine, personalDashboard: personalDashboard, board: board, periods: periods, audit: audit,
     report: report, exportReport: exportReport, refreshReport: refreshReport, setReportFilter: setReportFilter,
     headerSummary: headerSummary,
-    detail: detail, flow: flow, quickAssign: quickAssign, submitFlow: submitFlow,
+    detail: detail, saveChecklistToggle: saveChecklistToggle, flow: flow, quickAssign: quickAssign, submitFlow: submitFlow,
     editItem: editItem, submitEdit: submitEdit, revision: revision,
     newRequest: newRequest, submitNewRequest: submitNewRequest, rowForm: rowForm, syncProductOptions: syncProductOptions,
     exportCsv: exportCsv, downloadDailyImage: downloadDailyImage, sweepOverdue: sweepOverdue,
@@ -6001,7 +6290,7 @@ LS.admin = (function () {
       if (!targetCode) { ui.toast('Cần mã loại việc.', 'err'); return; }
       LS.api.saveCatalog('workType', targetCode, {
         group_name: patch.group, display_name: patch.name, sla_hours: patch.sla_hours,
-        requires_appointment: patch.needs_appointment, requires_ks_approval: true,
+        requires_appointment: patch.needs_appointment, requires_ks_approval: patch.needs_ks_approval,
         is_active: patch.active, checklist_json: JSON.stringify(patch.checklist)
       }).then(function () { ui.closeDialog(); return LS.app.refreshServer('Đã lưu loại việc.'); })
         .catch(function (error) { ui.toast(error.message || 'Không thể lưu loại việc.', 'err'); });
@@ -6098,7 +6387,7 @@ LS.admin = (function () {
         ui.btn('Nhập Excel/CSV', { sm: true, act: 'user-import', icon: 'upload' }),
       body: '<p class="t2" style="margin:0 0 .75rem">Mã cán bộ gắn với đúng một phòng/PGD. Phòng/PGD đăng nhập bằng mã; LS, kiểm soát và quản trị dùng mã kèm mật khẩu. Có thể xuất Excel thành CSV UTF-8 để nhập nhiều dòng.</p>' + ui.table(
         [{ label: 'Mã đăng nhập', cls: 'fit' }, { label: 'Họ tên' }, { label: 'Email' }, { label: 'Đơn vị' },
-        { label: 'Vai trò', cls: 'fit' }, { label: 'Việc đang mở', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: '', cls: 'fit' }],
+        { label: 'Vai trò', cls: 'fit' }, { label: 'Việc đang mở', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: 'Nghỉ', cls: 'fit' }, { label: '', cls: 'fit' }],
         st().users.map(function (u) {
           var open = st().items.filter(function (i) {
             return i.assigned_user_id === u.user_id && D.STATUS[i.status].open;
@@ -6111,7 +6400,8 @@ LS.admin = (function () {
               '<div class="t2">' + U.esc(LS.screens.unitName(u.unit_id)) + '</div>',
               ui.tag(D.ROLES[u.role].label, 'info'),
               open ? '<span class="tid">' + open + '</span>' : '<span class="t2">—</span>',
-              u.active ? ui.tag('Hoạt động', 'ok') : ui.tag('Đã khóa', 'neutral'),
+              !u.active ? ui.tag('Đã khóa', 'neutral') : D.userOff(u) ? ui.tag('Đang nghỉ', 'warn') : ui.tag('Hoạt động', 'ok'),
+              u.active && D.userOff(u) ? '<div class="t2">' + U.esc((u.off_from || '') + (u.off_to ? ' → ' + u.off_to : '')) + '</div>' : '',
               ui.iconBtn('pencil', { act: 'user-edit', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Sửa người dùng' })
             ]
           };
@@ -6122,7 +6412,7 @@ LS.admin = (function () {
 
   function userDialog(id) {
     var u = id ? U.byId(st().users, 'user_id', id) : null;
-    var cur = u || { user_id: '', login_code: '', auth_group: 'INTERNAL', full_name: '', email: '', unit_id: 'PHONG_LS', role: 'CAN_BO_LS', active: true, zalo_name: '', zalo_phone: '', telegram_chat_id: '' };
+    var cur = u || { user_id: '', login_code: '', auth_group: 'INTERNAL', full_name: '', email: '', unit_id: 'PHONG_LS', role: 'CAN_BO_LS', active: true, availability_status: 'AVAILABLE', off_from: '', off_to: '', off_reason: '', replacement_user_id: '', zalo_name: '', zalo_phone: '', telegram_chat_id: '' };
 
     ui.openDialog(u ? 'Sửa người dùng' : 'Thêm người dùng',
       '<form data-form="user"' + (u ? ' data-id="' + U.attr(u.user_id) + '"' : '') + '>' +
@@ -6134,6 +6424,10 @@ LS.admin = (function () {
         return [x.unit_id, x.name];
       }), cur.unit_id)) +
       ui.field('Vai trò', ui.select('role', Object.keys(D.ROLES).map(function (k) { return [k, D.ROLES[k].label]; }), cur.role)) +
+      ui.field('Khả năng nhận việc', ui.select('availability_status', [['AVAILABLE', 'Có thể nhận việc'], ['OFF', 'Đang nghỉ']], cur.availability_status || 'AVAILABLE')) +
+      ui.field('Nghỉ từ', ui.input('off_from', cur.off_from || '', { type: 'date' })) +
+      ui.field('Nghỉ đến', ui.input('off_to', cur.off_to || '', { type: 'date' })) +
+      ui.field('Cán bộ thay thế', ui.select('replacement_user_id', st().users.filter(function (x) { return x.role === 'CAN_BO_LS' && x.active && x.user_id !== cur.user_id; }).map(function (x) { return [x.user_id, x.full_name]; }), cur.replacement_user_id || '', { blank: 'Không chỉ định' }), 'Nếu đổi khỏi Cán bộ LS khi còn việc mở, chọn cán bộ thay thế; hệ thống sẽ bàn giao trong cùng thao tác.') +
       ui.field('Tên trong nhóm Zalo', ui.input('zalo_name', cur.zalo_name || ''), 'dùng để gắn thẻ khi nhắn nhóm') +
       ui.field('Số Zalo', ui.input('zalo_phone', cur.zalo_phone || '', { type: 'tel' })) +
       ui.field('Chat ID Telegram', ui.input('telegram_chat_id', cur.telegram_chat_id || ''), 'bot chỉ nhắn được cho người đã bắt đầu trò chuyện') +
@@ -6141,6 +6435,7 @@ LS.admin = (function () {
       ui.field('Mật khẩu mới', ui.input('new_password', '', { type: 'password', placeholder: 'Để trống để giữ nguyên; phòng/PGD không cần nhập' })) +
       '<div style="margin-top:1rem">' +
       ui.checkbox('active', cur.active, 'Tài khoản đang hoạt động', 'khóa tài khoản khi nghỉ hoặc chuyển công tác') + '</div>' +
+      ui.field('Lý do nghỉ', ui.textarea('off_reason', cur.off_reason || '', { placeholder: 'Ví dụ: nghỉ phép, nghỉ ốm, đi công tác' })) +
       ui.formEnd('Lưu') + '</form>');
   }
 
@@ -6159,6 +6454,9 @@ LS.admin = (function () {
       unit_id: String(d.get('unit_id')), role: String(d.get('role')), active: d.get('active') !== null,
       auth_group: String(d.get('role')) === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL',
       new_password: String(d.get('new_password') || ''),
+      availability_status: String(d.get('availability_status') || 'AVAILABLE').toUpperCase(),
+      off_from: String(d.get('off_from') || ''), off_to: String(d.get('off_to') || ''),
+      off_reason: String(d.get('off_reason') || '').trim(), replacement_user_id: String(d.get('replacement_user_id') || ''),
       zalo_name: String(d.get('zalo_name') || '').trim(), zalo_phone: String(d.get('zalo_phone') || '').trim(),
       telegram_chat_id: String(d.get('telegram_chat_id') || '').trim()
     };
@@ -6167,6 +6465,8 @@ LS.admin = (function () {
       LS.api.saveCatalog('user', targetId, {
         full_name: patch.full_name, email: patch.email, login_code: patch.login_code, auth_group: patch.auth_group,
         new_password: patch.new_password, unit_id: patch.unit_id, role: patch.role, is_active: patch.active,
+        availability_status: patch.availability_status, off_from: patch.off_from, off_to: patch.off_to,
+        off_reason: patch.off_reason, replacement_user_id: patch.replacement_user_id,
         zalo_name: patch.zalo_name, zalo_phone: patch.zalo_phone, telegram_chat_id: patch.telegram_chat_id
       }).then(function () { ui.closeDialog(); return LS.app.refreshServer('Đã lưu người dùng.'); })
         .catch(function (error) { ui.toast(error.message || 'Không thể lưu người dùng.', 'err'); });
@@ -6179,8 +6479,25 @@ LS.admin = (function () {
         return i.assigned_user_id === id && D.STATUS[i.status].open;
       }).length;
       if (u.role === 'CAN_BO_LS' && (patch.role !== 'CAN_BO_LS' || !patch.active) && open) {
-        ui.toast('Còn ' + open + ' việc đang mở — bàn giao trước khi đổi vai trò hoặc khóa.', 'err');
-        return;
+        if (!patch.replacement_user_id) {
+          ui.toast('Còn ' + open + ' việc đang mở — chọn cán bộ thay thế trước khi đổi vai trò hoặc khóa.', 'err');
+          return;
+        }
+        var replacement = U.byId(st().users, 'user_id', patch.replacement_user_id);
+        if (!replacement || replacement.role !== 'CAN_BO_LS' || !replacement.active) {
+          ui.toast('Cán bộ thay thế phải là cán bộ LS đang hoạt động.', 'err');
+          return;
+        }
+        var handedAt = new Date().toISOString();
+        st().items.filter(function (i) {
+          return i.assigned_user_id === id && D.STATUS[i.status].open;
+        }).forEach(function (i) {
+          i.assigned_user_id = patch.replacement_user_id;
+          i.assigned_by = 'ADMIN';
+          i.assigned_at = handedAt;
+          i.updated_at = handedAt;
+          i.version = Number(i.version || 0) + 1;
+        });
       }
       Object.keys(patch).forEach(function (k) { u[k] = patch[k]; });
       commit('Người dùng', 'Sửa ' + id + ' (' + patch.role + ').');
@@ -6754,6 +7071,7 @@ LS.app = (function () {
       case 'room-board': return S.roomBoard();
       case 'queue': return S.queue();
       case 'mine': return S.mine();
+      case 'my-dashboard': return S.personalDashboard();
       case 'board': return S.board();
       case 'report': return S.report();
       case 'periods': return S.periods();
@@ -6805,7 +7123,7 @@ LS.app = (function () {
     return '<div class="auth"><div class="auth-side">' +
       '<div><div class="rail-mark" style="width:44px;height:44px">LS</div></div>' +
       '<div><h2 class="auth-lead">Mật khẩu tạm chỉ dùng được <em>một lần</em>.</h2>' +
-      '<p class="auth-note">Mật khẩu do quản trị cấp không gắn với riêng ai. Đặt mật khẩu của bạn trước khi vào hệ thống.</p>' +
+      '<p class="auth-note">Mật khẩu do quản trị cấp không gắn với riêng ai. Đặt mật khẩu của bạn trước khi vào hệ thống; tài khoản quản trị phải hoàn tất bước này trước khi đổi quyền người dùng.</p>' +
       '</div></div>' +
       '<div class="auth-main"><div class="auth-form">' +
       '<h1>Đổi mật khẩu</h1><p>' + U.esc(u.full_name) + '</p>' +
@@ -7142,6 +7460,10 @@ LS.app = (function () {
     var act = t.closest('[data-act]');
     if (act && t.tagName === 'INPUT') {
       var a = act.getAttribute('data-act');
+      if (a === 'checklist-toggle') {
+        S.saveChecklistToggle(act.getAttribute('data-id'), Number(act.getAttribute('data-index')), !!t.checked);
+        return;
+      }
       if (a === 'chan-toggle') { A.toggleChannel(act.getAttribute('data-code')); return; }
       if (a === 'rule-toggle') { A.toggleRule(act.getAttribute('data-id')); return; }
     }

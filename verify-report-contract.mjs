@@ -73,6 +73,49 @@ const quy = D.presetRange('quarter');
 if (!/^\d{4}-\d{2}$/.test(quy.from) || !/^\d{4}-\d{2}$/.test(quy.to)) fail('Mốc quý phải trả về dạng YYYY-MM.');
 if (D.monthsInRange(quy.from, quy.to).length !== 3) fail('Một quý phải gồm đúng 3 tháng.');
 
+// Một hồ sơ có đủ bốn mốc phải tách đúng từng đoạn thời gian, không gộp
+// submitted -> completed vào giờ xử lý.
+const timed = row('TIMED_T9', '2026-09', '', '', 'HOAN_THANH_LS');
+timed.submitted_at = '2026-09-05T00:00:00.000Z';
+timed.accepted_at = '2026-09-05T02:00:00.000Z';
+timed.assigned_at = '2026-09-05T05:00:00.000Z';
+timed.completed_at = '2026-09-06T05:00:00.000Z';
+st.items.push(timed);
+const timingState = Object.assign({}, st, { items: [timed] });
+const timing = D.reportFromItems('2026-09', '2026-09', 'unit', timingState).total;
+if (timing.tong_gio_tiep_nhan !== 2 || timing.tong_gio_phan_cong !== 3 || timing.tong_gio_xu_ly !== 24 || timing.tong_gio_toan_trinh !== 29) {
+  fail('Các đoạn thời gian nhận/phân công/xử lý/toàn trình không được tính đúng: ' + JSON.stringify(timing));
+}
+if (timing.gio_tiep_nhan_tb !== 2 || timing.gio_phan_cong_tb !== 3 || timing.gio_xu_ly_tb !== 24 || timing.gio_toan_trinh_tb !== 29) {
+  fail('Thời gian trung bình phải suy từ tổng và số mẫu của từng đoạn.');
+}
+
+// Ma trận phải giữ đủ mọi cán bộ LS, kể cả người chưa phát sinh việc, và
+// đếm theo đúng nhóm việc để đối chiếu với bảng LS Time Log.
+const staffA = { user_id: 'LS_A', full_name: 'Cán bộ A', role: 'CAN_BO_LS', active: true };
+const staffB = { user_id: 'LS_B', full_name: 'Cán bộ B', role: 'CAN_BO_LS', active: true };
+const workloadState = Object.assign({}, st, {
+  users: [staffA, staffB],
+  workTypes: [
+    { code: 'WT_A', name: 'Nhóm A', group: 'Nhóm A', active: true },
+    { code: 'WT_B', name: 'Nhóm B', group: 'Nhóm B', active: true }
+  ],
+  items: [
+    Object.assign({}, base, { item_id: 'W_A1', assigned_user_id: 'LS_A', work_type_code: 'WT_A', occurrence_date: '2026-09-02', status: 'DANG_THUC_HIEN' }),
+    Object.assign({}, base, { item_id: 'W_A2', assigned_user_id: 'LS_A', work_type_code: 'WT_B', occurrence_date: '2026-09-03', status: 'HOAN_THANH_LS' })
+  ]
+});
+const workload = D.staffWorkloadByGroup(workloadState.items, workloadState, '2026-09-01', '2026-09-30');
+if (workload.groups.join('|') !== 'Nhóm A|Nhóm B') fail('Ma trận phải giữ đúng danh sách nhóm việc.');
+const rowA = workload.rows.find((x) => x.user.user_id === 'LS_A');
+const rowB = workload.rows.find((x) => x.user.user_id === 'LS_B');
+if (!rowA || rowA.total !== 2 || rowA.byGroup['Nhóm A'] !== 1 || rowA.byGroup['Nhóm B'] !== 1 || rowA.done !== 1) {
+  fail('Ma trận phải đếm đủ tổng, nhóm việc và hoàn thành của cán bộ có việc.');
+}
+if (!rowB || rowB.total !== 0 || rowB.byGroup['Nhóm A'] !== 0 || rowB.byGroup['Nhóm B'] !== 0) {
+  fail('Ma trận phải hiển thị cán bộ chưa phát sinh việc với số 0.');
+}
+
 /* ---------------------------- Phía máy chủ ---------------------------- */
 
 const server = read('Code.gs');
@@ -106,5 +149,20 @@ for (const m of metrics) {
   if (!clientSource.includes(m)) fail('Bản tính trình duyệt thiếu chỉ số ' + m + '.');
   if (!server.includes(m)) fail('Bản tính máy chủ thiếu chỉ số ' + m + '.');
 }
+
+// Thời gian phải tách được ba đoạn nghiệp vụ, không gộp hết vào "giờ xử lý":
+// nhận hồ sơ (submitted -> accepted), phân công (accepted -> assigned),
+// và xử lý đến hoàn thành (assigned -> completed).
+const timingMetrics = [
+  'tong_gio_tiep_nhan', 'tong_gio_phan_cong', 'tong_gio_xu_ly', 'tong_gio_toan_trinh',
+  'gio_tiep_nhan_tb', 'gio_phan_cong_tb', 'gio_xu_ly_tb', 'gio_toan_trinh_tb'
+];
+for (const m of timingMetrics) {
+  if (!clientSource.includes(m)) fail('Bản tính trình duyệt thiếu chỉ số thời gian ' + m + '.');
+  if (!server.includes(m)) fail('Bản tính máy chủ thiếu chỉ số thời gian ' + m + '.');
+}
+if (!server.includes('function itemTiming_')) fail('Máy chủ thiếu hàm tính mốc nhận/phân công/hoàn thành.');
+if (!setup.includes('tong_gio_tiep_nhan')) fail('PeriodSummary chưa có cột thời gian nhận hồ sơ.');
+if (!server.includes('hasTimingColumns')) fail('Báo cáo chưa có fallback cho kho PeriodSummary cũ chưa migrate.');
 
 console.log('Report contract passed.');

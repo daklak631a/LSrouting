@@ -87,6 +87,38 @@ function passwordHash_(password) {
   return 'sha256:' + Utilities.base64Encode(bytes);
 }
 
+// Google Sheets trả checkbox là boolean, còn dữ liệu nhập từ CSV/TSV thường
+// thành "TRUE"/"1". Mọi điểm kiểm quyền phải dùng cùng một bộ đọc cờ, nếu
+// không cán bộ đang hoạt động có thể bị từ chối khi phân công.
+function truthy_(value) {
+  if (value === true) return true;
+  var normalized = String(value === null || value === undefined ? '' : value).trim().toLowerCase();
+  return normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'y';
+}
+
+function dateOnly_(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    if (isNaN(value.getTime())) return '';
+    return Utilities.formatDate(value, Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
+  }
+  var match = String(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+}
+
+function userOff_(user, onDate) {
+  if (!user) return false;
+  var status = String(user.availability_status || 'AVAILABLE').trim().toUpperCase();
+  var from = dateOnly_(user.off_from), to = dateOnly_(user.off_to);
+  if (status !== 'OFF' && !from && !to) return false;
+  var day = dateOnly_(onDate || new Date());
+  return !!day && (!from || day >= from) && (!to || day <= to);
+}
+
+function userAvailableForAssignment_(user, onDate) {
+  return !!(user && String(user.role || '').trim().toUpperCase() === 'CAN_BO_LS' && truthy_(user.is_active) && !userOff_(user, onDate));
+}
+
 function authGroup_(user) {
   return String(user.auth_group || (user.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL')).toUpperCase();
 }
@@ -95,7 +127,7 @@ function activeUserById_(id) {
   if (!id) return null;
   var found = DataRepository.find('Users', 'user_id', id);
   if (!found) return null;
-  if (String(found.is_active) !== 'true' && found.is_active !== true) throw new Error('Tài khoản đang bị khóa.');
+  if (!truthy_(found.is_active)) throw new Error('Tài khoản đang bị khóa.');
   return found;
 }
 
@@ -113,7 +145,7 @@ function currentUser_() {
   if (!email) throw new Error('Hãy nhập mã cán bộ để đăng nhập.');
   var u = DataRepository.find('Users', 'email', email.toLowerCase());
   if (!u) throw new Error('Mã cán bộ chưa được cấp quyền vào hệ thống.');
-  if (String(u.is_active) !== 'true' && u.is_active !== true) throw new Error('Tài khoản đang bị khóa.');
+  if (!truthy_(u.is_active)) throw new Error('Tài khoản đang bị khóa.');
   return u;
 }
 
@@ -123,8 +155,10 @@ function currentUser_() {
  */
 function requireActor_() {
   var u = currentUser_();
-  if (String(u.must_change_password) === 'true' || u.must_change_password === true) {
-    throw new Error('Hãy đổi mật khẩu tạm trước khi thao tác.');
+  if (truthy_(u.must_change_password)) {
+    throw new Error(u.role === 'ADMIN'
+      ? 'Tài khoản quản trị đang dùng mật khẩu khởi tạo. Hãy đổi mật khẩu của chính tài khoản admin trước khi đổi quyền hoặc cấu hình người dùng.'
+      : 'Hãy đổi mật khẩu tạm của chính tài khoản này trước khi thao tác.');
   }
   return u;
 }
@@ -141,7 +175,7 @@ function authenticateUser(loginCode, password) {
     user = rows.filter(function (row) { return row.role === 'ADMIN'; })[0];
   }
   if (!user) throw new Error('Mã cán bộ chưa được cấp quyền.');
-  if (String(user.is_active) !== 'true' && user.is_active !== true) throw new Error('Tài khoản đang bị khóa.');
+  if (!truthy_(user.is_active)) throw new Error('Tài khoản đang bị khóa.');
 
   var group = authGroup_(user);
   if (group === 'INTERNAL') {
@@ -576,7 +610,7 @@ function carryOpenWorkToPlan_(fromPeriodId, toPeriodId, u) {
         item_id: newItemId, period_id: toPeriodId, origin_item_id: old.origin_item_id || old.item_id, carryover_from_item_id: old.item_id,
         request_id: newRequestId, work_type_code: old.work_type_code, product_name: old.product_name, occurrence_date: targetPlan.start_date,
         source_stt: prefix + counts[oldReq.unit_id], source_tab: old.source_tab || '', status: 'CHO_TIEP_NHAN', assigned_user_id: '', assigned_by: '', submitted_at: stamp_(),
-        accepted_at: '', assigned_at: '', due_at: '', completed_at: '', appointment_json: '', checklist_json: '', pending_json: '',
+        accepted_at: '', assigned_at: '', due_at: '', completed_at: '', processing_started_at: old.processing_started_at || '', appointment_json: '', checklist_json: old.checklist_json || '[]', pending_json: '',
         note: 'Chuyển tiếp từ ' + old.item_id + '.', version: 1, created_at: stamp_(), updated_at: stamp_()
       });
       // Đánh dấu dòng cũ đã sinh ra dòng mới ở kỳ sau. Thiếu dấu này thì việc
@@ -593,6 +627,32 @@ function carryOpenWorkToPlan_(fromPeriodId, toPeriodId, u) {
 }
 
 /* ---------------------------- Báo cáo nhiều kỳ ---------------------------- */
+
+function elapsedHours_(from, to) {
+  if (!from || !to) return null;
+  var start = new Date(from).getTime();
+  var end = new Date(to).getTime();
+  if (!isFinite(start) || !isFinite(end) || end < start) return null;
+  return (end - start) / 3600000;
+}
+
+/**
+ * Các mốc SLA được ghi trên WorkItems, không cần sửa workbook nguồn:
+ * - tiếp nhận: lúc đơn vị gửi -> lúc LS nhận hồ sơ;
+ * - phân công: lúc nhận -> lúc gán cán bộ;
+ * - xử lý: lúc gán -> lúc hoàn thành;
+ * - toàn trình: lúc gửi -> lúc hoàn thành.
+ * Trả null khi một đoạn chưa đủ mốc để dashboard không biến dữ liệu thiếu
+ * thành số 0 giả.
+ */
+function itemTiming_(item) {
+  return {
+    tiep_nhan: elapsedHours_(item.submitted_at, item.accepted_at),
+    phan_cong: elapsedHours_(item.accepted_at, item.assigned_at),
+    xu_ly: elapsedHours_(item.assigned_at, item.completed_at),
+    toan_trinh: elapsedHours_(item.submitted_at, item.completed_at)
+  };
+}
 
 /**
  * Số liệu một kỳ, tách theo bốn chiều. Chỉ số được chọn sao cho **cộng dồn qua
@@ -629,7 +689,9 @@ function periodSummaryRows_(periodId) {
     var id = dimension + ' ' + key;
     if (!buckets[id]) {
       buckets[id] = { dimension: dimension, dim_key: key, dim_label: label,
-        phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 };
+        phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0,
+        tong_gio_tiep_nhan: 0, so_tiep_nhan: 0, tong_gio_phan_cong: 0, so_phan_cong: 0,
+        tong_gio_xu_ly: 0, so_xu_ly: 0, tong_gio_toan_trinh: 0, so_toan_trinh: 0 };
     }
     return buckets[id];
   }
@@ -637,10 +699,7 @@ function periodSummaryRows_(periodId) {
   items.forEach(function (i) {
     var req = requests[i.request_id] || {};
     var done = i.status === 'HOAN_THANH_LS';
-    var hours = 0;
-    if (done && i.assigned_at && i.completed_at) {
-      hours = Math.max(0, (new Date(i.completed_at).getTime() - new Date(i.assigned_at).getTime()) / 3600000);
-    }
+    var timing = itemTiming_(i);
     // Việc đã chuyển sang kỳ sau được chấm trễ ở dòng cuối của nó, không phải
     // ở mỗi kỳ nó đi qua — nếu không một việc trễ đếm thành ba lần trễ.
     var late = i.due_at && !i.carried_to_item_id
@@ -656,7 +715,11 @@ function periodSummaryRows_(periodId) {
 
     targets.forEach(function (b) {
       if (i.carryover_from_item_id) b.chuyen_tiep_vao += 1; else b.phat_sinh += 1;
-      if (done) { b.hoan_thanh += 1; b.tong_gio_xu_ly += hours; }
+      if (timing.tiep_nhan !== null) { b.tong_gio_tiep_nhan += timing.tiep_nhan; b.so_tiep_nhan += 1; }
+      if (timing.phan_cong !== null) { b.tong_gio_phan_cong += timing.phan_cong; b.so_phan_cong += 1; }
+      if (timing.xu_ly !== null) { b.tong_gio_xu_ly += timing.xu_ly; b.so_xu_ly += 1; }
+      if (timing.toan_trinh !== null) { b.tong_gio_toan_trinh += timing.toan_trinh; b.so_toan_trinh += 1; }
+      if (done) b.hoan_thanh += 1;
       if (i.status === 'HUY') b.huy += 1;
       // Việc đã sinh dòng tiếp ở kỳ sau không còn là tồn của kỳ này nữa.
       if (OPEN_STATUS.indexOf(i.status) !== -1 && !i.carried_to_item_id) b.ton_cuoi_ky += 1;
@@ -668,7 +731,13 @@ function periodSummaryRows_(periodId) {
     var b = buckets[k];
     b.period_id = periodId;
     b.month_key = plan.month_key;
-    b.tong_gio_xu_ly = Math.round(b.tong_gio_xu_ly * 100) / 100;
+    ['tong_gio_tiep_nhan', 'tong_gio_phan_cong', 'tong_gio_xu_ly', 'tong_gio_toan_trinh'].forEach(function (key) {
+      b[key] = Math.round(b[key] * 100) / 100;
+    });
+    b.gio_tiep_nhan_tb = b.so_tiep_nhan ? Math.round((b.tong_gio_tiep_nhan / b.so_tiep_nhan) * 10) / 10 : 0;
+    b.gio_phan_cong_tb = b.so_phan_cong ? Math.round((b.tong_gio_phan_cong / b.so_phan_cong) * 10) / 10 : 0;
+    b.gio_xu_ly_tb = b.so_xu_ly ? Math.round((b.tong_gio_xu_ly / b.so_xu_ly) * 10) / 10 : 0;
+    b.gio_toan_trinh_tb = b.so_toan_trinh ? Math.round((b.tong_gio_toan_trinh / b.so_toan_trinh) * 10) / 10 : 0;
     return b;
   });
 }
@@ -687,7 +756,11 @@ function writePeriodSummary_(periodId) {
         period_id: row.period_id, month_key: row.month_key, dimension: row.dimension,
         dim_key: row.dim_key, dim_label: row.dim_label, phat_sinh: row.phat_sinh,
         chuyen_tiep_vao: row.chuyen_tiep_vao, hoan_thanh: row.hoan_thanh, huy: row.huy,
-        ton_cuoi_ky: row.ton_cuoi_ky, qua_han: row.qua_han, tong_gio_xu_ly: row.tong_gio_xu_ly,
+        ton_cuoi_ky: row.ton_cuoi_ky, qua_han: row.qua_han,
+        tong_gio_tiep_nhan: row.tong_gio_tiep_nhan, so_tiep_nhan: row.so_tiep_nhan,
+        tong_gio_phan_cong: row.tong_gio_phan_cong, so_phan_cong: row.so_phan_cong,
+        tong_gio_xu_ly: row.tong_gio_xu_ly, so_xu_ly: row.so_xu_ly,
+        tong_gio_toan_trinh: row.tong_gio_toan_trinh, so_toan_trinh: row.so_toan_trinh,
         updated_at: stamp_()
       };
       if (existing[key]) {
@@ -754,17 +827,28 @@ function getReport(opts) {
   var lastSnapshot = {};
 
   plans.forEach(function (plan) {
-    var rows = plan.status === 'ARCHIVED' && stored[plan.period_id] && stored[plan.period_id].length
-      ? stored[plan.period_id]
+    var storedRows = stored[plan.period_id] || [];
+    // Kho cũ chưa chạy setupSheetDB() sẽ không có các cột timing trong object
+    // đọc ra. Tính lại từ WorkItems để báo cáo không im lặng trả toàn số 0;
+    // khi quản trị chạy migration, kỳ ARCHIVED sẽ lại dùng snapshot đã chốt.
+    var hasTimingColumns = storedRows.some(function (r) {
+      return Object.prototype.hasOwnProperty.call(r, 'tong_gio_tiep_nhan');
+    });
+    var rows = plan.status === 'ARCHIVED' && storedRows.length && hasTimingColumns
+      ? storedRows
       : periodSummaryRows_(plan.period_id);
 
     var monthTotal = { month_key: plan.month_key, name: plan.name, status: plan.status,
-      phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 };
+      phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0,
+      tong_gio_tiep_nhan: 0, so_tiep_nhan: 0, tong_gio_phan_cong: 0, so_phan_cong: 0,
+      tong_gio_xu_ly: 0, so_xu_ly: 0, tong_gio_toan_trinh: 0, so_toan_trinh: 0 };
     var snapshot = {};
 
     rows.forEach(function (r) {
       if (String(r.dimension) === 'TONG') {
-        ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'ton_cuoi_ky', 'qua_han', 'tong_gio_xu_ly']
+        ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'ton_cuoi_ky', 'qua_han',
+          'tong_gio_tiep_nhan', 'so_tiep_nhan', 'tong_gio_phan_cong', 'so_phan_cong',
+          'tong_gio_xu_ly', 'so_xu_ly', 'tong_gio_toan_trinh', 'so_toan_trinh']
           .forEach(function (k) { monthTotal[k] += Number(r[k] || 0); });
         return;
       }
@@ -772,9 +856,13 @@ function getReport(opts) {
 
       var key = String(r.dim_key || '');
       var acc = totals[key] || (totals[key] = { key: key, label: r.dim_label || key || 'Chưa rõ',
-        phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, qua_han: 0, tong_gio_xu_ly: 0 });
+        phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, qua_han: 0,
+        tong_gio_tiep_nhan: 0, so_tiep_nhan: 0, tong_gio_phan_cong: 0, so_phan_cong: 0,
+        tong_gio_xu_ly: 0, so_xu_ly: 0, tong_gio_toan_trinh: 0, so_toan_trinh: 0 });
       acc.label = r.dim_label || acc.label;
-      ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'qua_han', 'tong_gio_xu_ly']
+      ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'qua_han',
+        'tong_gio_tiep_nhan', 'so_tiep_nhan', 'tong_gio_phan_cong', 'so_phan_cong',
+        'tong_gio_xu_ly', 'so_xu_ly', 'tong_gio_toan_trinh', 'so_toan_trinh']
         .forEach(function (k) { acc[k] += Number(r[k] || 0); });
       // Tồn là ảnh chụp: giữ riêng theo kỳ rồi lấy kỳ cuối, không cộng dồn.
       snapshot[key] = Number(r.ton_cuoi_ky || 0);
@@ -788,17 +876,27 @@ function getReport(opts) {
   var rows = Object.keys(totals).map(function (k) {
     var r = totals[k];
     r.ton_cuoi_ky = Number(lastSnapshot[k] || 0);
-    r.gio_xu_ly_tb = r.hoan_thanh ? Math.round((r.tong_gio_xu_ly / r.hoan_thanh) * 10) / 10 : 0;
+    r.gio_tiep_nhan_tb = r.so_tiep_nhan ? Math.round((r.tong_gio_tiep_nhan / r.so_tiep_nhan) * 10) / 10 : 0;
+    r.gio_phan_cong_tb = r.so_phan_cong ? Math.round((r.tong_gio_phan_cong / r.so_phan_cong) * 10) / 10 : 0;
+    r.gio_xu_ly_tb = r.so_xu_ly ? Math.round((r.tong_gio_xu_ly / r.so_xu_ly) * 10) / 10 : 0;
+    r.gio_toan_trinh_tb = r.so_toan_trinh ? Math.round((r.tong_gio_toan_trinh / r.so_toan_trinh) * 10) / 10 : 0;
     return r;
   }).sort(function (a, b) { return b.phat_sinh - a.phat_sinh || String(a.label).localeCompare(String(b.label)); });
 
   var total = months.reduce(function (acc, m) {
-    ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'qua_han', 'tong_gio_xu_ly']
+    ['phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'qua_han',
+      'tong_gio_tiep_nhan', 'so_tiep_nhan', 'tong_gio_phan_cong', 'so_phan_cong',
+      'tong_gio_xu_ly', 'so_xu_ly', 'tong_gio_toan_trinh', 'so_toan_trinh']
       .forEach(function (k) { acc[k] += Number(m[k] || 0); });
     acc.ton_cuoi_ky = Number(m.ton_cuoi_ky || 0);
     return acc;
-  }, { phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0, tong_gio_xu_ly: 0 });
-  total.gio_xu_ly_tb = total.hoan_thanh ? Math.round((total.tong_gio_xu_ly / total.hoan_thanh) * 10) / 10 : 0;
+  }, { phat_sinh: 0, chuyen_tiep_vao: 0, hoan_thanh: 0, huy: 0, ton_cuoi_ky: 0, qua_han: 0,
+    tong_gio_tiep_nhan: 0, so_tiep_nhan: 0, tong_gio_phan_cong: 0, so_phan_cong: 0,
+    tong_gio_xu_ly: 0, so_xu_ly: 0, tong_gio_toan_trinh: 0, so_toan_trinh: 0 });
+  total.gio_tiep_nhan_tb = total.so_tiep_nhan ? Math.round((total.tong_gio_tiep_nhan / total.so_tiep_nhan) * 10) / 10 : 0;
+  total.gio_phan_cong_tb = total.so_phan_cong ? Math.round((total.tong_gio_phan_cong / total.so_phan_cong) * 10) / 10 : 0;
+  total.gio_xu_ly_tb = total.so_xu_ly ? Math.round((total.tong_gio_xu_ly / total.so_xu_ly) * 10) / 10 : 0;
+  total.gio_toan_trinh_tb = total.so_toan_trinh ? Math.round((total.tong_gio_toan_trinh / total.so_toan_trinh) * 10) / 10 : 0;
 
   return { from: from, to: to, group: group, months: months, rows: rows, total: total,
     periods: plans.length, generated_at: stamp_() };
@@ -881,12 +979,14 @@ function getBootstrap() {
   var result = {
     activePlan: publicMonthlyPlan_(activePlan),
     me: { user_id: u.user_id, full_name: u.full_name, email: u.email, role: u.role, unit_id: u.unit_id,
-      must_change_password: String(u.must_change_password) === 'true' || u.must_change_password === true },
+      must_change_password: truthy_(u.must_change_password) },
     users: DataRepository.getAll('Users').map(function (x) {
       return { user_id: x.user_id, full_name: x.full_name, email: x.email || '', role: x.role, unit_id: x.unit_id,
         sort_order: x.sort_order || '', source_tab: x.source_tab || '', is_active: x.is_active,
         login_code: x.login_code || x.user_id || '', auth_group: authGroup_(x),
-        zalo_name: x.zalo_name || '', zalo_phone: x.zalo_phone || '' };
+        zalo_name: x.zalo_name || '', zalo_phone: x.zalo_phone || '', telegram_chat_id: x.telegram_chat_id || '',
+        availability_status: String(x.availability_status || 'AVAILABLE').toUpperCase(),
+        off_from: x.off_from || '', off_to: x.off_to || '', off_reason: x.off_reason || '', replacement_user_id: x.replacement_user_id || '' };
     }),
     units: DataRepository.getAll('Units'),
     workTypes: DataRepository.getAll('WorkTypes'),
@@ -898,7 +998,10 @@ function getBootstrap() {
     items: u.role === 'ADMIN' ? items.map(sanitizeAdminItem_) : items,
     // Events và Inbox chỉ thêm, không xóa. Lấy phần đuôi gần nhất thay vì đọc
     // trọn bảng, nếu không thời gian mở màn hình sẽ dài dần theo từng tháng.
-    events: DataRepository.tail('Events', 800).filter(function (e) { return visible[e.item_id]; }).map(function (e) {
+    events: DataRepository.tail('Events', 800).filter(function (e) {
+      if (u.role === 'CAN_BO_LS') return e.by === u.user_id;
+      return visible[e.item_id];
+    }).map(function (e) {
       return u.role === 'ADMIN' ? sanitizeAdminEvent_(e) : e;
     }),
     inbox: DataRepository.tail('Inbox', 200).filter(function (n) { return n.user_id === u.user_id; }),
@@ -1013,6 +1116,8 @@ function createRequest(payload) {
     payload.items.forEach(function (it) {
       var itemId = id_('ITEM');
       ids.push(itemId);
+      var typeChecklist = [];
+      try { typeChecklist = JSON.parse(types[it.work_type_code].checklist_json || '[]'); } catch (ignoreChecklist) { typeChecklist = []; }
       var sourceStt = nextSourceStt_(t, u.unit_id, activePlan.period_id);
       var unit = t.find('Units', 'unit_id', u.unit_id);
       t.append('WorkItems', {
@@ -1034,8 +1139,9 @@ function createRequest(payload) {
         assigned_at: '',
         due_at: '',
         completed_at: '',
+        processing_started_at: '',
         appointment_json: '',
-        checklist_json: '',
+        checklist_json: JSON.stringify(typeChecklist.map(function () { return false; })),
         pending_json: '',
         note: '',
         version: 1,
@@ -1089,9 +1195,24 @@ function transitionItem(itemId, to, opts) {
     var fields = { status: to, version: Number(item.version) + 1, updated_at: ts };
     var reason = opts.reason || '';
 
+    var doneType = t.find('WorkTypes', 'type_code', item.work_type_code);
+    var checklistDefs = [];
+    try { checklistDefs = doneType ? JSON.parse(doneType.object.checklist_json || '[]') : []; } catch (ignoreChecklist) { checklistDefs = []; }
+    var checklistState = [];
+    try { checklistState = JSON.parse(item.checklist_json || '[]'); } catch (ignoreChecklistState) { checklistState = []; }
+    if (['DA_SOAN_XONG', 'HOAN_THANH_LS'].indexOf(to) !== -1 && checklistDefs.length && checklistState.filter(Boolean).length < checklistDefs.length) {
+      throw new Error('Chưa tích đủ các nhóm việc; hãy ghi nhận từng phần trước khi hoàn thành toàn bộ hồ sơ.');
+    }
+
     if (to === 'DA_PHAN_CONG') {
       var staff = t.find('Users', 'user_id', opts.assignee_id);
-      if (!staff || staff.object.role !== 'CAN_BO_LS' || String(staff.object.is_active) !== 'true') throw new Error('Người nhận việc phải là cán bộ LS đang hoạt động.');
+      if (!userAvailableForAssignment_(staff && staff.object, ts)) {
+        if (staff && userOff_(staff.object, ts)) {
+          var offFrom = dateOnly_(staff.object.off_from), offTo = dateOnly_(staff.object.off_to);
+          throw new Error('Cán bộ ' + staff.object.full_name + ' đang nghỉ' + (offFrom ? ' từ ' + offFrom : '') + (offTo ? ' đến ' + offTo : '') + '. Chọn cán bộ khác hoặc bàn giao việc đang mở.');
+        }
+        throw new Error('Người nhận việc phải là cán bộ LS đang hoạt động.');
+      }
       var wt = t.find('WorkTypes', 'type_code', item.work_type_code);
       var slaHours = wt ? Number(wt.object.sla_hours) || 8 : 8;
       fields.assigned_user_id = opts.assignee_id;
@@ -1115,6 +1236,7 @@ function transitionItem(itemId, to, opts) {
     }
 
     if ((to === 'CHO_PHAN_CONG' || to === 'DA_PHAN_CONG') && !item.accepted_at) fields.accepted_at = ts;
+    if (to === 'DANG_THUC_HIEN' && !item.processing_started_at) fields.processing_started_at = ts;
     if (to === 'HOAN_THANH_LS') {
       // Loại việc cần khách ký thì phải có lịch hẹn trước khi đóng việc.
       var doneType = t.find('WorkTypes', 'type_code', item.work_type_code);
@@ -1151,6 +1273,31 @@ function transitionItem(itemId, to, opts) {
     }
 
     return { ok: true, status: to, version: fields.version, queued: queued, period_id: item.period_id };
+  });
+  syncMonthlyPlanWorkbook_(result.period_id);
+  return result;
+}
+
+/** Lưu trạng thái tick các nhóm việc, không đổi trạng thái hồ sơ. */
+function saveChecklist(itemId, checklist, expectedVersion) {
+  var u = requireActor_();
+  var result = DataRepository.tx(function (t) {
+    var found = t.find('WorkItems', 'item_id', itemId);
+    if (!found) throw new Error('Không tìm thấy việc ' + itemId + '.');
+    var item = found.object;
+    if (expectedVersion !== undefined && Number(item.version) !== Number(expectedVersion)) throw new Error('Việc đã được người khác cập nhật. Tải lại trước khi lưu.');
+    if (u.role === 'CAN_BO_LS' && item.assigned_user_id !== u.user_id) throw new Error('Chỉ người được giao mới ghi nhận nhóm việc.');
+    if (['CAN_BO_LS', 'KS_LS', 'QUAN_LY_LS'].indexOf(u.role) === -1) throw new Error('Vai trò không được ghi nhận nhóm việc.');
+    var wt = t.find('WorkTypes', 'type_code', item.work_type_code), defs = [];
+    try { defs = wt ? JSON.parse(wt.object.checklist_json || '[]') : []; } catch (ignore) { defs = []; }
+    var values = Array.isArray(checklist) ? checklist : [];
+    var normalized = defs.map(function (_, index) { return values[index] === true || String(values[index]).toLowerCase() === 'true'; });
+    var ts = stamp_();
+    var fields = { checklist_json: JSON.stringify(normalized), version: Number(item.version) + 1, updated_at: ts };
+    t.write(found, fields);
+    t.append('Events', { event_id: id_('EVT'), item_id: itemId, type: 'CAP_NHAT_CHECKLIST', by: u.user_id, at: ts,
+      reason: normalized.filter(Boolean).length + '/' + defs.length + ' nhóm việc đã hoàn thành.', before_json: item.checklist_json || '[]', after_json: fields.checklist_json });
+    return { ok: true, version: fields.version, checklist: normalized, period_id: item.period_id };
   });
   syncMonthlyPlanWorkbook_(result.period_id);
   return result;
@@ -1333,6 +1480,38 @@ function logConfig_(t, u, area, detail) {
   t.append('ConfigLog', { id: id_('CFG'), at: stamp_(), by: u.user_id, area: area, detail: detail });
 }
 
+/** Bàn giao toàn bộ việc đang mở sang cán bộ thay thế trong cùng giao dịch. */
+function handoverOpenWork_(t, oldUserId, replacementUserId, actorId, openItems, reason) {
+  var ts = stamp_();
+  var moved = 0;
+  (openItems || []).filter(function (item) {
+    return item.assigned_user_id === oldUserId && OPEN_STATUS.indexOf(item.status) !== -1;
+  }).forEach(function (item) {
+    var found = t.find('WorkItems', 'item_id', item.item_id);
+    if (!found) return;
+    var fields = {
+      assigned_user_id: replacementUserId,
+      assigned_by: actorId,
+      assigned_at: ts,
+      updated_at: ts,
+      version: Number(item.version || 0) + 1
+    };
+    t.write(found, fields);
+    t.append('Events', {
+      event_id: id_('EVT'), item_id: item.item_id, type: 'DOI_NGUOI', by: actorId, at: ts,
+      reason: reason || 'Bàn giao do đổi vai trò hoặc khóa tài khoản.',
+      before_json: JSON.stringify({ status: item.status, assigned_user_id: oldUserId }),
+      after_json: JSON.stringify(fields)
+    });
+    var merged = {};
+    Object.keys(item).forEach(function (key) { merged[key] = item[key]; });
+    Object.keys(fields).forEach(function (key) { merged[key] = fields[key]; });
+    Notifications.queue(t, merged, 'DOI_NGUOI', actorId);
+    moved += 1;
+  });
+  return moved;
+}
+
 /** Lưu danh mục từ màn Quản trị. Các cột và bảng được giới hạn cứng, không nhận tên Sheet tùy ý. */
 function adminSaveCatalog(kind, code, data) {
   var u = requireAdmin_();
@@ -1361,6 +1540,25 @@ function adminSaveCatalog(kind, code, data) {
       data.auth_group = data.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL';
       if (!data.login_code) throw new Error('Người dùng phải có mã đăng nhập.');
       if (!t.find('Units', 'unit_id', data.unit_id)) throw new Error('Đơn vị ' + data.unit_id + ' chưa có trong danh mục.');
+      var availability = String(data.availability_status || 'AVAILABLE').trim().toUpperCase();
+      if (['AVAILABLE', 'OFF'].indexOf(availability) === -1) throw new Error('Trạng thái nhận việc không hợp lệ.');
+      var offFrom = data.off_from ? dateOnly_(data.off_from) : '';
+      var offTo = data.off_to ? dateOnly_(data.off_to) : '';
+      if (data.off_from && !offFrom) throw new Error('Ngày bắt đầu nghỉ phải có dạng YYYY-MM-DD.');
+      if (data.off_to && !offTo) throw new Error('Ngày kết thúc nghỉ phải có dạng YYYY-MM-DD.');
+      if (offFrom && offTo && offFrom > offTo) throw new Error('Ngày kết thúc nghỉ không được trước ngày bắt đầu.');
+      data.availability_status = availability;
+      data.off_from = offFrom;
+      data.off_to = offTo;
+      data.off_reason = String(data.off_reason || '').trim();
+      data.replacement_user_id = String(data.replacement_user_id || '').trim();
+      if (data.replacement_user_id) {
+        if (data.replacement_user_id === code) throw new Error('Cán bộ thay thế không được là chính tài khoản đang sửa.');
+        var replacement = t.find('Users', 'user_id', data.replacement_user_id);
+        if (!replacement || String(replacement.object.role || '').trim().toUpperCase() !== 'CAN_BO_LS' || !truthy_(replacement.object.is_active)) {
+          throw new Error('Cán bộ thay thế phải là cán bộ LS đang hoạt động.');
+        }
+      }
       var sameEmail = t.rows('Users').filter(function (x) {
         return data.email && String(x.email).toLowerCase() === String(data.email || '').toLowerCase() && x.user_id !== code;
       });
@@ -1375,15 +1573,23 @@ function adminSaveCatalog(kind, code, data) {
         data.must_change_password = true;
       }
       delete data.new_password;
-      if (found && found.object.role === 'CAN_BO_LS' &&
-          (data.role !== 'CAN_BO_LS' || !data.is_active) &&
-          t.rows('WorkItems').some(function (i) { return i.assigned_user_id === code && OPEN_STATUS.indexOf(i.status) !== -1; })) {
-        throw new Error('Cán bộ vẫn còn việc đang mở; cần bàn giao trước khi đổi vai trò hoặc khóa.');
+      if (found && String(found.object.role || '').trim().toUpperCase() === 'CAN_BO_LS' &&
+          (data.role !== 'CAN_BO_LS' || !truthy_(data.is_active))) {
+        var openItems = t.rows('WorkItems').filter(function (i) {
+          return i.assigned_user_id === code && OPEN_STATUS.indexOf(i.status) !== -1;
+        });
+        if (openItems.length) {
+          if (!data.replacement_user_id) {
+            throw new Error('Còn ' + openItems.length + ' việc đang mở; chọn cán bộ thay thế trước khi đổi vai trò hoặc khóa.');
+          }
+          handoverOpenWork_(t, code, data.replacement_user_id, u.user_id, openItems,
+            'Bàn giao do đổi vai trò hoặc khóa tài khoản ' + code + '.');
+        }
       }
       // Khóa nốt tài khoản quản trị cuối cùng là tự nhốt mình ngoài cửa.
       if (found && found.object.role === 'ADMIN' && (data.role !== 'ADMIN' || data.is_active === false)) {
         var otherAdmins = t.rows('Users').filter(function (x) {
-          return x.role === 'ADMIN' && x.user_id !== code && String(x.is_active) === 'true';
+          return x.role === 'ADMIN' && x.user_id !== code && truthy_(x.is_active);
         });
         if (!otherAdmins.length) throw new Error('Đây là tài khoản quản trị đang hoạt động duy nhất; tạo tài khoản quản trị khác trước.');
       }

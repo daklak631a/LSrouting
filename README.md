@@ -17,6 +17,34 @@ Bản trình duyệt không gửi ra ngoài; chỉ GAS gọi provider thật.
 
 ## Triển khai Apps Script
 
+### URL web app đang dùng
+
+Deployment chuẩn đã được cập nhật lên **Version 19**, chạy dưới tài khoản
+`daklak631a@gmail.com`, quyền truy cập `Anyone`:
+
+`https://script.google.com/macros/s/AKfycbylljXwRUkxUCL_wnxztLAzotSNi9iiOvgpGtXPCwzIQHjCgpPz6d_zvG_XC1urUlCH/exec`
+
+Đây là URL duy nhất nên gửi cho người dùng. Deployment `New` đã được đồng bộ lên
+Version 9; deployment cũ `newdeploy` là bản legacy hiện không dùng và không nên
+gửi liên kết đó.
+Khi sửa mã, cập nhật đúng deployment này để giữ nguyên URL; không tạo deployment
+mới nếu không muốn phải đổi liên kết người dùng.
+
+Version 19 giữ nguyên bàn giao tự động các việc đang mở sang cán bộ thay thế khi
+quản trị đổi vai trò khỏi `CAN_BO_LS` hoặc khóa tài khoản. Nếu chưa chọn người
+thay thế, hệ thống vẫn chặn thao tác và báo rõ số việc cần xử lý.
+
+Bản này cũng có dashboard cá nhân và bộ đếm giờ xử lý khách hàng (tính từ lúc
+LS bấm **Bắt đầu xử lý**, loại trừ 11:30–13:30 và 18:00–07:30), nhật ký chỉ
+hiện sự kiện do chính cán bộ LS thực hiện, cùng checklist nhóm việc. Tích từng
+nhóm sẽ ghi sự kiện `CAP_NHAT_CHECKLIST`; chỉ được báo soạn xong/hoàn thành khi
+đã tích đủ. Nếu hộp thoại bị đồng bộ lại trong lúc đang mở, giao diện báo rõ
+xung đột trạng thái và yêu cầu tải lại thay vì hiện lỗi chung.
+
+Khi mở trên trình duyệt có nhiều tài khoản Google, giữ nguyên URL trên và không
+chèn thêm đoạn `/macros/u/4/` (hoặc chỉ số tài khoản khác). Biến thể đó có thể
+trả về trang Page Not Found dù deployment đang hoạt động.
+
 ```
 node build-gas.mjs
 ```
@@ -41,6 +69,14 @@ script phải mở được file mẫu đó. Không mở được thì chọn m�
 
 - chia sẻ file mẫu cho tài khoản đang chạy script, hoặc
 - chạy `usePlanTemplate("")` để tạo file kế hoạch trống thay vì nhân bản mẫu.
+
+Quản trị người dùng có thể đặt `Khả năng nhận việc = Đang nghỉ`, ngày bắt đầu/kết thúc
+(để trống ngày kết thúc cho nghỉ dài ngày), lý do và cán bộ thay thế. Cán bộ đang nghỉ
+không xuất hiện trong danh sách phân công và máy chủ cũng chặn phân công trực tiếp;
+việc đang mở không tự chuyển người để tránh thay đổi nghiệp vụ ngoài ý muốn. Dashboard
+Kết quả thực hiện có thêm ma trận số lượng theo từng cán bộ và nhóm việc, giữ cả các dòng
+chưa phát sinh việc với số 0. Khi quy tắc phân công trỏ tới cán bộ đang nghỉ, giao diện
+đề xuất cán bộ thay thế khả dụng; người kiểm soát vẫn phải xác nhận trước khi lưu.
 
 Đổi sang mẫu khác thì chạy `usePlanTemplate("<spreadsheetId>")`; hàm kiểm tra mở
 được file ngay lúc khai, không để lỗi nổ ở lần dựng kỳ kế tiếp.
@@ -75,7 +111,8 @@ Nếu kho đã tạo từ phiên bản cũ và màn Kênh gửi tin chưa có SM
 chạy lại `setupSheetDB()`. Hàm sẽ bổ sung dòng `SMS` vào `Channels` và mẫu
 `TPL_SMS_HEN_KY` ở trạng thái nháp nếu còn thiếu; không ghi đè cấu hình hoặc dữ liệu đã có.
 
-Chạy lại `setupSheetDB()` cũng bổ sung cột `telegram_chat_id` cho `Users`, cột
+Chạy lại `setupSheetDB()` cũng bổ sung các cột `telegram_chat_id`, `availability_status`,
+`off_from`, `off_to`, `off_reason`, `replacement_user_id` cho `Users`, cột
 `next_try_at` cho `NotificationOutbox`, mẫu `TPL_MAIL_HEN_KY` và `TPL_NHOM_HEN_KY`,
 quy tắc `R8` báo nhóm nội bộ, và đánh dấu quy tắc hẹn khách `R6` là đường báo thẳng
 khách. Sau đó chạy `installOutboxWorker()` một lần để cài thêm trigger quét quá hạn.

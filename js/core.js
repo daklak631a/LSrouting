@@ -111,6 +111,44 @@ var LS = (function () {
   }
 
   /**
+   * Tính số mili-giây làm việc thực tế giữa hai mốc. Không dùng phép trừ
+   * Date đơn giản vì hồ sơ có thể chạy qua giờ nghỉ trưa, buổi tối, cuối tuần
+   * hoặc ngày lễ. Mốc ngày/giờ được giữ theo múi giờ trình duyệt của ứng dụng
+   * (GAS luôn chạy theo Asia/Ho_Chi_Minh).
+   */
+  function workingMilliseconds(fromIso, toIso, cal) {
+    if (!fromIso || !toIso) return null;
+    var from = new Date(fromIso), to = new Date(toIso);
+    if (!isFinite(from.getTime()) || !isFinite(to.getTime()) || to < from) return null;
+    cal = cal || { days: [1, 2, 3, 4, 5], open: '07:30', close: '18:00', breakFrom: '11:30', breakTo: '13:30', holidays: [] };
+    var total = 0, cursor = new Date(from.getTime()), guard = 0, segs = segments(cal);
+    while (cursor < to && guard++ < 10000) {
+      if (!isWorkday(cursor, cal)) {
+        cursor.setDate(cursor.getDate() + 1); cursor.setHours(0, 0, 0, 0); continue;
+      }
+      var dayStart = new Date(cursor.getTime()); dayStart.setHours(0, 0, 0, 0);
+      var nextDay = new Date(dayStart.getTime()); nextDay.setDate(nextDay.getDate() + 1);
+      var moved = false;
+      segs.forEach(function (seg) {
+        if (cursor >= to || moved && cursor >= nextDay) return;
+        var start = new Date(dayStart.getTime()); start.setMinutes(seg[0]);
+        var end = new Date(dayStart.getTime()); end.setMinutes(seg[1]);
+        var a = cursor > start ? cursor : start;
+        var b = to < end ? to : end;
+        if (b > a) total += b.getTime() - a.getTime();
+        if (cursor < end) { cursor = new Date(end.getTime()); moved = true; }
+      });
+      if (cursor < nextDay && cursor < to) { cursor = nextDay; }
+    }
+    return total;
+  }
+
+  function workingHours(fromIso, toIso, cal) {
+    var ms = workingMilliseconds(fromIso, toIso, cal);
+    return ms === null ? null : Math.round((ms / 3600000) * 10) / 10;
+  }
+
+  /**
    * Cộng giờ làm việc thật vào một mốc, bỏ qua ngoài giờ, nghỉ trưa, cuối tuần và ngày lễ.
    * Giao lúc 16h chiều thứ Sáu với SLA 4 giờ phải ra sáng thứ Hai, không phải 20h thứ Sáu.
    */
@@ -289,7 +327,8 @@ var LS = (function () {
     esc: esc, attr: attr, now: now, localDate: localDate, pad: pad, uid: uid,
     fmtDate: fmtDate, fmtTime: fmtTime, fmtDT: fmtDT, fmtGap: fmtGap,
     initials: initials, mask: mask, pct: pct, byId: byId, where: where, sum: sum,
-    addWorkingHours: addWorkingHours, isWorkday: isWorkday, periodRange: periodRange,
+    addWorkingHours: addWorkingHours, workingMilliseconds: workingMilliseconds, workingHours: workingHours,
+    isWorkday: isWorkday, periodRange: periodRange,
     icon: icon,
     load: load, save: save, reset: reset, db: db,
     replace: replace, setBackend: setBackend, isGas: isGas

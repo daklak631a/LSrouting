@@ -36,7 +36,9 @@ LS.api = (function () {
       return { user_id: u.user_id, full_name: u.full_name, email: u.email || '', role: u.role, unit_id: u.unit_id,
         sort_order: Number(u.sort_order) || 9999, source_tab: u.source_tab || '', active: truth(u.is_active),
         login_code: u.login_code || u.user_id || '', auth_group: u.auth_group || (u.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL'),
-        zalo_name: u.zalo_name || '', zalo_phone: u.zalo_phone || '', telegram_chat_id: u.telegram_chat_id || '' };
+        zalo_name: u.zalo_name || '', zalo_phone: u.zalo_phone || '', telegram_chat_id: u.telegram_chat_id || '',
+        availability_status: String(u.availability_status || 'AVAILABLE').toUpperCase(),
+        off_from: u.off_from || '', off_to: u.off_to || '', off_reason: u.off_reason || '', replacement_user_id: u.replacement_user_id || '' };
     });
     if (raw.me && !LS.byId(out.users, 'user_id', raw.me.user_id)) {
       out.users.push({ user_id: raw.me.user_id, login_code: raw.me.user_id, auth_group: raw.me.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL', full_name: raw.me.full_name, email: raw.me.email, role: raw.me.role, unit_id: raw.me.unit_id, active: true });
@@ -59,7 +61,7 @@ LS.api = (function () {
     out.workTypes = (raw.workTypes || []).map(function (w) {
       return {
         code: w.type_code, name: w.display_name, group: w.group_name || '', sla_hours: Number(w.sla_hours) || 8,
-        needs_appointment: truth(w.requires_appointment), needs_ks_approval: true,
+        needs_appointment: truth(w.requires_appointment), needs_ks_approval: truth(w.requires_ks_approval),
         active: truth(w.is_active), sort_order: Number(w.sort_order) || 9999, checklist: json(w.checklist_json, [])
       };
     });
@@ -79,7 +81,7 @@ LS.api = (function () {
         item_id: i.item_id, period_id: i.period_id || '', carryover_from_item_id: i.carryover_from_item_id || '', carried_to_item_id: i.carried_to_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
         occurrence_date: i.occurrence_date, status: i.status, assigned_user_id: i.assigned_user_id || '', assigned_by: i.assigned_by || '',
         submitted_at: i.submitted_at || '', accepted_at: i.accepted_at || '', assigned_at: i.assigned_at || '', due_at: i.due_at || '',
-        completed_at: i.completed_at || '', appointment: json(i.appointment_json, null), checklist: json(i.checklist_json, []),
+        completed_at: i.completed_at || '', processing_started_at: i.processing_started_at || '', appointment: json(i.appointment_json, null), checklist: json(i.checklist_json, []),
         pending: json(i.pending_json, null), note: i.note || '', version: Number(i.version) || 1
       };
     });
@@ -152,6 +154,7 @@ LS.api = (function () {
     createNextMonthlyPlan: function () { return call('createNextMonthlyPlan'); },
     createRequest: function (payload) { return call('createRequest', payload); },
     transitionItem: function (id, to, opts) { return call('transitionItem', id, to, opts || {}); },
+    saveChecklist: function (id, checklist, expectedVersion) { return call('saveChecklist', id, checklist, expectedVersion); },
     proposeRevision: function (id, fields, reason) { return call('proposeRevision', id, fields, reason); },
     resolveRevision: function (id, approve, reason) { return call('resolveRevision', id, approve, reason || ''); },
     saveCatalog: function (kind, code, data) { return call('adminSaveCatalog', kind, code, data); },
