@@ -663,8 +663,8 @@ function carryOpenWorkToPlan_(fromPeriodId, toPeriodId, u) {
       var prefix = String(oldReq.unit_id || 'DONVI') + '_';
       counts[oldReq.unit_id] = (counts[oldReq.unit_id] || 0) + 1;
       t.append('WorkItems', {
-        item_id: newItemId, period_id: toPeriodId, origin_item_id: old.origin_item_id || old.item_id, carryover_from_item_id: old.item_id,
-        request_id: newRequestId, work_type_code: old.work_type_code, product_name: old.product_name, occurrence_date: targetPlan.start_date,
+        item_id: newItemId, period_id: toPeriodId, origin_item_id: old.origin_item_id || old.item_id, carryover_from_item_id: old.item_id, parent_item_id: old.parent_item_id || '',
+        request_id: newRequestId, work_type_code: old.work_type_code, product_name: old.product_name, collateral_mode: old.collateral_mode || 'NONE', occurrence_date: targetPlan.start_date,
         source_stt: prefix + counts[oldReq.unit_id], source_tab: old.source_tab || '', status: 'CHO_TIEP_NHAN', assigned_user_id: '', assigned_by: '', submitted_at: stamp_(),
         accepted_at: '', assigned_at: '', due_at: '', completed_at: '', processing_started_at: old.processing_started_at || '', pause_log_json: nextPauseLog_(old, 'CHO_TIEP_NHAN', stamp_()) || old.pause_log_json || '', appointment_json: '', checklist_json: old.checklist_json || '[]', pending_json: '',
         note: 'Chuyển tiếp từ ' + old.item_id + '.', version: 1, created_at: stamp_(), updated_at: stamp_()
@@ -1272,6 +1272,20 @@ function nextSourceStt_(t, unitId, periodId) {
   return prefix + (max + 1);
 }
 
+var COLLATERAL_NEW_WORK_TYPE_ = 'LEGACY_26';
+var COLLATERAL_MODES_ = ['NONE', 'CO_SAN', 'MOI'];
+
+function canChooseCollateralMode_(wt) {
+  return !!(wt && ['Món', 'HM SXKD', 'Thấu chi', 'Thẻ tín dụng'].indexOf(String(wt.group_name || '')) !== -1);
+}
+
+function normalizeCollateralMode_(mode, wt) {
+  var normalized = String(mode || 'NONE').trim().toUpperCase();
+  if (COLLATERAL_MODES_.indexOf(normalized) === -1) throw new Error('Tình trạng TSBĐ không hợp lệ.');
+  if (normalized !== 'NONE' && !canChooseCollateralMode_(wt)) throw new Error('Chỉ công việc tín dụng mới được chọn tình trạng TSBĐ.');
+  return normalized;
+}
+
 /**
  * Một khách, nhiều việc, mỗi việc một ngày phát sinh riêng.
  * payload = { customer:{name,kind,cif,phone,email}, note, items:[{work_type_code,product_name,occurrence_date}] }
@@ -1287,6 +1301,7 @@ function createRequest(payload) {
   payload.items.forEach(function (it) {
     if (!types[it.work_type_code]) throw new Error('Loại việc không hợp lệ: ' + it.work_type_code);
     if (!it.product_name) throw new Error('Thiếu tên sản phẩm cho một dòng việc.');
+    it.collateral_mode = normalizeCollateralMode_(it.collateral_mode, types[it.work_type_code]);
   });
 
   var activePlan = activePlan_();
@@ -1325,7 +1340,7 @@ function createRequest(payload) {
       updated_at: ts
     });
 
-    var ids = [];
+    var ids = [], linkedItems = [];
     payload.items.forEach(function (it) {
       var itemId = id_('ITEM');
       ids.push(itemId);
@@ -1338,9 +1353,11 @@ function createRequest(payload) {
         period_id: activePlan.period_id,
         origin_item_id: '',
         carryover_from_item_id: '',
+        parent_item_id: '',
         request_id: requestId,
         work_type_code: it.work_type_code,
         product_name: it.product_name,
+        collateral_mode: it.collateral_mode,
         occurrence_date: it.occurrence_date || ts.substring(0, 10),
         source_stt: sourceStt,
         source_tab: unit ? (unit.object.source_tab || unit.object.name || u.unit_id) : u.unit_id,
@@ -1366,9 +1383,38 @@ function createRequest(payload) {
         by: u.user_id, at: ts, reason: 'Đơn vị ' + u.unit_id + ' đăng ký yêu cầu.',
         before_json: '', after_json: JSON.stringify(it)
       });
+      if (it.collateral_mode === 'MOI') {
+        var collateralType = types[COLLATERAL_NEW_WORK_TYPE_];
+        if (!collateralType || !truthy_(collateralType.is_active)) throw new Error('Thiếu loại việc hồ sơ TSBĐ mới trong danh mục.');
+        var childId = id_('ITEM');
+        var childChecklist = [];
+        try { childChecklist = JSON.parse(collateralType.checklist_json || '[]'); } catch (ignoreChildChecklist) { childChecklist = []; }
+        var child = {
+          item_id: childId, period_id: activePlan.period_id, origin_item_id: '', carryover_from_item_id: '',
+          parent_item_id: itemId, request_id: requestId, work_type_code: COLLATERAL_NEW_WORK_TYPE_,
+          product_name: collateralType.display_name || COLLATERAL_NEW_WORK_TYPE_, collateral_mode: 'MOI',
+          occurrence_date: it.occurrence_date || ts.substring(0, 10), source_stt: nextSourceStt_(t, u.unit_id, activePlan.period_id),
+          source_tab: unit ? (unit.object.source_tab || unit.object.name || u.unit_id) : u.unit_id,
+          status: 'CHO_TIEP_NHAN', assigned_user_id: '', assigned_by: '', submitted_at: ts,
+          accepted_at: '', assigned_at: '', due_at: '', completed_at: '', processing_started_at: '', appointment_json: '',
+          checklist_json: JSON.stringify(childChecklist.map(function () { return false; })), pending_json: '', note: '',
+          version: 1, created_at: ts, updated_at: ts
+        };
+        t.append('WorkItems', child);
+        t.append('Events', {
+          event_id: id_('EVT'), item_id: childId, type: 'TAO_VIEC', by: u.user_id, at: ts,
+          reason: 'Tạo hồ sơ TSBĐ mới đi kèm việc ' + itemId + '.', before_json: '', after_json: JSON.stringify(child)
+        });
+        linkedItems.push({
+          item_id: childId, parent_item_id: itemId, work_type_code: child.work_type_code,
+          product_name: child.product_name, occurrence_date: child.occurrence_date, status: child.status,
+          assigned_user_id: '', assigned_by: '', submitted_at: ts, version: 1,
+          collateral_mode: 'MOI', checklist: childChecklist.map(function () { return false; })
+        });
+      }
     });
 
-    return { ok: true, request_id: requestId, item_ids: ids, period_id: activePlan.period_id };
+    return { ok: true, request_id: requestId, item_ids: ids, linked_items: linkedItems, period_id: activePlan.period_id };
   });
   syncMonthlyPlanWorkbook_(result.period_id);
   return result;
@@ -1602,7 +1648,7 @@ function addLinkedItem(parentId, workTypeCode) {
     t.append('WorkItems', {
       item_id: itemId, period_id: parent.period_id, origin_item_id: '', carryover_from_item_id: '',
       parent_item_id: parentId, request_id: parent.request_id,
-      work_type_code: workTypeCode, product_name: wt.object.display_name || workTypeCode,
+      work_type_code: workTypeCode, product_name: wt.object.display_name || workTypeCode, collateral_mode: workTypeCode === COLLATERAL_NEW_WORK_TYPE_ ? 'MOI' : 'NONE',
       occurrence_date: ts.substring(0, 10),
       source_stt: nextSourceStt_(t, unitId, parent.period_id),
       source_tab: unit ? (unit.object.source_tab || unit.object.name || unitId) : (parent.source_tab || unitId),

@@ -37,7 +37,7 @@ var SCHEMA = {
     'cif', 'phone', 'email', 'priority_flags_json', 'requestor_id', 'requestor_name', 'requestor_kind',
     'note', 'created_at', 'updated_at'],
 
-  WorkItems: ['item_id', 'period_id', 'origin_item_id', 'carryover_from_item_id', 'request_id', 'work_type_code', 'product_name', 'occurrence_date',
+  WorkItems: ['item_id', 'period_id', 'origin_item_id', 'carryover_from_item_id', 'request_id', 'work_type_code', 'product_name', 'collateral_mode', 'occurrence_date',
     'source_stt', 'source_tab', 'status', 'assigned_user_id', 'assigned_by', 'submitted_at', 'accepted_at', 'assigned_at',
     'due_at', 'completed_at', 'processing_started_at', 'appointment_json', 'checklist_json', 'pending_json', 'note',
     // Việc mở sang kỳ sau được nhân thành dòng mới ở kỳ đó. Không đánh dấu dòng

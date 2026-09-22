@@ -78,7 +78,7 @@ LS.api = (function () {
     });
     out.items = (raw.items || []).map(function (i) {
       return {
-        item_id: i.item_id, period_id: i.period_id || '', parent_item_id: i.parent_item_id || '', carryover_from_item_id: i.carryover_from_item_id || '', carried_to_item_id: i.carried_to_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
+        item_id: i.item_id, period_id: i.period_id || '', parent_item_id: i.parent_item_id || '', collateral_mode: i.collateral_mode || 'NONE', carryover_from_item_id: i.carryover_from_item_id || '', carried_to_item_id: i.carried_to_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
         occurrence_date: i.occurrence_date, status: i.status, assigned_user_id: i.assigned_user_id || '', assigned_by: i.assigned_by || '',
         submitted_at: i.submitted_at || '', accepted_at: i.accepted_at || '', assigned_at: i.assigned_at || '', due_at: i.due_at || '',
         completed_at: i.completed_at || '', processing_started_at: i.processing_started_at || '', pause_log: json(i.pause_log_json, []), appointment: json(i.appointment_json, null), checklist: json(i.checklist_json, []),

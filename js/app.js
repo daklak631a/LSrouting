@@ -595,6 +595,11 @@ LS.app = (function () {
       return;
     }
 
+    if (t.getAttribute('data-role') === 'work-type-product') {
+      S.syncCollateralMode(t);
+      return;
+    }
+
     if (t.hasAttribute('data-cond')) { applyConds(); return; }
 
     var reportField = { 'report-preset': 'preset', 'report-from': 'from', 'report-to': 'to', 'report-group': 'group' };

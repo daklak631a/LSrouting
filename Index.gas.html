@@ -2936,7 +2936,7 @@ LS.api = (function () {
     });
     out.items = (raw.items || []).map(function (i) {
       return {
-        item_id: i.item_id, period_id: i.period_id || '', parent_item_id: i.parent_item_id || '', carryover_from_item_id: i.carryover_from_item_id || '', carried_to_item_id: i.carried_to_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
+        item_id: i.item_id, period_id: i.period_id || '', parent_item_id: i.parent_item_id || '', collateral_mode: i.collateral_mode || 'NONE', carryover_from_item_id: i.carryover_from_item_id || '', carried_to_item_id: i.carried_to_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
         occurrence_date: i.occurrence_date, status: i.status, assigned_user_id: i.assigned_user_id || '', assigned_by: i.assigned_by || '',
         submitted_at: i.submitted_at || '', accepted_at: i.accepted_at || '', assigned_at: i.assigned_at || '', due_at: i.due_at || '',
         completed_at: i.completed_at || '', processing_started_at: i.processing_started_at || '', pause_log: json(i.pause_log_json, []), appointment: json(i.appointment_json, null), checklist: json(i.checklist_json, []),
@@ -5979,6 +5979,32 @@ LS.screens = (function () {
     }).map(function (w) { return [w.code, w.name]; });
   }
 
+  function defaultWorkTypeGroup() {
+    var groups = workTypeGroups();
+    return groups.length ? groups[0][0] : '';
+  }
+
+  // Chỉ nhóm công việc tín dụng có thể phát sinh lựa chọn TSBĐ. Nhóm TSĐB
+  // bản thân đã là hồ sơ tài sản, không hỏi lại để tránh tạo nghĩa vụ kép.
+  function canChooseCollateralMode(w) {
+    return !!(w && w.active && ['Món', 'HM SXKD', 'Thấu chi', 'Thẻ tín dụng'].indexOf(w.group || '') !== -1);
+  }
+
+  function defaultCollateralMode(w) {
+    if (!canChooseCollateralMode(w)) return 'NONE';
+    if (/TSĐB|TSDB|Có TSĐB/i.test(String(w.name || ''))) return 'CO_SAN';
+    return 'NONE';
+  }
+
+  function collateralOptions(w) {
+    if (!canChooseCollateralMode(w)) return [];
+    return [
+      ['NONE', 'Không có TSBĐ — chỉ Hợp đồng tín dụng'],
+      ['CO_SAN', 'TSBĐ có sẵn — chỉ Hợp đồng tín dụng'],
+      ['MOI', 'TSBĐ mới — tạo thêm hồ sơ tài sản']
+    ];
+  }
+
   function syncProductOptions(groupSelect, selectedCode) {
     var row = groupSelect && groupSelect.closest('.row-item');
     var product = row && row.querySelector('[data-role="work-type-product"]');
@@ -5987,12 +6013,45 @@ LS.screens = (function () {
     product.innerHTML = '<option value="">Chọn sản phẩm</option>' + options.map(function (op) {
       return '<option value="' + U.attr(op[0]) + '"' + (String(op[0]) === String(selectedCode || '') ? ' selected' : '') + '>' + U.esc(op[1]) + '</option>';
     }).join('');
+    syncCollateralMode(product);
+  }
+
+  function syncCollateralMode(productSelect, selectedMode) {
+    var row = productSelect && productSelect.closest('.row-item');
+    var modeField = row && row.querySelector('[data-role="collateral-mode-field"]');
+    var modeSelect = row && row.querySelector('[data-role="collateral-mode"]');
+    if (!modeField || !modeSelect) return;
+    var wt = U.byId(st().workTypes, 'code', productSelect.value);
+    var options = collateralOptions(wt);
+    modeSelect.innerHTML = options.map(function (op) {
+      return '<option value="' + U.attr(op[0]) + '">' + U.esc(op[1]) + '</option>';
+    }).join('');
+    if (!options.length) {
+      modeSelect.value = 'NONE';
+      modeField.hidden = true;
+      return;
+    }
+    modeField.hidden = false;
+    modeSelect.value = selectedMode || defaultCollateralMode(wt);
+  }
+
+  function rowCollateralMode(row, wt) {
+    if (!canChooseCollateralMode(wt)) return 'NONE';
+    var field = row && row.querySelector('[data-role="collateral-mode-field"]');
+    var select = row && row.querySelector('[data-role="collateral-mode"]');
+    if (!field || field.hidden) return 'NONE';
+    var mode = String(select && select.value || defaultCollateralMode(wt)).toUpperCase();
+    return ['NONE', 'CO_SAN', 'MOI'].indexOf(mode) !== -1 ? mode : defaultCollateralMode(wt);
   }
 
   function rowForm(idx) {
+    var defaultGroup = defaultWorkTypeGroup();
     return '<div class="row-item">' +
-      ui.field('Loại việc', ui.select('wg_' + idx, workTypeGroups(), '', { attrs: ' data-role="work-type-group" required' })) +
-      ui.field('Sản phẩm', ui.select('wt_' + idx, [], '', { blank: 'Chọn sản phẩm', attrs: ' data-role="work-type-product" required' })) +
+      ui.field('Loại việc', ui.select('wg_' + idx, workTypeGroups(), defaultGroup, { attrs: ' data-role="work-type-group" required' })) +
+      ui.field('Sản phẩm', ui.select('wt_' + idx, productOptions(defaultGroup), '', { blank: 'Chọn sản phẩm', attrs: ' data-role="work-type-product" required' })) +
+      '<div data-role="collateral-mode-field" hidden style="grid-column:1/-1">' +
+      ui.field('Tình trạng TSBĐ', ui.select('cm_' + idx, [], '', { attrs: ' data-role="collateral-mode"' }), 'Chọn TSBĐ có sẵn nếu chỉ làm Hợp đồng tín dụng; chọn TSBĐ mới nếu phải lập thêm hồ sơ tài sản.') +
+      '</div>' +
       ui.field('Ngày phát sinh', ui.input('dt_' + idx, U.localDate(), { type: 'date', required: true })) +
       ui.iconBtn('trash', { act: 'del-row', label: 'Xóa dòng việc' }) +
       '</div>';
@@ -6027,6 +6086,8 @@ LS.screens = (function () {
       '</div>' +
       ui.formEnd('Gửi sang LS') + '</form>',
       { size: 'md', sub: 'Một hồ sơ, nhiều việc' });
+    var firstGroup = document.querySelector('#dialog [data-role="work-type-group"]');
+    if (firstGroup) syncProductOptions(firstGroup);
   }
 
   function submitNewRequest(form) {
@@ -6056,6 +6117,7 @@ LS.screens = (function () {
         work_type_code: product.value,
         product_name: wt ? wt.name : '',
         work_type_group: group.value,
+        collateral_mode: rowCollateralMode(row, wt),
         occurrence_date: date.value
       });
     });
@@ -6086,7 +6148,7 @@ LS.screens = (function () {
           status: 'CHO_TIEP_NHAN', assigned_user_id: '', assigned_by: '',
           submitted_at: U.now(), accepted_at: '', assigned_at: '', due_at: '', completed_at: '', processing_started_at: '',
           appointment: null, checklist: (wt ? wt.checklist : []).map(function () { return false; }),
-          note: '', pending: null, version: 1, syncing: true
+          note: '', pending: null, version: 1, collateral_mode: it.collateral_mode || 'NONE', parent_item_id: '', syncing: true
         });
       });
 
@@ -6106,6 +6168,18 @@ LS.screens = (function () {
             row.item_id = ids[idx] || tmp;
             row.request_id = result.request_id;
             row.syncing = false;
+          });
+          (result && result.linked_items || []).forEach(function (child) {
+            st().items.unshift({
+              item_id: child.item_id, request_id: result.request_id, parent_item_id: child.parent_item_id || '',
+              work_type_code: child.work_type_code, product_name: child.product_name,
+              occurrence_date: child.occurrence_date, status: child.status || 'CHO_TIEP_NHAN',
+              assigned_user_id: child.assigned_user_id || '', assigned_by: child.assigned_by || '',
+              submitted_at: child.submitted_at || '', accepted_at: child.accepted_at || '', assigned_at: child.assigned_at || '',
+              due_at: child.due_at || '', completed_at: child.completed_at || '', processing_started_at: child.processing_started_at || '',
+              appointment: null, checklist: child.checklist || [], note: child.note || '', pending: null,
+              version: Number(child.version) || 1, collateral_mode: child.collateral_mode || 'MOI', syncing: false
+            });
           });
           LS.app.render();
           ui.toast('Đã gửi ' + (ids.length || payload.items.length) + ' việc sang LS.', 'ok');
@@ -6145,9 +6219,24 @@ LS.screens = (function () {
         status: 'CHO_TIEP_NHAN', assigned_user_id: '', assigned_by: '',
         submitted_at: U.now(), accepted_at: '', assigned_at: '', due_at: '', completed_at: '', processing_started_at: '',
         appointment: null, checklist: (wt ? wt.checklist : []).map(function () { return false; }),
-        note: '', pending: null, version: 1
+        note: '', pending: null, version: 1, collateral_mode: rowCollateralMode(row, wt), parent_item_id: ''
       });
       logEvent(id, 'TAO_VIEC', unitName(u.unit_id) + ' đăng ký yêu cầu.');
+      if (rowCollateralMode(row, wt) === 'MOI') {
+        var collateralType = U.byId(st().workTypes, 'code', 'LEGACY_26');
+        if (collateralType) {
+          var childId = U.uid('ITEM');
+          st().items.unshift({
+            item_id: childId, request_id: reqId, parent_item_id: id, work_type_code: collateralType.code,
+            product_name: collateralType.name, occurrence_date: date.value, status: 'CHO_TIEP_NHAN',
+            assigned_user_id: '', assigned_by: '', submitted_at: U.now(), accepted_at: '', assigned_at: '', due_at: '',
+            completed_at: '', processing_started_at: '', appointment: null,
+            checklist: (collateralType.checklist || []).map(function () { return false; }), note: '', pending: null,
+            version: 1, collateral_mode: 'MOI'
+          });
+          logEvent(childId, 'TAO_VIEC', 'Tạo hồ sơ TSBĐ mới đi kèm việc ' + id + '.');
+        }
+      }
       n += 1;
     });
 
@@ -6197,7 +6286,7 @@ LS.screens = (function () {
     headerSummary: headerSummary,
     detail: detail, saveChecklistToggle: saveChecklistToggle, addLinked: addLinked, toggleLinkedBox: toggleLinkedBox, flow: flow, quickAssign: quickAssign, submitFlow: submitFlow,
     editItem: editItem, submitEdit: submitEdit, revision: revision,
-    newRequest: newRequest, submitNewRequest: submitNewRequest, rowForm: rowForm, syncProductOptions: syncProductOptions,
+    newRequest: newRequest, submitNewRequest: submitNewRequest, rowForm: rowForm, syncProductOptions: syncProductOptions, syncCollateralMode: syncCollateralMode,
     exportCsv: exportCsv, downloadDailyImage: downloadDailyImage, exportBoard: exportBoard, sweepOverdue: sweepOverdue,
     visibleItems: visibleItems, setFilter: setFilter, toggleSort: toggleSort, resetFilters: resetFilters, resetFilter: resetFilter, openFilter: openFilter, setDraftFilter: setDraftFilter, applyFilter: applyFilter, applyReportFilter: applyReportFilter,
     staffList: staffList, userName: userName, unitName: unitName, itemLabel: itemLabel, itemRef: itemRef,
@@ -8502,6 +8591,11 @@ LS.app = (function () {
 
     if (t.getAttribute('data-role') === 'work-type-group') {
       S.syncProductOptions(t);
+      return;
+    }
+
+    if (t.getAttribute('data-role') === 'work-type-product') {
+      S.syncCollateralMode(t);
       return;
     }
 
