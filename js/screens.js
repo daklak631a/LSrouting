@@ -237,12 +237,11 @@ LS.screens = (function () {
           x.avgTotalHours === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.avgTotalHours.toFixed(1) + '</span>',
           x.onTime === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '%</span>'
         ] }; }),
-        { icon: 'users', title: 'Chưa có dữ liệu cán bộ LS', text: 'Chọn kỳ khác hoặc thêm cán bộ trong Quản trị hệ thống.' }
+        { icon: 'users', title: 'Chưa có dữ liệu cán bộ LS', text: '' }
       ) + (report.workload && report.workload.groups.length ? '<div style="margin-top:1rem">' + ui.sectionTitle('Số lượng theo cán bộ và nhóm việc') +
-        '<p class="t2">Đếm toàn bộ việc phát sinh trong kỳ, kể cả cán bộ chưa có việc; không tự chuyển các việc đang mở khi cán bộ nghỉ.</p>' +
         ui.table([{ label: 'Cán bộ LS' }].concat(report.workload.groups.map(function (g) { return { label: g, cls: 'num' }; })).concat([{ label: 'Tổng', cls: 'num' }]),
           report.workload.rows.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.user.full_name) + '</div>'].concat(report.workload.groups.map(function (g) { return '<span class="tid">' + Number(x.byGroup[g] || 0) + '</span>'; })).concat(['<span class="tid">' + x.total + '</span>']) }; }),
-          { icon: 'users', title: 'Chưa có cán bộ LS', text: 'Thêm cán bộ trong Quản trị hệ thống.' }) + '</div>' : '') : '');
+          { icon: 'users', title: 'Chưa có cán bộ LS', text: '' }) + '</div>' : '') : '');
     return ui.block({
       title: 'Kết quả thực hiện', icon: 'chart',
       filters: filtersHtml,
@@ -319,9 +318,9 @@ LS.screens = (function () {
       rows: groupNames.map(function (g) { return { label: g }; }),
       series: [{ name: 'Phát sinh', values: groupNames.map(function (g) { return byGroup[g]; }) }]
     });
-    return ui.block({ title: 'Tổng hợp theo loại việc', icon: 'activity', note: 'Số liệu theo ngày phát sinh trong kỳ đã chọn.', body: chart + ui.table(
+    return ui.block({ title: 'Tổng hợp theo loại việc', icon: 'activity', body: chart + ui.table(
       [{ label: 'Loại việc' }, { label: 'Phát sinh', cls: 'num' }, { label: 'Đã phân công', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }], rows,
-      { icon: 'activity', title: 'Chưa có hồ sơ trong kỳ', text: 'Chọn kỳ khác rồi bấm Tìm kiếm.' }) });
+      { icon: 'activity', title: 'Chưa có hồ sơ trong kỳ', text: '' }) });
   }
 
   /** Dải số liệu gọn trên thanh đầu; không lặp lại trong thân màn hình. */
@@ -626,7 +625,7 @@ LS.screens = (function () {
   function openFilter(screen) {
     var opts = filterOptions(screen);
     filterDraft = { screen: screen, values: Object.assign({}, filters[screen] || {}) };
-    ui.openDialog('Bộ lọc', filterFields(screen, opts) + '<div class="form-end"><button type="button" class="btn btn-quiet" data-act="reset-filter" data-screen="' + U.attr(screen) + '">Xóa lọc</button><button type="button" class="btn btn-primary" data-act="apply-filter" data-screen="' + U.attr(screen) + '">Áp dụng</button></div>', { size: 'md', sub: 'Chọn điều kiện, sau đó bấm Áp dụng.' });
+    ui.openDialog('Bộ lọc', filterFields(screen, opts) + '<div class="form-end"><button type="button" class="btn btn-quiet" data-act="reset-filter" data-screen="' + U.attr(screen) + '">Xóa lọc</button><button type="button" class="btn btn-primary" data-act="apply-filter" data-screen="' + U.attr(screen) + '">Áp dụng</button></div>', { size: 'md' });
   }
 
   function applyFilters(screen, list) {
@@ -874,8 +873,7 @@ LS.screens = (function () {
     var late = open.filter(function (i) { var s = D.sla(i, st()); return s && s.late; });
     var fix = all.filter(function (i) { return i.status === 'CAN_BO_SUNG'; });
 
-    return (fix.length ? ui.banner('warn', fix.length + ' việc đang chờ đơn vị bổ sung',
-        'Kiểm soát đã trả lại. Mở chi tiết để xem lý do rồi gửi lại LS.') : '') +
+    return (fix.length ? ui.banner('warn', fix.length + ' việc đang chờ đơn vị bổ sung', 'Kiểm soát đã trả lại.') : '') +
       ui.block({
         title: 'Danh sách đã phân bổ', count: list.length + '/' + all.length, icon: 'clipboard',
         actions: u.role === 'PHONG_PGD' ? ui.btn('Tạo việc mới', { kind: 'primary', act: 'new-request', icon: 'plus', sm: true }) : '',
@@ -883,7 +881,7 @@ LS.screens = (function () {
         body: itemTable(list, ['code', 'customer', 'contact', 'work', 'date', 'status', 'staff', 'act'], {
           icon: 'clipboard',
           title: all.length ? 'Không có việc khớp bộ lọc' : 'Đơn vị chưa gửi việc nào',
-          text: all.length ? 'Thử xóa bớt điều kiện lọc.' : 'Bấm tạo việc mới để đăng ký hồ sơ đầu tiên cho khách.',
+          text: '',
           action: !all.length && u.role === 'PHONG_PGD' ? ui.btn('Tạo việc mới', { kind: 'primary', act: 'new-request', icon: 'plus' }) : ''
         }, 'work')
       });
@@ -927,7 +925,7 @@ LS.screens = (function () {
     var warn = backlog.length
       ? ui.banner('warn', backlog.length + ' việc còn mở nằm trước kỳ đang xem',
         'Chúng phát sinh từ ' + U.fmtDate(backlog.map(function (i) { return i.occurrence_date; }).sort()[0]) +
-        ' và chưa đóng. Bấm để mở rộng kỳ xem.') +
+         ' và chưa đóng.') +
         '<div style="margin:-0.5rem 0 0.75rem">' +
         ui.btn('Xem cả việc tồn', { act: 'room-backlog', icon: 'history', sm: true, kind: 'line' }) + '</div>'
       : '';
@@ -937,7 +935,7 @@ LS.screens = (function () {
       note: '',
       filters: listToolbar('room', { status: true, type: true, staff: true, dates: true }, true),
       body: itemTable(list, ['code', 'customer', 'work', 'staff', 'sla', 'status', 'act'], {
-        icon: 'building', title: 'Phòng chưa có hồ sơ trong kỳ', text: 'Chọn ngày tương lai khác hoặc gửi hồ sơ mới.'
+        icon: 'building', title: 'Phòng chưa có hồ sơ trong kỳ', text: ''
       }, 'room')
     });
   }
@@ -971,11 +969,11 @@ LS.screens = (function () {
       body: roomCharts(current, range, byStaff) + ui.sectionTitle('Theo nhóm cấp độ / loại việc') + ui.table(
         [{ label: 'Loại việc' }, { label: 'Tổng', cls: 'num' }, { label: 'Đang mở', cls: 'num' }],
         byType.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.name) + '</div>', '<span class="tid">' + x.n + '</span>', '<span class="tid">' + x.open + '</span>'] }; }),
-        { icon: 'chart', title: 'Chưa có nhóm việc trong kỳ', text: 'Chưa có hồ sơ phù hợp khoảng ngày.' }
+        { icon: 'chart', title: 'Chưa có nhóm việc trong kỳ', text: '' }
       ) + '<div style="margin-top:1.25rem">' + ui.sectionTitle('LS đang xử lý cho phòng') + ui.table(
         [{ label: 'Cán bộ LS' }, { label: 'Tổng việc', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }],
         byStaff.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.s.full_name) + '</div>', '<span class="tid">' + x.n + '</span>', '<span class="tid">' + x.open + '</span>', '<span class="tid">' + x.done + '</span>'] }; }),
-        { icon: 'users', title: 'Chưa có LS xử lý cho phòng', text: 'Hồ sơ sẽ xuất hiện sau khi kiểm soát phân công.' }
+        { icon: 'users', title: 'Chưa có LS xử lý cho phòng', text: '' }
       ) + '</div>'
     });
   }
@@ -1132,7 +1130,6 @@ LS.screens = (function () {
     if (pending.length) {
       out += ui.block({
         title: 'Đề nghị sửa chờ duyệt', count: pending.length, icon: 'pencil',
-        note: 'Phòng gửi việc đã sửa hồ sơ sau khi LS nhận. Duyệt thì thay đổi mới có hiệu lực.',
         body: ui.table(
           [{ label: 'Mã việc', cls: 'fit' }, { label: 'Người đề nghị' }, { label: 'Nội dung thay đổi' }, { label: 'Lý do' }, { label: '', cls: 'fit' }],
           pending.map(function (i) {
@@ -1155,10 +1152,10 @@ LS.screens = (function () {
 
     out += ui.block({
       title: 'Hàng chờ & đang xử lý', count: filtered.length + '/' + source.length, icon: 'activity',
-      note: todayCount || nextCount ? 'Ưu tiên trên cùng: <b>' + todayCount + '</b> việc hôm nay (nền xanh), <b>' + nextCount + '</b> việc T+1, sau đó các ngày còn lại.' : '',
+      note: '',
       filters: '<div class="queue-toolbar">' + queueTabs(tab, counts) + '<div class="queue-tools">' + listSearch('queue') + filterBar('queue', { status: true, type: true, staff: true, dates: true }) + sortControl('queue') + '</div></div>' + unitChips,
       body: itemTable(page.rows, tab === 'intake' || tab === 'assign' ? ['code', 'customer', 'unit', 'work', 'date', 'status', 'act'] : ['code', 'customer', 'unit', 'work', 'date', 'staff', 'sla', 'status', 'act'], {
-        icon: 'activity', title: 'Không có hồ sơ trong trang này', text: 'Đổi tab, kỳ ngày hoặc bộ lọc để xem danh sách khác.'
+        icon: 'activity', title: 'Không có hồ sơ trong trang này', text: ''
       }, 'queue') + pageControls(page)
     });
 
@@ -1189,14 +1186,13 @@ LS.screens = (function () {
     var late = open.filter(function (i) { var s = D.sla(i, st()); return s && s.late; });
     var fresh = all.filter(function (i) { return i.status === 'DA_PHAN_CONG'; });
 
-    return (late.length ? ui.banner('danger', late.length + ' việc đã quá hạn xử lý',
-        'Cập nhật tiến độ hoặc báo vướng mắc để kiểm soát biết.') : '') +
+    return (late.length ? ui.banner('danger', late.length + ' việc đã quá hạn xử lý', '') : '') +
       ui.block({
         title: 'Việc được giao', count: list.length + '/' + all.length, icon: 'briefcase',
         filters: listToolbar('mine', { status: true, type: true }, true),
         // Bỏ cột cán bộ: mọi dòng ở đây đều là việc của chính người đang xem.
         body: itemTable(list, ['code', 'customer', 'contact', 'work', 'progress', 'time', 'status', 'act'], {
-          icon: 'briefcase', title: 'Chưa có việc nào được giao', text: 'Kiểm soát LS sẽ phân công việc cho bạn từ hàng chờ.'
+          icon: 'briefcase', title: 'Chưa có việc nào được giao', text: ''
         }, 'mine')
       });
   }
@@ -1234,7 +1230,6 @@ LS.screens = (function () {
     }, 0);
     var rows = touched.slice().sort(function (a, b) { return new Date(b.completed_at || b.processing_started_at || 0) - new Date(a.completed_at || a.processing_started_at || 0); }).slice(0, 30);
     return ui.block({ title: 'Dashboard cá nhân', count: U.fmtDate(today), icon: 'chart',
-      note: 'Chỉ hiển thị việc của ' + U.esc(u.full_name) + '. Giờ xử lý đã loại trừ 11:30–13:30 và 18:00–07:30.',
       body: ui.strip([
         ui.metric('Hoàn thành hôm nay', doneToday.length, 'ok'),
         ui.metric('Đang mở', running.length, 'info'),
@@ -1248,7 +1243,7 @@ LS.screens = (function () {
           '<div class="t2">' + U.esc(wtName(i.work_type_code)) + '</div>', ui.statusTag(i.status),
           '<span class="tid">' + U.esc(D.processingLabel(i, st(), now)) + '</span>'
         ] }; }),
-        { icon: 'briefcase', title: 'Chưa có hoạt động hôm nay', text: 'Khi bạn bấm “Bắt đầu xử lý”, thời gian làm việc sẽ được ghi nhận tại đây.' }) + '</div>'
+        { icon: 'briefcase', title: 'Chưa có hoạt động hôm nay', text: '' }) + '</div>'
     });
   }
 
@@ -1323,7 +1318,7 @@ LS.screens = (function () {
     var panels = {
       type: function () { return typeSummaryBlock(report.range); },
       staff: function () { return ui.block({
-        title: 'Tải việc theo cán bộ', icon: 'users', note: 'Ảnh chụp hiện tại, không phụ thuộc kỳ đang chọn.',
+        title: 'Tải việc theo cán bộ', icon: 'users',
         body: ui.table(
           [{ label: 'Cán bộ' }, { label: 'Đang mở', cls: 'num' }, { label: 'Phân bổ' }, { label: 'Quá hạn', cls: 'num' }, { label: 'Đã xong', cls: 'num' }],
           load.map(function (x) {
@@ -1338,11 +1333,11 @@ LS.screens = (function () {
               ]
             };
           }),
-          { icon: 'users', title: 'Chưa có cán bộ LS đang hoạt động', text: 'Thêm cán bộ trong màn quản trị người dùng.' }
+          { icon: 'users', title: 'Chưa có cán bộ LS đang hoạt động', text: '' }
         )
       }); },
       unit: function () { return ui.block({
-        title: 'Theo đơn vị gửi', icon: 'building', note: 'Hồ sơ có ngày phát sinh trong kỳ đã chọn.',
+        title: 'Theo đơn vị gửi', icon: 'building',
         body: LS.charts.bars({
           title: 'Hồ sơ theo đơn vị gửi', sub: reportLabel(report.range), labelHead: 'Đơn vị', sort: true,
           rows: byUnit.map(function (x) { return { label: x.unit.name }; }),
@@ -1366,7 +1361,7 @@ LS.screens = (function () {
         )
       }); },
       status: function () { return ui.block({
-        title: 'Phân bố trạng thái', icon: 'activity', note: 'Ảnh chụp hiện tại, xếp theo thứ tự của luồng xử lý.',
+        title: 'Phân bố trạng thái', icon: 'activity',
         body: LS.charts.bars({
           title: 'Số việc ở từng trạng thái', labelHead: 'Trạng thái',
           rows: spread.map(function (x) { return { label: D.STATUS[x.k].label }; }),
@@ -1410,17 +1405,16 @@ LS.screens = (function () {
 
     return (thieuKho.length
       ? ui.banner('warn', thieuKho.length + ' kỳ chưa tạo được kho Sheet kế hoạch',
-        'Kỳ ' + thieuKho.map(function (p) { return U.esc(p.month_key || p.period_id); }).join(', ') +
-        ' chưa có file. Hệ thống thử lại mỗi giờ; nếu vẫn không có, chạy setupFirstMonthlyPlan() trong Apps Script để đọc lỗi cụ thể.')
+        'Kỳ ' + thieuKho.map(function (p) { return U.esc(p.month_key || p.period_id); }).join(', ') + '.')
       : '') +
       ui.block({
       title: 'Kế hoạch tháng', icon: 'calendar',
       actions: canCreate ? ui.btn('Tạo tháng kế tiếp', { act: 'create-next-monthly-plan', icon: 'plus', sm: true }) : '',
-      note: active.name ? 'Đang xem: ' + U.esc(active.name) + '. Kỳ đã tạo trước chỉ tự kích hoạt từ ngày đầu tháng.' : 'Chưa có kỳ hoạt động.',
+      note: active.name ? 'Đang xem: ' + U.esc(active.name) : '',
       body: ui.table(
         [{ label: 'Kỳ' }, { label: 'Thời gian' }, { label: 'Trạng thái' }, { label: 'Google Sheet' }],
         rows,
-        { icon: 'calendar', title: 'Chưa có lịch sử kỳ tháng', text: canCreate ? 'Tạo kế hoạch tháng kế tiếp để hệ thống chuẩn bị Sheet và chuyển tiếp việc đang mở.' : 'Kỳ tháng sẽ xuất hiện sau khi quản trị tạo.' }
+        { icon: 'calendar', title: 'Chưa có lịch sử kỳ tháng', text: '' }
       )
     });
   }
@@ -1498,13 +1492,13 @@ LS.screens = (function () {
       title: 'Phạm vi báo cáo', icon: 'calendar',
       actions: ui.btn(running ? 'Đang chạy…' : 'Chạy báo cáo', { act: 'report-run', sm: true, kind: 'primary', icon: 'play', disabled: running }) +
         (reportCache && reportCache.data ? ui.btn('Tải Excel', { act: 'report-export', sm: true, icon: 'file' }) : ''),
-      note: 'Chọn phạm vi rồi bấm Chạy báo cáo — đổi ô lọc không tự tải. Việc kéo dài nhiều tháng chỉ được tính một lần, ở tháng nó phát sinh.',
+      note: '',
       body: ui.pad(controls)
     });
 
     if (running) {
       return head + ui.block({ title: 'Đang tổng hợp', icon: 'chart',
-        body: ui.empty({ icon: 'chart', title: 'Đang tổng hợp số liệu', text: 'Máy chủ đang gộp dữ liệu của ' + o.from + ' đến ' + o.to + '.' }) });
+        body: ui.empty({ icon: 'chart', title: 'Đang tổng hợp số liệu', text: '' }) });
     }
     if (reportCache && reportCache.error) {
       return head + ui.banner('danger', 'Không lấy được báo cáo', reportCache.error);
@@ -1513,12 +1507,11 @@ LS.screens = (function () {
     var data = reportCache && reportCache.data;
     if (!data) {
       return head + ui.block({ title: 'Chưa chạy báo cáo', icon: 'chart',
-        body: ui.empty({ icon: 'chart', title: 'Chọn phạm vi rồi bấm Chạy báo cáo', text: 'Báo cáo chỉ tổng hợp khi bạn yêu cầu, để không bắt máy chủ gộp dữ liệu mỗi lần mở màn.',
+        body: ui.empty({ icon: 'chart', title: 'Chưa có dữ liệu báo cáo', text: '',
           action: ui.btn('Chạy báo cáo', { kind: 'primary', act: 'report-run', icon: 'play' }) }) });
     }
     var shown = String(reportCache.key).split('|');
-    var staleNote = stale ? ui.banner('warn', 'Đang hiện kết quả cũ: ' + shown[0] + ' → ' + shown[1],
-      'Bộ lọc đã đổi. Bấm Chạy báo cáo để tổng hợp theo phạm vi mới.') : '';
+    var staleNote = stale ? ui.banner('warn', 'Kết quả cũ: ' + shown[0] + ' → ' + shown[1], '') : '';
     var t = data.total;
 
     var strip = ui.strip([
@@ -1574,7 +1567,7 @@ LS.screens = (function () {
             '<span class="tid">' + (r.gio_toan_trinh_tb ? r.gio_toan_trinh_tb + 'h' : '—') + '</span>'
           ] };
         }),
-        { icon: 'chart', title: 'Chưa có việc nào trong khoảng này', text: 'Đổi khoảng thời gian rồi xem lại.' }
+        { icon: 'chart', title: 'Chưa có việc nào trong khoảng này', text: '' }
       )
     });
 
@@ -1594,7 +1587,7 @@ LS.screens = (function () {
             '<span class="tid">' + num(m.ton_cuoi_ky) + '</span>'
           ] };
         }),
-        { icon: 'calendar', title: 'Chưa có kỳ nào', text: 'Khoảng đã chọn chưa có kỳ kế hoạch nào.' }
+        { icon: 'calendar', title: 'Chưa có kỳ nào', text: '' }
       )
     });
 
@@ -1710,7 +1703,7 @@ LS.screens = (function () {
             ]
           };
         }),
-        { icon: 'history', title: 'Không có sự kiện trong kỳ đã chọn', text: 'Đổi kỳ báo cáo hoặc xóa từ khóa tìm kiếm.' }
+        { icon: 'history', title: 'Không có sự kiện trong kỳ đã chọn', text: '' }
       )
     });
   }
@@ -1840,11 +1833,11 @@ LS.screens = (function () {
     var done = wt.checklist.filter(function (_, idx) { return values[idx] === true; }).length;
     var canTick = i.assigned_user_id === u.user_id || ['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1;
     return '<div style="margin-top:1.125rem">' + ui.sectionTitle('Việc cần làm') +
-      '<p class="t2">Đã hoàn thành ' + done + '/' + wt.checklist.length + ' nhóm. Tích từng nhóm để ghi nhận phần việc.</p>' +
+      '<p class="t2">Đã hoàn thành ' + done + '/' + wt.checklist.length + ' nhóm.</p>' +
       '<div class="f-stack">' + wt.checklist.map(function (c, idx) {
         return '<label class="chan-check"><input type="checkbox" data-act="checklist-toggle" data-id="' + U.attr(i.item_id) + '" data-index="' + idx + '"' + (values[idx] === true ? ' checked' : '') + (canTick ? '' : ' disabled') + '><span>' + U.esc(c) + '</span></label>';
       }).join('') + '</div>' +
-      (done === wt.checklist.length ? ui.banner('ok', 'Đã ghi nhận đủ các nhóm việc', 'Bạn có thể bấm nút hoàn thành theo đúng bước của luồng để đóng toàn bộ hồ sơ.') : '') + '</div>';
+      (done === wt.checklist.length ? ui.banner('ok', 'Đã ghi nhận đủ các nhóm việc', '') : '') + '</div>';
   }
 
   function refreshChecklistBox(itemId) {
@@ -1954,8 +1947,7 @@ LS.screens = (function () {
     var kids = linkedChildren(i);
     var html = '';
     if (parent) {
-      html += ui.banner('info', 'Đây là việc kèm',
-        'Phát sinh trong lúc xử lý việc ' + itemRef(parent) + ' (' + productLabel(parent) + '). Được tính là một việc riêng.') ;
+      html += '<div class="t2">Việc kèm của ' + U.esc(itemRef(parent)) + '</div>';
       html += '<div class="form-end" style="margin-top:.5rem">' +
         ui.btn('Mở việc chính', { sm: true, act: 'detail', data: ' data-id="' + U.attr(parent.item_id) + '"' }) + '</div>';
     }
@@ -1973,7 +1965,6 @@ LS.screens = (function () {
         '<span>Có làm kèm hồ sơ TSĐB (tài sản mới) — tính thêm 1 việc</span></label>' +
         '<div data-linked-box hidden style="margin-top:.5rem">' +
         '<div class="f-row">' + ui.field('Sản phẩm TSĐB', ui.select('linked_type', opts.map(function (w) { return [w.code, w.name]; }), def.code, { attrs: ' data-role="linked-type"' })) + '</div>' +
-        '<p class="t2">Việc TSĐB được giao luôn cho ' + U.esc(userName(i.assigned_user_id) || 'cán bộ đang xử lý') + ' và bắt đầu tính giờ từ lúc thêm.</p>' +
         '<div class="form-end">' + ui.btn('Thêm việc TSĐB', { kind: 'primary', sm: true, act: 'add-linked', data: ' data-id="' + U.attr(i.item_id) + '"' }) + '</div></div>';
     }
     if (!html) return '';
@@ -2058,7 +2049,6 @@ LS.screens = (function () {
       var staff = staffList();
       if (!staff.length) { ui.toast('Chưa có cán bộ LS đang hoạt động.', 'err'); return; }
       var rec = assignmentRecommendation(i);
-      if (opts.quick && rec) body += '<div style="margin-top:.75rem">' + ui.banner('info', 'Đề xuất phân công nhanh', rec.user.full_name + (rec.replacementFor ? ' · thay cho ' + rec.replacementFor.full_name + ' đang nghỉ' : ' · theo cấu hình phụ trách') + (rec.rule && rec.rule.label ? ' — ' + rec.rule.label : '') + '. Bạn vẫn có thể đổi cán bộ trước khi lưu.') + '</div>';
       var loadRows = staff.map(function (x) {
         var load = staffLoad(x.user_id);
         return {
@@ -2107,8 +2097,7 @@ LS.screens = (function () {
         }).join('') + '</div></div>';
 
       body += reach.available.length
-        ? ui.banner('info', 'Tin cho khách cần bạn xác nhận trước khi gửi',
-          'Sau khi lưu, mở lại chi tiết việc để xem trước nội dung rồi mới bấm gửi.')
+        ? ''
         : ui.banner('warn', 'Khách chưa có email, Zalo hay số điện thoại',
           'Hệ thống sẽ nhắn vào nhóm Zalo nội bộ, gắn thẻ ' +
           (D.officerTag(i, st()) || userName(i.assigned_user_id) || 'cán bộ phụ trách') +
@@ -2129,6 +2118,15 @@ LS.screens = (function () {
     } else if (tr.note) {
       body += '<div style="margin-top:1rem">' +
         ui.field('Ghi chú kết quả', ui.textarea('reason', '', { placeholder: 'Tóm tắt kết quả xử lý' })) + '</div>';
+    }
+
+    if (to === 'HOAN_THANH_LS') {
+      body += '<div class="f" style="margin-top:1rem"><label>Thông báo sau khi hoàn thành</label>' +
+        '<div class="chip-row" role="radiogroup" aria-label="Cách thông báo sau khi hoàn thành">' +
+        '<label class="chip"><input type="radio" name="notification_mode" value="NONE"><span>' + U.icon('ban', 15) + 'Không gửi</span></label>' +
+        '<label class="chip"><input type="radio" name="notification_mode" value="IN_APP" checked><span>' + U.icon('bell', 15) + 'Thông báo cán bộ</span></label>' +
+        '<label class="chip"><input type="radio" name="notification_mode" value="DEFAULT"><span>' + U.icon('send', 15) + 'Theo quy tắc hệ thống</span></label>' +
+        '</div><span class="hint">Thông báo cán bộ chỉ hiện trong chuông của người nhận; không gửi Email, Zalo hay SMS.</span></div>';
     }
 
     body += ui.formEnd(tr.label, { danger: to === 'HUY' }) + '</form>';
@@ -2183,6 +2181,7 @@ LS.screens = (function () {
     }
     var ts = U.now();
     var reason = String(d.get('reason') || '').trim();
+    var notificationMode = to === 'HOAN_THANH_LS' ? String(d.get('notification_mode') || 'IN_APP') : 'DEFAULT';
 
     if (tr.reason && tr.reason !== 'free') {
       var code = String(d.get('reason_code') || '');
@@ -2259,7 +2258,7 @@ LS.screens = (function () {
       LS.app.background(
         LS.api.transitionItem(i.item_id, to, {
           reason: reason, assignee_id: assigneeId, appointment: appointment,
-          expected_version: expected
+          expected_version: expected, notification_mode: notificationMode
         }),
         {
           label: tr.label,
@@ -2282,7 +2281,7 @@ LS.screens = (function () {
     }
 
     logEvent(i.item_id, to, reason || tr.label);
-    var sent = tr.notify ? D.queueNotifications(i, tr.notify, st(), st().session) : [];
+    var sent = notificationMode === 'NONE' ? [] : (tr.notify ? D.queueNotifications(i, tr.notify, st(), st().session, notificationMode) : []);
     U.save();
     LS.app.render();
 

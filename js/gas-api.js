@@ -88,6 +88,20 @@ LS.api = (function () {
     out.events = raw.events || [];
     out.activePlan = raw.activePlan || null;
     out.monthlyPlans = raw.monthlyPlans || [];
+    out.operationalScorecardMeta = raw.operationalScorecardMeta || null;
+    out.operationalScorecard = (raw.operationalScorecard || []).map(function (x) {
+      return {
+        user: { user_id: x.user && x.user.user_id || '', full_name: x.user && x.user.full_name || '' },
+        eligible: Number(x.eligible) || 0, done: Number(x.done) || 0, timedDone: Number(x.timedDone) || 0,
+        onTime: Number(x.onTime) || 0,
+        lateOpen: Number(x.lateOpen) || 0, open: Number(x.open) || 0, score: x.score === null ? null : Number(x.score),
+        onTimeRate: x.onTimeRate === null ? null : Number(x.onTimeRate) || 0,
+        completionRate: x.completionRate === null ? null : Number(x.completionRate) || 0,
+        backlogRate: x.backlogRate === null ? null : Number(x.backlogRate) || 0,
+        dataQuality: x.dataQuality || ''
+      };
+    });
+    out.operationalScoreSnapshots = raw.operationalScoreSnapshots || [];
     out.inbox = (raw.inbox || []).map(function (n) {
       return { id: n.id, user_id: n.user_id, item_id: n.item_id, event: n.event, at: n.at, read: truth(n.is_read) };
     });
@@ -168,6 +182,9 @@ LS.api = (function () {
     testChannel: function (code, recipient) { return call('adminTestChannel', code, recipient); },
     changeOutbox: function (id, action) { return call('changeOutbox', id, action); },
     changePassword: function (current, next) { return call('changeOwnPassword', current, next); },
-    markInboxRead: function () { return call('markInboxRead'); }
+    resetUserPassword: function (userId, nextPassword) { return call('adminResetUserPassword', userId, nextPassword); },
+    markInboxRead: function (ids) {
+      return Array.isArray(ids) ? call('markInboxRead', ids) : call('markInboxRead');
+    }
   };
 })();

@@ -116,68 +116,49 @@ svg { display: block; flex: none; }
 /* ============================== Đăng nhập ============================== */
 
 .auth {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  grid-template-columns: minmax(0, 1.08fr) minmax(400px, 0.92fr);
 }
 
 .auth-side {
   position: relative;
-  padding: 3rem 3.5rem;
+  padding: clamp(2rem, 5vw, 4.5rem);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   color: #dff0ee;
   background:
-    radial-gradient(900px 520px at 80% 110%, rgba(255, 198, 47, 0.16), transparent 60%),
-    linear-gradient(158deg, var(--brand-900), var(--brand) 62%, var(--brand-600));
+    linear-gradient(90deg, rgba(3, 61, 63, .96), rgba(3, 82, 80, .86) 48%, rgba(4, 91, 87, .54)),
+    url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201440%20900%22%20role%3D%22img%22%20aria-label%3D%22Lu%E1%BB%93ng%20x%E1%BB%AD%20l%C3%BD%20h%E1%BB%93%20s%C6%A1%20t%C3%ADn%20d%E1%BB%A5ng%22%3E%0A%20%20%3Cdefs%3E%0A%20%20%20%20%3ClinearGradient%20id%3D%22panel%22%20x1%3D%220%22%20x2%3D%221%22%20y1%3D%220%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%230b817c%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23075f61%22%2F%3E%3C%2FlinearGradient%3E%0A%20%20%20%20%3ClinearGradient%20id%3D%22gold%22%20x1%3D%220%22%20x2%3D%221%22%3E%3Cstop%20stop-color%3D%22%23ffc62f%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23f5a900%22%2F%3E%3C%2FlinearGradient%3E%0A%20%20%3C%2Fdefs%3E%0A%20%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%23b9e5df%22%20stroke-opacity%3D%22.16%22%3E%3Cpath%20d%3D%22M760%20120h500M860%20220h380M680%20320h600M780%20420h500M740%20520h560M880%20620h350%22%2F%3E%3Cpath%20d%3D%22M1080%2060v690M900%20120v610M1260%20170v500%22%2F%3E%3C%2Fg%3E%0A%20%20%3Cpath%20d%3D%22M610%20695C790%20535%20830%20745%201012%20563s224%2052%20380-102%22%20fill%3D%22none%22%20stroke%3D%22url(%23gold)%22%20stroke-width%3D%227%22%20stroke-linecap%3D%22round%22%2F%3E%0A%20%20%3Cg%20transform%3D%22translate(790%20278)%22%3E%3Crect%20width%3D%22256%22%20height%3D%22184%22%20rx%3D%2218%22%20fill%3D%22url(%23panel)%22%20stroke%3D%22%2368b9ae%22%20stroke-opacity%3D%22.48%22%2F%3E%3Cpath%20d%3D%22M25%2066h67l16%2018h122v71H25z%22%20fill%3D%22%23e0f2ee%22%20fill-opacity%3D%22.95%22%2F%3E%3Cpath%20d%3D%22M25%2066h67l16%2018H25z%22%20fill%3D%22%23ffc62f%22%2F%3E%3Crect%20x%3D%2247%22%20y%3D%22112%22%20width%3D%22116%22%20height%3D%2210%22%20rx%3D%225%22%20fill%3D%22%230b7774%22%20opacity%3D%22.55%22%2F%3E%3Crect%20x%3D%2247%22%20y%3D%22135%22%20width%3D%2283%22%20height%3D%228%22%20rx%3D%224%22%20fill%3D%22%230b7774%22%20opacity%3D%22.35%22%2F%3E%3Ccircle%20cx%3D%22211%22%20cy%3D%2242%22%20r%3D%2219%22%20fill%3D%22%23ffc62f%22%2F%3E%3Cpath%20d%3D%22M204%2042l5%205%2010-12%22%20fill%3D%22none%22%20stroke%3D%22%23075f61%22%20stroke-width%3D%224%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fg%3E%0A%20%20%3Cg%20transform%3D%22translate(1080%20468)%22%3E%3Crect%20width%3D%22190%22%20height%3D%22150%22%20rx%3D%2217%22%20fill%3D%22%230b7674%22%20stroke%3D%22%238fd4ca%22%20stroke-opacity%3D%22.42%22%2F%3E%3Cpath%20d%3D%22M56%2077V60a39%2039%200%200%201%2078%200v17%22%20fill%3D%22none%22%20stroke%3D%22%23e5f6f2%22%20stroke-width%3D%2210%22%20stroke-linecap%3D%22round%22%2F%3E%3Crect%20x%3D%2241%22%20y%3D%2276%22%20width%3D%22108%22%20height%3D%2255%22%20rx%3D%229%22%20fill%3D%22%23e5f6f2%22%2F%3E%3Ccircle%20cx%3D%2295%22%20cy%3D%22101%22%20r%3D%228%22%20fill%3D%22%230a7673%22%2F%3E%3Cpath%20d%3D%22M95%20109v10%22%20stroke%3D%22%230a7673%22%20stroke-width%3D%226%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fg%3E%0A%20%20%3Cg%20transform%3D%22translate(650%20603)%22%3E%3Crect%20width%3D%22180%22%20height%3D%2292%22%20rx%3D%2216%22%20fill%3D%22%23076b6d%22%20stroke%3D%22%2371beb4%22%20stroke-opacity%3D%22.38%22%2F%3E%3Ccircle%20cx%3D%2242%22%20cy%3D%2246%22%20r%3D%2220%22%20fill%3D%22%23e0f2ee%22%2F%3E%3Cpath%20d%3D%22M33%2046h18M42%2037v18%22%20stroke%3D%22%2307716f%22%20stroke-width%3D%224%22%20stroke-linecap%3D%22round%22%2F%3E%3Crect%20x%3D%2276%22%20y%3D%2232%22%20width%3D%2270%22%20height%3D%229%22%20rx%3D%224.5%22%20fill%3D%22%23dff0ee%22%20opacity%3D%22.85%22%2F%3E%3Crect%20x%3D%2276%22%20y%3D%2252%22%20width%3D%2248%22%20height%3D%227%22%20rx%3D%223.5%22%20fill%3D%22%23dff0ee%22%20opacity%3D%22.42%22%2F%3E%3C%2Fg%3E%0A%3C%2Fsvg%3E%0A") center / cover no-repeat,
+    linear-gradient(145deg, var(--brand-900), var(--brand));
   overflow: hidden;
 }
 
-/* Vân nền mảnh, không phải gradient trang trí */
-.auth-side::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 100% 34px;
-  pointer-events: none;
-}
-
+.auth-side::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,.06), transparent 25%, transparent 76%, rgba(0,0,0,.12)); pointer-events: none; }
 .auth-side > * { position: relative; z-index: 1; }
-
-.auth-lead {
-  font-size: clamp(1.7rem, 2.6vw, 2.35rem);
-  font-weight: 700;
-  line-height: 1.16;
-  letter-spacing: -0.02em;
-  color: #fff;
-  max-width: 16ch;
-}
-
+.auth-brand { display: inline-flex; align-items: center; gap: .7rem; font-size: .86rem; font-weight: 700; letter-spacing: .03em; }
+.auth-brand .rail-mark { width: 42px; height: 42px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.auth-copy { max-width: 33rem; margin: auto 0; padding: 3rem 0; }
+.auth-eyebrow { margin-bottom: .7rem; color: var(--gold); font-size: .75rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.auth-lead { font-size: clamp(2rem, 3.25vw, 3.15rem); font-weight: 700; line-height: 1.08; letter-spacing: -.02em; color: #fff; max-width: 12ch; }
 .auth-lead em { font-style: normal; color: var(--gold); }
+.auth-summary { max-width: 42ch; margin-top: 1.15rem; color: #c6e4df; font-size: .94rem; line-height: 1.6; }
+.auth-highlights { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.5rem; }
+.auth-highlights span { padding: .36rem .62rem; border: 1px solid rgba(220,246,241,.28); border-radius: 999px; background: rgba(1,49,51,.24); color: #e5f6f2; font-size: .75rem; }
+.auth-note { font-size: .78rem; line-height: 1.5; color: #b4d8d2; max-width: 48ch; }
 
-.auth-steps { display: flex; flex-direction: column; gap: 0.85rem; margin-top: 1.75rem; max-width: 42ch; }
-
-.auth-step { display: flex; gap: 0.75rem; align-items: flex-start; font-size: 0.86rem; color: #c3ded9; }
-
-.auth-step b {
-  flex: none;
-  width: 22px; height: 22px;
-  display: grid; place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  border-radius: 50%;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #fff;
-}
-
-.auth-note { font-size: 0.76rem; color: #9ec6c1; max-width: 46ch; }
-
-.auth-main { display: grid; place-items: center; padding: 2.5rem 2rem; background: var(--surface); }
-.auth-form { width: 100%; max-width: 380px; }
-.auth-form h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.01em; }
-.auth-form > p { color: var(--ink-3); font-size: 0.85rem; margin-bottom: 1.5rem; }
+.auth-main { display: grid; place-items: center; padding: 2.5rem 2rem; background: #f4f8f7; }
+.auth-form { width: 100%; max-width: 410px; padding: clamp(1.5rem, 4vw, 2.5rem); border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 18px 50px rgba(10, 62, 59, .09); }
+.auth-form-kicker { display: flex; align-items: center; gap: .5rem; color: var(--brand-700); font-size: .78rem; font-weight: 700; }
+.auth-form-kicker svg { color: var(--gold-700); }
+.auth-form h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.01em; }
+.auth-form > p { color: var(--ink-3); font-size: .86rem; margin: .35rem 0 1.5rem; }
+.auth-form .btn-primary { width: 100%; justify-content: center; }
+.password-control { position: relative; }
+.password-control .input { padding-right: 2.8rem; }
+.password-toggle { position: absolute; top: 50%; right: .28rem; display: grid; place-items: center; width: 34px; height: 34px; transform: translateY(-50%); border-radius: var(--r-sm); color: var(--ink-4); }
+.password-toggle:hover { background: var(--brand-50); color: var(--brand-800); }
 
 .auth-divider {
   display: flex; align-items: center; gap: 0.75rem;
@@ -941,9 +922,12 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 @media (max-width: 760px) {
   .customer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .auth { grid-template-columns: 1fr; }
-  .auth-side { padding: 2rem 1.5rem; }
-  .auth-steps { display: none; }
+  .auth-side { min-height: 340px; padding: 2rem 1.5rem; background-position: 62% center; }
+  .auth-copy { padding: 2.5rem 0 1.25rem; }
+  .auth-lead { max-width: 13ch; }
+  .auth-summary, .auth-highlights { display: none; }
   .auth-main { padding: 1.75rem 1.25rem 3rem; }
+  .auth-form { max-width: 480px; }
 
   .shell { grid-template-columns: 1fr; }
   .rail { display: none; }
@@ -1154,7 +1138,7 @@ table.t tbody tr.row-next:not(.priority-urgent):not(.priority-vip):not(.priority
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <script>
-/* js/core.js?v=20260920-catalog-v2 */
+/* js/core.js?v=20260922-adminscore-v1 */
 /**
  * core.js — tiện ích dùng chung, bộ biểu tượng, kho dữ liệu.
  * Mọi module khác treo vào đối tượng LS.
@@ -1405,6 +1389,7 @@ var LS = (function () {
     trash: 'M4 7h16M9.5 7V5.2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V7M6.2 7l.9 12.1a1 1 0 0 0 1 .9h7.8a1 1 0 0 0 1-.9L17.8 7',
     pencil: 'M4 20.2h4.2L20 8.4 15.8 4.2 4 16zM14.4 5.6l4.2 4.2',
     eye: 'M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12zM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+    'eye-off': 'M3 3l18 18M10.6 6.1A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a16.8 16.8 0 0 1-3.2 3.8M6.2 6.2A16.7 16.7 0 0 0 2.5 12S6 18 12 18c1.2 0 2.3-.2 3.3-.6M9.7 9.7a3.2 3.2 0 0 0 4.5 4.5',
     arrow: 'M4 12h14.5M13 6.5l5.5 5.5-5.5 5.5',
     lock: 'M5.5 10.8h13V21h-13zM8.5 10.8V7.6a3.5 3.5 0 0 1 7 0v3.2',
     play: 'M7.5 4.8 19.5 12l-12 7.2z',
@@ -1493,7 +1478,7 @@ var LS = (function () {
   };
 })();
 
-/* js/domain.js?v=20260920-catalog-v2 */
+/* js/domain.js?v=20260922-adminscore-v1 */
 /**
  * domain.js — luật nghiệp vụ: vai trò, trạng thái, kênh gửi tin, mẫu tin, hàng đợi.
  * Không chạm DOM. Mọi thứ ở đây phải khớp Code.gs phía máy chủ.
@@ -2064,7 +2049,7 @@ LS.domain = (function () {
    * Không kênh nào dùng được thì vẫn tạo bản ghi KHONG_GUI kèm lý do —
    * im lặng bỏ qua là cách nhanh nhất để không ai biết tin đã không tới nơi.
    */
-  function queueNotifications(item, event, st, actorId) {
+  function queueNotifications(item, event, st, actorId, channelMode) {
     // Quy tắc có điều kiện: hẹn ký báo thẳng khách hay báo qua nhóm nội bộ
     // là hai đường loại trừ nhau, không phát cả hai.
     var viaGroup = !!(item.appointment && item.appointment.via_group);
@@ -2092,7 +2077,9 @@ LS.domain = (function () {
         var selected = event === 'DANG_HEN_KH' && item.appointment && !item.appointment.via_group
           ? item.appointment.channel : '';
         if (selected === 'ZALO') selected = 'ZBS';
-        var candidateChannels = selected && ['EMAIL', 'ZBS', 'SMS'].indexOf(selected) !== -1 ? [selected] : rule.channels;
+        var candidateChannels = channelMode === 'IN_APP'
+          ? ['IN_APP']
+          : (selected && ['EMAIL', 'ZBS', 'SMS'].indexOf(selected) !== -1 ? [selected] : rule.channels);
         var chosen = null, reason = '', address = '', tpl = null;
         for (var i = 0; i < candidateChannels.length; i++) {
           var code = candidateChannels[i];
@@ -2361,6 +2348,69 @@ LS.domain = (function () {
       if (item.status === 'HOAN_THANH_LS') row.done += 1;
     });
     return { groups: groups, rows: users.map(function (u) { return byUser[u.user_id]; }) };
+  }
+
+  /**
+   * Điểm vận hành tự tính từ dữ liệu công việc, không có bước nhập hay duyệt điểm.
+   * 60 điểm đúng hạn + 25 điểm hoàn thành + 15 điểm không để tồn quá hạn.
+   * Việc hủy và bản sao đã chuyển sang kỳ sau không làm lệch kết quả của cán bộ.
+   */
+  function operationalScorecard(fromDate, toDate, st, now) {
+    var from = dateOnly(fromDate), to = dateOnly(toDate);
+    var at = now instanceof Date ? now : new Date(now || U.now());
+    var users = (st.users || []).filter(function (u) {
+      return u.role === 'CAN_BO_LS' && u.active !== false && String(u.is_active).toLowerCase() !== 'false';
+    });
+    var byUser = {};
+    users.forEach(function (u) {
+      byUser[u.user_id] = { user: u, eligible: 0, done: 0, timedDone: 0, onTime: 0, lateOpen: 0, open: 0 };
+    });
+
+    (st.items || []).forEach(function (item) {
+      var day = dateOnly(item.occurrence_date || item.submitted_at);
+      var row = byUser[item.assigned_user_id];
+      if (!row || !day || (from && day < from) || (to && day > to) || item.status === 'HUY' || item.carried_to_item_id) return;
+
+      row.eligible += 1;
+      if (item.status === 'HOAN_THANH_LS') {
+        row.done += 1;
+        if (item.due_at && item.completed_at) {
+          row.timedDone += 1;
+          if (new Date(item.completed_at).getTime() <= new Date(item.due_at).getTime()) row.onTime += 1;
+        }
+      }
+      if (STATUS[item.status] && STATUS[item.status].open) {
+        row.open += 1;
+        if (item.due_at && at.getTime() > new Date(item.due_at).getTime()) row.lateOpen += 1;
+      }
+    });
+
+    return users.map(function (u) {
+      var row = byUser[u.user_id];
+      if (!row.eligible) return Object.assign(row, { score: null, onTimeRate: null, completionRate: null, backlogRate: null, dataQuality: 'NO_WORK' });
+      if (!row.timedDone) {
+        row.score = null;
+        row.onTimeRate = null;
+        row.completionRate = Math.round((row.done / row.eligible) * 100);
+        row.backlogRate = Math.round((row.open ? Math.max(0, 1 - row.lateOpen / row.open) : 1) * 100);
+        row.dataQuality = 'THIEU_HAN_SLA';
+        return row;
+      }
+      var onTimeRate = row.onTime / row.timedDone;
+      var completionRate = row.done / row.eligible;
+      var backlogRate = row.open ? Math.max(0, 1 - row.lateOpen / row.open) : 1;
+      row.onTimeRate = Math.round(onTimeRate * 100);
+      row.completionRate = Math.round(completionRate * 100);
+      row.backlogRate = Math.round(backlogRate * 100);
+      row.score = Math.round(60 * onTimeRate + 25 * completionRate + 15 * backlogRate);
+      row.dataQuality = row.timedDone === row.done ? 'OK' : 'THIEU_HAN_SLA';
+      return row;
+    }).sort(function (a, b) {
+      if (a.score === null && b.score === null) return String(a.user.full_name || '').localeCompare(String(b.user.full_name || ''));
+      if (a.score === null) return 1;
+      if (b.score === null) return -1;
+      return b.score - a.score || String(a.user.full_name || '').localeCompare(String(b.user.full_name || ''));
+    });
   }
 
   /**
@@ -2792,7 +2842,7 @@ LS.domain = (function () {
     addressFor: addressFor, templateFor: templateFor, emailUsedToday: emailUsedToday,
     REPORT_PRESETS: REPORT_PRESETS, presetRange: presetRange, monthsInRange: monthsInRange,
     reportFromItems: reportFromItems, monthKey: monthKey,
-    dateOnly: dateOnly, userOff: userOff, userAvailable: userAvailable, staffWorkloadByGroup: staffWorkloadByGroup,
+    dateOnly: dateOnly, userOff: userOff, userAvailable: userAvailable, staffWorkloadByGroup: staffWorkloadByGroup, operationalScorecard: operationalScorecard,
     VARS: VARS, FORBIDDEN: FORBIDDEN, TPL_STATUS: TPL_STATUS,
     NOTIFY_EVENTS: NOTIFY_EVENTS, AUDIENCE: AUDIENCE, OUT_STATUS: OUT_STATUS,
     label: label, tone: tone,
@@ -2805,7 +2855,7 @@ LS.domain = (function () {
   };
 })();
 
-/* js/gas-api.js?v=20260920-catalog-v2 */
+/* js/gas-api.js?v=20260922-adminscore-v1 */
 /**
  * Cầu nối duy nhất giữa giao diện và Apps Script.
  * Khi mở file trực tiếp, adapter tắt hoàn toàn để bản mô phỏng vẫn xem được.
@@ -2896,6 +2946,20 @@ LS.api = (function () {
     out.events = raw.events || [];
     out.activePlan = raw.activePlan || null;
     out.monthlyPlans = raw.monthlyPlans || [];
+    out.operationalScorecardMeta = raw.operationalScorecardMeta || null;
+    out.operationalScorecard = (raw.operationalScorecard || []).map(function (x) {
+      return {
+        user: { user_id: x.user && x.user.user_id || '', full_name: x.user && x.user.full_name || '' },
+        eligible: Number(x.eligible) || 0, done: Number(x.done) || 0, timedDone: Number(x.timedDone) || 0,
+        onTime: Number(x.onTime) || 0,
+        lateOpen: Number(x.lateOpen) || 0, open: Number(x.open) || 0, score: x.score === null ? null : Number(x.score),
+        onTimeRate: x.onTimeRate === null ? null : Number(x.onTimeRate) || 0,
+        completionRate: x.completionRate === null ? null : Number(x.completionRate) || 0,
+        backlogRate: x.backlogRate === null ? null : Number(x.backlogRate) || 0,
+        dataQuality: x.dataQuality || ''
+      };
+    });
+    out.operationalScoreSnapshots = raw.operationalScoreSnapshots || [];
     out.inbox = (raw.inbox || []).map(function (n) {
       return { id: n.id, user_id: n.user_id, item_id: n.item_id, event: n.event, at: n.at, read: truth(n.is_read) };
     });
@@ -2976,11 +3040,14 @@ LS.api = (function () {
     testChannel: function (code, recipient) { return call('adminTestChannel', code, recipient); },
     changeOutbox: function (id, action) { return call('changeOutbox', id, action); },
     changePassword: function (current, next) { return call('changeOwnPassword', current, next); },
-    markInboxRead: function () { return call('markInboxRead'); }
+    resetUserPassword: function (userId, nextPassword) { return call('adminResetUserPassword', userId, nextPassword); },
+    markInboxRead: function (ids) {
+      return Array.isArray(ids) ? call('markInboxRead', ids) : call('markInboxRead');
+    }
   };
 })();
 
-/* js/ui.js?v=20260920-catalog-v2 */
+/* js/ui.js?v=20260922-adminscore-v1 */
 /**
  * ui.js — thành phần giao diện dùng lại.
  * Trả về chuỗi HTML đã thoát ký tự; chỉ hộp thoại và thông báo nổi chạm DOM.
@@ -3267,7 +3334,7 @@ LS.ui = (function () {
   };
 })();
 
-/* js/charts.js?v=20260920-catalog-v2 */
+/* js/charts.js?v=20260922-adminscore-v1 */
 /**
  * charts.js — đồ thị dựng bằng HTML/CSS, không thư viện ngoài.
  *
@@ -3470,7 +3537,7 @@ LS.charts = (function () {
   return { columns: columns, bars: bars, buckets: buckets, bind: bind };
 })();
 
-/* js/screens.js?v=20260920-catalog-v2 */
+/* js/screens.js?v=20260922-adminscore-v1 */
 /**
  * screens.js — các màn hình vận hành: việc đã gửi, hàng chờ, việc của tôi, điều hành.
  * Kèm hộp thoại chi tiết việc, sửa việc, chuyển trạng thái và đăng ký việc mới.
@@ -3710,12 +3777,11 @@ LS.screens = (function () {
           x.avgTotalHours === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.avgTotalHours.toFixed(1) + '</span>',
           x.onTime === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '%</span>'
         ] }; }),
-        { icon: 'users', title: 'Chưa có dữ liệu cán bộ LS', text: 'Chọn kỳ khác hoặc thêm cán bộ trong Quản trị hệ thống.' }
+        { icon: 'users', title: 'Chưa có dữ liệu cán bộ LS', text: '' }
       ) + (report.workload && report.workload.groups.length ? '<div style="margin-top:1rem">' + ui.sectionTitle('Số lượng theo cán bộ và nhóm việc') +
-        '<p class="t2">Đếm toàn bộ việc phát sinh trong kỳ, kể cả cán bộ chưa có việc; không tự chuyển các việc đang mở khi cán bộ nghỉ.</p>' +
         ui.table([{ label: 'Cán bộ LS' }].concat(report.workload.groups.map(function (g) { return { label: g, cls: 'num' }; })).concat([{ label: 'Tổng', cls: 'num' }]),
           report.workload.rows.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.user.full_name) + '</div>'].concat(report.workload.groups.map(function (g) { return '<span class="tid">' + Number(x.byGroup[g] || 0) + '</span>'; })).concat(['<span class="tid">' + x.total + '</span>']) }; }),
-          { icon: 'users', title: 'Chưa có cán bộ LS', text: 'Thêm cán bộ trong Quản trị hệ thống.' }) + '</div>' : '') : '');
+          { icon: 'users', title: 'Chưa có cán bộ LS', text: '' }) + '</div>' : '') : '');
     return ui.block({
       title: 'Kết quả thực hiện', icon: 'chart',
       filters: filtersHtml,
@@ -3792,9 +3858,9 @@ LS.screens = (function () {
       rows: groupNames.map(function (g) { return { label: g }; }),
       series: [{ name: 'Phát sinh', values: groupNames.map(function (g) { return byGroup[g]; }) }]
     });
-    return ui.block({ title: 'Tổng hợp theo loại việc', icon: 'activity', note: 'Số liệu theo ngày phát sinh trong kỳ đã chọn.', body: chart + ui.table(
+    return ui.block({ title: 'Tổng hợp theo loại việc', icon: 'activity', body: chart + ui.table(
       [{ label: 'Loại việc' }, { label: 'Phát sinh', cls: 'num' }, { label: 'Đã phân công', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Quá hạn', cls: 'num' }], rows,
-      { icon: 'activity', title: 'Chưa có hồ sơ trong kỳ', text: 'Chọn kỳ khác rồi bấm Tìm kiếm.' }) });
+      { icon: 'activity', title: 'Chưa có hồ sơ trong kỳ', text: '' }) });
   }
 
   /** Dải số liệu gọn trên thanh đầu; không lặp lại trong thân màn hình. */
@@ -4099,7 +4165,7 @@ LS.screens = (function () {
   function openFilter(screen) {
     var opts = filterOptions(screen);
     filterDraft = { screen: screen, values: Object.assign({}, filters[screen] || {}) };
-    ui.openDialog('Bộ lọc', filterFields(screen, opts) + '<div class="form-end"><button type="button" class="btn btn-quiet" data-act="reset-filter" data-screen="' + U.attr(screen) + '">Xóa lọc</button><button type="button" class="btn btn-primary" data-act="apply-filter" data-screen="' + U.attr(screen) + '">Áp dụng</button></div>', { size: 'md', sub: 'Chọn điều kiện, sau đó bấm Áp dụng.' });
+    ui.openDialog('Bộ lọc', filterFields(screen, opts) + '<div class="form-end"><button type="button" class="btn btn-quiet" data-act="reset-filter" data-screen="' + U.attr(screen) + '">Xóa lọc</button><button type="button" class="btn btn-primary" data-act="apply-filter" data-screen="' + U.attr(screen) + '">Áp dụng</button></div>', { size: 'md' });
   }
 
   function applyFilters(screen, list) {
@@ -4347,8 +4413,7 @@ LS.screens = (function () {
     var late = open.filter(function (i) { var s = D.sla(i, st()); return s && s.late; });
     var fix = all.filter(function (i) { return i.status === 'CAN_BO_SUNG'; });
 
-    return (fix.length ? ui.banner('warn', fix.length + ' việc đang chờ đơn vị bổ sung',
-        'Kiểm soát đã trả lại. Mở chi tiết để xem lý do rồi gửi lại LS.') : '') +
+    return (fix.length ? ui.banner('warn', fix.length + ' việc đang chờ đơn vị bổ sung', 'Kiểm soát đã trả lại.') : '') +
       ui.block({
         title: 'Danh sách đã phân bổ', count: list.length + '/' + all.length, icon: 'clipboard',
         actions: u.role === 'PHONG_PGD' ? ui.btn('Tạo việc mới', { kind: 'primary', act: 'new-request', icon: 'plus', sm: true }) : '',
@@ -4356,7 +4421,7 @@ LS.screens = (function () {
         body: itemTable(list, ['code', 'customer', 'contact', 'work', 'date', 'status', 'staff', 'act'], {
           icon: 'clipboard',
           title: all.length ? 'Không có việc khớp bộ lọc' : 'Đơn vị chưa gửi việc nào',
-          text: all.length ? 'Thử xóa bớt điều kiện lọc.' : 'Bấm tạo việc mới để đăng ký hồ sơ đầu tiên cho khách.',
+          text: '',
           action: !all.length && u.role === 'PHONG_PGD' ? ui.btn('Tạo việc mới', { kind: 'primary', act: 'new-request', icon: 'plus' }) : ''
         }, 'work')
       });
@@ -4400,7 +4465,7 @@ LS.screens = (function () {
     var warn = backlog.length
       ? ui.banner('warn', backlog.length + ' việc còn mở nằm trước kỳ đang xem',
         'Chúng phát sinh từ ' + U.fmtDate(backlog.map(function (i) { return i.occurrence_date; }).sort()[0]) +
-        ' và chưa đóng. Bấm để mở rộng kỳ xem.') +
+         ' và chưa đóng.') +
         '<div style="margin:-0.5rem 0 0.75rem">' +
         ui.btn('Xem cả việc tồn', { act: 'room-backlog', icon: 'history', sm: true, kind: 'line' }) + '</div>'
       : '';
@@ -4410,7 +4475,7 @@ LS.screens = (function () {
       note: '',
       filters: listToolbar('room', { status: true, type: true, staff: true, dates: true }, true),
       body: itemTable(list, ['code', 'customer', 'work', 'staff', 'sla', 'status', 'act'], {
-        icon: 'building', title: 'Phòng chưa có hồ sơ trong kỳ', text: 'Chọn ngày tương lai khác hoặc gửi hồ sơ mới.'
+        icon: 'building', title: 'Phòng chưa có hồ sơ trong kỳ', text: ''
       }, 'room')
     });
   }
@@ -4444,11 +4509,11 @@ LS.screens = (function () {
       body: roomCharts(current, range, byStaff) + ui.sectionTitle('Theo nhóm cấp độ / loại việc') + ui.table(
         [{ label: 'Loại việc' }, { label: 'Tổng', cls: 'num' }, { label: 'Đang mở', cls: 'num' }],
         byType.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.name) + '</div>', '<span class="tid">' + x.n + '</span>', '<span class="tid">' + x.open + '</span>'] }; }),
-        { icon: 'chart', title: 'Chưa có nhóm việc trong kỳ', text: 'Chưa có hồ sơ phù hợp khoảng ngày.' }
+        { icon: 'chart', title: 'Chưa có nhóm việc trong kỳ', text: '' }
       ) + '<div style="margin-top:1.25rem">' + ui.sectionTitle('LS đang xử lý cho phòng') + ui.table(
         [{ label: 'Cán bộ LS' }, { label: 'Tổng việc', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }],
         byStaff.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.s.full_name) + '</div>', '<span class="tid">' + x.n + '</span>', '<span class="tid">' + x.open + '</span>', '<span class="tid">' + x.done + '</span>'] }; }),
-        { icon: 'users', title: 'Chưa có LS xử lý cho phòng', text: 'Hồ sơ sẽ xuất hiện sau khi kiểm soát phân công.' }
+        { icon: 'users', title: 'Chưa có LS xử lý cho phòng', text: '' }
       ) + '</div>'
     });
   }
@@ -4605,7 +4670,6 @@ LS.screens = (function () {
     if (pending.length) {
       out += ui.block({
         title: 'Đề nghị sửa chờ duyệt', count: pending.length, icon: 'pencil',
-        note: 'Phòng gửi việc đã sửa hồ sơ sau khi LS nhận. Duyệt thì thay đổi mới có hiệu lực.',
         body: ui.table(
           [{ label: 'Mã việc', cls: 'fit' }, { label: 'Người đề nghị' }, { label: 'Nội dung thay đổi' }, { label: 'Lý do' }, { label: '', cls: 'fit' }],
           pending.map(function (i) {
@@ -4628,10 +4692,10 @@ LS.screens = (function () {
 
     out += ui.block({
       title: 'Hàng chờ & đang xử lý', count: filtered.length + '/' + source.length, icon: 'activity',
-      note: todayCount || nextCount ? 'Ưu tiên trên cùng: <b>' + todayCount + '</b> việc hôm nay (nền xanh), <b>' + nextCount + '</b> việc T+1, sau đó các ngày còn lại.' : '',
+      note: '',
       filters: '<div class="queue-toolbar">' + queueTabs(tab, counts) + '<div class="queue-tools">' + listSearch('queue') + filterBar('queue', { status: true, type: true, staff: true, dates: true }) + sortControl('queue') + '</div></div>' + unitChips,
       body: itemTable(page.rows, tab === 'intake' || tab === 'assign' ? ['code', 'customer', 'unit', 'work', 'date', 'status', 'act'] : ['code', 'customer', 'unit', 'work', 'date', 'staff', 'sla', 'status', 'act'], {
-        icon: 'activity', title: 'Không có hồ sơ trong trang này', text: 'Đổi tab, kỳ ngày hoặc bộ lọc để xem danh sách khác.'
+        icon: 'activity', title: 'Không có hồ sơ trong trang này', text: ''
       }, 'queue') + pageControls(page)
     });
 
@@ -4662,14 +4726,13 @@ LS.screens = (function () {
     var late = open.filter(function (i) { var s = D.sla(i, st()); return s && s.late; });
     var fresh = all.filter(function (i) { return i.status === 'DA_PHAN_CONG'; });
 
-    return (late.length ? ui.banner('danger', late.length + ' việc đã quá hạn xử lý',
-        'Cập nhật tiến độ hoặc báo vướng mắc để kiểm soát biết.') : '') +
+    return (late.length ? ui.banner('danger', late.length + ' việc đã quá hạn xử lý', '') : '') +
       ui.block({
         title: 'Việc được giao', count: list.length + '/' + all.length, icon: 'briefcase',
         filters: listToolbar('mine', { status: true, type: true }, true),
         // Bỏ cột cán bộ: mọi dòng ở đây đều là việc của chính người đang xem.
         body: itemTable(list, ['code', 'customer', 'contact', 'work', 'progress', 'time', 'status', 'act'], {
-          icon: 'briefcase', title: 'Chưa có việc nào được giao', text: 'Kiểm soát LS sẽ phân công việc cho bạn từ hàng chờ.'
+          icon: 'briefcase', title: 'Chưa có việc nào được giao', text: ''
         }, 'mine')
       });
   }
@@ -4707,7 +4770,6 @@ LS.screens = (function () {
     }, 0);
     var rows = touched.slice().sort(function (a, b) { return new Date(b.completed_at || b.processing_started_at || 0) - new Date(a.completed_at || a.processing_started_at || 0); }).slice(0, 30);
     return ui.block({ title: 'Dashboard cá nhân', count: U.fmtDate(today), icon: 'chart',
-      note: 'Chỉ hiển thị việc của ' + U.esc(u.full_name) + '. Giờ xử lý đã loại trừ 11:30–13:30 và 18:00–07:30.',
       body: ui.strip([
         ui.metric('Hoàn thành hôm nay', doneToday.length, 'ok'),
         ui.metric('Đang mở', running.length, 'info'),
@@ -4721,7 +4783,7 @@ LS.screens = (function () {
           '<div class="t2">' + U.esc(wtName(i.work_type_code)) + '</div>', ui.statusTag(i.status),
           '<span class="tid">' + U.esc(D.processingLabel(i, st(), now)) + '</span>'
         ] }; }),
-        { icon: 'briefcase', title: 'Chưa có hoạt động hôm nay', text: 'Khi bạn bấm “Bắt đầu xử lý”, thời gian làm việc sẽ được ghi nhận tại đây.' }) + '</div>'
+        { icon: 'briefcase', title: 'Chưa có hoạt động hôm nay', text: '' }) + '</div>'
     });
   }
 
@@ -4796,7 +4858,7 @@ LS.screens = (function () {
     var panels = {
       type: function () { return typeSummaryBlock(report.range); },
       staff: function () { return ui.block({
-        title: 'Tải việc theo cán bộ', icon: 'users', note: 'Ảnh chụp hiện tại, không phụ thuộc kỳ đang chọn.',
+        title: 'Tải việc theo cán bộ', icon: 'users',
         body: ui.table(
           [{ label: 'Cán bộ' }, { label: 'Đang mở', cls: 'num' }, { label: 'Phân bổ' }, { label: 'Quá hạn', cls: 'num' }, { label: 'Đã xong', cls: 'num' }],
           load.map(function (x) {
@@ -4811,11 +4873,11 @@ LS.screens = (function () {
               ]
             };
           }),
-          { icon: 'users', title: 'Chưa có cán bộ LS đang hoạt động', text: 'Thêm cán bộ trong màn quản trị người dùng.' }
+          { icon: 'users', title: 'Chưa có cán bộ LS đang hoạt động', text: '' }
         )
       }); },
       unit: function () { return ui.block({
-        title: 'Theo đơn vị gửi', icon: 'building', note: 'Hồ sơ có ngày phát sinh trong kỳ đã chọn.',
+        title: 'Theo đơn vị gửi', icon: 'building',
         body: LS.charts.bars({
           title: 'Hồ sơ theo đơn vị gửi', sub: reportLabel(report.range), labelHead: 'Đơn vị', sort: true,
           rows: byUnit.map(function (x) { return { label: x.unit.name }; }),
@@ -4839,7 +4901,7 @@ LS.screens = (function () {
         )
       }); },
       status: function () { return ui.block({
-        title: 'Phân bố trạng thái', icon: 'activity', note: 'Ảnh chụp hiện tại, xếp theo thứ tự của luồng xử lý.',
+        title: 'Phân bố trạng thái', icon: 'activity',
         body: LS.charts.bars({
           title: 'Số việc ở từng trạng thái', labelHead: 'Trạng thái',
           rows: spread.map(function (x) { return { label: D.STATUS[x.k].label }; }),
@@ -4883,17 +4945,16 @@ LS.screens = (function () {
 
     return (thieuKho.length
       ? ui.banner('warn', thieuKho.length + ' kỳ chưa tạo được kho Sheet kế hoạch',
-        'Kỳ ' + thieuKho.map(function (p) { return U.esc(p.month_key || p.period_id); }).join(', ') +
-        ' chưa có file. Hệ thống thử lại mỗi giờ; nếu vẫn không có, chạy setupFirstMonthlyPlan() trong Apps Script để đọc lỗi cụ thể.')
+        'Kỳ ' + thieuKho.map(function (p) { return U.esc(p.month_key || p.period_id); }).join(', ') + '.')
       : '') +
       ui.block({
       title: 'Kế hoạch tháng', icon: 'calendar',
       actions: canCreate ? ui.btn('Tạo tháng kế tiếp', { act: 'create-next-monthly-plan', icon: 'plus', sm: true }) : '',
-      note: active.name ? 'Đang xem: ' + U.esc(active.name) + '. Kỳ đã tạo trước chỉ tự kích hoạt từ ngày đầu tháng.' : 'Chưa có kỳ hoạt động.',
+      note: active.name ? 'Đang xem: ' + U.esc(active.name) : '',
       body: ui.table(
         [{ label: 'Kỳ' }, { label: 'Thời gian' }, { label: 'Trạng thái' }, { label: 'Google Sheet' }],
         rows,
-        { icon: 'calendar', title: 'Chưa có lịch sử kỳ tháng', text: canCreate ? 'Tạo kế hoạch tháng kế tiếp để hệ thống chuẩn bị Sheet và chuyển tiếp việc đang mở.' : 'Kỳ tháng sẽ xuất hiện sau khi quản trị tạo.' }
+        { icon: 'calendar', title: 'Chưa có lịch sử kỳ tháng', text: '' }
       )
     });
   }
@@ -4971,13 +5032,13 @@ LS.screens = (function () {
       title: 'Phạm vi báo cáo', icon: 'calendar',
       actions: ui.btn(running ? 'Đang chạy…' : 'Chạy báo cáo', { act: 'report-run', sm: true, kind: 'primary', icon: 'play', disabled: running }) +
         (reportCache && reportCache.data ? ui.btn('Tải Excel', { act: 'report-export', sm: true, icon: 'file' }) : ''),
-      note: 'Chọn phạm vi rồi bấm Chạy báo cáo — đổi ô lọc không tự tải. Việc kéo dài nhiều tháng chỉ được tính một lần, ở tháng nó phát sinh.',
+      note: '',
       body: ui.pad(controls)
     });
 
     if (running) {
       return head + ui.block({ title: 'Đang tổng hợp', icon: 'chart',
-        body: ui.empty({ icon: 'chart', title: 'Đang tổng hợp số liệu', text: 'Máy chủ đang gộp dữ liệu của ' + o.from + ' đến ' + o.to + '.' }) });
+        body: ui.empty({ icon: 'chart', title: 'Đang tổng hợp số liệu', text: '' }) });
     }
     if (reportCache && reportCache.error) {
       return head + ui.banner('danger', 'Không lấy được báo cáo', reportCache.error);
@@ -4986,12 +5047,11 @@ LS.screens = (function () {
     var data = reportCache && reportCache.data;
     if (!data) {
       return head + ui.block({ title: 'Chưa chạy báo cáo', icon: 'chart',
-        body: ui.empty({ icon: 'chart', title: 'Chọn phạm vi rồi bấm Chạy báo cáo', text: 'Báo cáo chỉ tổng hợp khi bạn yêu cầu, để không bắt máy chủ gộp dữ liệu mỗi lần mở màn.',
+        body: ui.empty({ icon: 'chart', title: 'Chưa có dữ liệu báo cáo', text: '',
           action: ui.btn('Chạy báo cáo', { kind: 'primary', act: 'report-run', icon: 'play' }) }) });
     }
     var shown = String(reportCache.key).split('|');
-    var staleNote = stale ? ui.banner('warn', 'Đang hiện kết quả cũ: ' + shown[0] + ' → ' + shown[1],
-      'Bộ lọc đã đổi. Bấm Chạy báo cáo để tổng hợp theo phạm vi mới.') : '';
+    var staleNote = stale ? ui.banner('warn', 'Kết quả cũ: ' + shown[0] + ' → ' + shown[1], '') : '';
     var t = data.total;
 
     var strip = ui.strip([
@@ -5047,7 +5107,7 @@ LS.screens = (function () {
             '<span class="tid">' + (r.gio_toan_trinh_tb ? r.gio_toan_trinh_tb + 'h' : '—') + '</span>'
           ] };
         }),
-        { icon: 'chart', title: 'Chưa có việc nào trong khoảng này', text: 'Đổi khoảng thời gian rồi xem lại.' }
+        { icon: 'chart', title: 'Chưa có việc nào trong khoảng này', text: '' }
       )
     });
 
@@ -5067,7 +5127,7 @@ LS.screens = (function () {
             '<span class="tid">' + num(m.ton_cuoi_ky) + '</span>'
           ] };
         }),
-        { icon: 'calendar', title: 'Chưa có kỳ nào', text: 'Khoảng đã chọn chưa có kỳ kế hoạch nào.' }
+        { icon: 'calendar', title: 'Chưa có kỳ nào', text: '' }
       )
     });
 
@@ -5183,7 +5243,7 @@ LS.screens = (function () {
             ]
           };
         }),
-        { icon: 'history', title: 'Không có sự kiện trong kỳ đã chọn', text: 'Đổi kỳ báo cáo hoặc xóa từ khóa tìm kiếm.' }
+        { icon: 'history', title: 'Không có sự kiện trong kỳ đã chọn', text: '' }
       )
     });
   }
@@ -5313,11 +5373,11 @@ LS.screens = (function () {
     var done = wt.checklist.filter(function (_, idx) { return values[idx] === true; }).length;
     var canTick = i.assigned_user_id === u.user_id || ['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1;
     return '<div style="margin-top:1.125rem">' + ui.sectionTitle('Việc cần làm') +
-      '<p class="t2">Đã hoàn thành ' + done + '/' + wt.checklist.length + ' nhóm. Tích từng nhóm để ghi nhận phần việc.</p>' +
+      '<p class="t2">Đã hoàn thành ' + done + '/' + wt.checklist.length + ' nhóm.</p>' +
       '<div class="f-stack">' + wt.checklist.map(function (c, idx) {
         return '<label class="chan-check"><input type="checkbox" data-act="checklist-toggle" data-id="' + U.attr(i.item_id) + '" data-index="' + idx + '"' + (values[idx] === true ? ' checked' : '') + (canTick ? '' : ' disabled') + '><span>' + U.esc(c) + '</span></label>';
       }).join('') + '</div>' +
-      (done === wt.checklist.length ? ui.banner('ok', 'Đã ghi nhận đủ các nhóm việc', 'Bạn có thể bấm nút hoàn thành theo đúng bước của luồng để đóng toàn bộ hồ sơ.') : '') + '</div>';
+      (done === wt.checklist.length ? ui.banner('ok', 'Đã ghi nhận đủ các nhóm việc', '') : '') + '</div>';
   }
 
   function refreshChecklistBox(itemId) {
@@ -5427,8 +5487,7 @@ LS.screens = (function () {
     var kids = linkedChildren(i);
     var html = '';
     if (parent) {
-      html += ui.banner('info', 'Đây là việc kèm',
-        'Phát sinh trong lúc xử lý việc ' + itemRef(parent) + ' (' + productLabel(parent) + '). Được tính là một việc riêng.') ;
+      html += '<div class="t2">Việc kèm của ' + U.esc(itemRef(parent)) + '</div>';
       html += '<div class="form-end" style="margin-top:.5rem">' +
         ui.btn('Mở việc chính', { sm: true, act: 'detail', data: ' data-id="' + U.attr(parent.item_id) + '"' }) + '</div>';
     }
@@ -5446,7 +5505,6 @@ LS.screens = (function () {
         '<span>Có làm kèm hồ sơ TSĐB (tài sản mới) — tính thêm 1 việc</span></label>' +
         '<div data-linked-box hidden style="margin-top:.5rem">' +
         '<div class="f-row">' + ui.field('Sản phẩm TSĐB', ui.select('linked_type', opts.map(function (w) { return [w.code, w.name]; }), def.code, { attrs: ' data-role="linked-type"' })) + '</div>' +
-        '<p class="t2">Việc TSĐB được giao luôn cho ' + U.esc(userName(i.assigned_user_id) || 'cán bộ đang xử lý') + ' và bắt đầu tính giờ từ lúc thêm.</p>' +
         '<div class="form-end">' + ui.btn('Thêm việc TSĐB', { kind: 'primary', sm: true, act: 'add-linked', data: ' data-id="' + U.attr(i.item_id) + '"' }) + '</div></div>';
     }
     if (!html) return '';
@@ -5531,7 +5589,6 @@ LS.screens = (function () {
       var staff = staffList();
       if (!staff.length) { ui.toast('Chưa có cán bộ LS đang hoạt động.', 'err'); return; }
       var rec = assignmentRecommendation(i);
-      if (opts.quick && rec) body += '<div style="margin-top:.75rem">' + ui.banner('info', 'Đề xuất phân công nhanh', rec.user.full_name + (rec.replacementFor ? ' · thay cho ' + rec.replacementFor.full_name + ' đang nghỉ' : ' · theo cấu hình phụ trách') + (rec.rule && rec.rule.label ? ' — ' + rec.rule.label : '') + '. Bạn vẫn có thể đổi cán bộ trước khi lưu.') + '</div>';
       var loadRows = staff.map(function (x) {
         var load = staffLoad(x.user_id);
         return {
@@ -5580,8 +5637,7 @@ LS.screens = (function () {
         }).join('') + '</div></div>';
 
       body += reach.available.length
-        ? ui.banner('info', 'Tin cho khách cần bạn xác nhận trước khi gửi',
-          'Sau khi lưu, mở lại chi tiết việc để xem trước nội dung rồi mới bấm gửi.')
+        ? ''
         : ui.banner('warn', 'Khách chưa có email, Zalo hay số điện thoại',
           'Hệ thống sẽ nhắn vào nhóm Zalo nội bộ, gắn thẻ ' +
           (D.officerTag(i, st()) || userName(i.assigned_user_id) || 'cán bộ phụ trách') +
@@ -5602,6 +5658,15 @@ LS.screens = (function () {
     } else if (tr.note) {
       body += '<div style="margin-top:1rem">' +
         ui.field('Ghi chú kết quả', ui.textarea('reason', '', { placeholder: 'Tóm tắt kết quả xử lý' })) + '</div>';
+    }
+
+    if (to === 'HOAN_THANH_LS') {
+      body += '<div class="f" style="margin-top:1rem"><label>Thông báo sau khi hoàn thành</label>' +
+        '<div class="chip-row" role="radiogroup" aria-label="Cách thông báo sau khi hoàn thành">' +
+        '<label class="chip"><input type="radio" name="notification_mode" value="NONE"><span>' + U.icon('ban', 15) + 'Không gửi</span></label>' +
+        '<label class="chip"><input type="radio" name="notification_mode" value="IN_APP" checked><span>' + U.icon('bell', 15) + 'Thông báo cán bộ</span></label>' +
+        '<label class="chip"><input type="radio" name="notification_mode" value="DEFAULT"><span>' + U.icon('send', 15) + 'Theo quy tắc hệ thống</span></label>' +
+        '</div><span class="hint">Thông báo cán bộ chỉ hiện trong chuông của người nhận; không gửi Email, Zalo hay SMS.</span></div>';
     }
 
     body += ui.formEnd(tr.label, { danger: to === 'HUY' }) + '</form>';
@@ -5656,6 +5721,7 @@ LS.screens = (function () {
     }
     var ts = U.now();
     var reason = String(d.get('reason') || '').trim();
+    var notificationMode = to === 'HOAN_THANH_LS' ? String(d.get('notification_mode') || 'IN_APP') : 'DEFAULT';
 
     if (tr.reason && tr.reason !== 'free') {
       var code = String(d.get('reason_code') || '');
@@ -5732,7 +5798,7 @@ LS.screens = (function () {
       LS.app.background(
         LS.api.transitionItem(i.item_id, to, {
           reason: reason, assignee_id: assigneeId, appointment: appointment,
-          expected_version: expected
+          expected_version: expected, notification_mode: notificationMode
         }),
         {
           label: tr.label,
@@ -5755,7 +5821,7 @@ LS.screens = (function () {
     }
 
     logEvent(i.item_id, to, reason || tr.label);
-    var sent = tr.notify ? D.queueNotifications(i, tr.notify, st(), st().session) : [];
+    var sent = notificationMode === 'NONE' ? [] : (tr.notify ? D.queueNotifications(i, tr.notify, st(), st().session, notificationMode) : []);
     U.save();
     LS.app.render();
 
@@ -6139,7 +6205,7 @@ LS.screens = (function () {
   };
 })();
 
-/* js/admin.js?v=20260920-catalog-v2 */
+/* js/admin.js?v=20260922-adminscore-v1 */
 /**
  * admin.js — bảng quản trị: kênh gửi tin, mẫu tin, quy tắc thông báo, hàng đợi,
  * danh mục, lịch làm việc, cấu hình hệ thống và nhật ký cấu hình.
@@ -6252,12 +6318,18 @@ LS.admin = (function () {
     var emailQuota = Number(email.config.daily_quota || 0);
     var quotaLeft = emailQuota - D.emailUsedToday(email.config);
     var pendingTpl = s.templates.filter(function (t) { return t.status === 'CHO_DUYET'; });
+    var plan = s.activePlan || {};
+    var month = D.monthKey(new Date());
+    var scores = s.operationalScorecard && s.operationalScorecard.length
+      ? s.operationalScorecard
+      : D.operationalScorecard(plan.start_date || (month + '-01'), plan.end_date || (month + '-31'), s);
+    var scored = scores.filter(function (x) { return x.score !== null; });
 
     var out = '';
 
     if (s.settings.env === 'THU_NGHIEM') {
       out += ui.banner('warn', 'Hệ thống đang ở môi trường thử nghiệm',
-        'Chỉ gửi tin cho người nhận trong danh sách cho phép. Chuyển sang môi trường thật ở mục Cấu hình chung sau khi nghiệm thu.');
+        'THU_NGHIEM');
     }
 
     out += ui.strip([
@@ -6267,6 +6339,65 @@ LS.admin = (function () {
       ui.metric('Không gửi được', h.skipped, h.skipped ? 'warn' : ''),
       ui.metric('Việc quá hạn', late.length, late.length ? 'danger' : '')
     ]);
+
+    out += ui.block({
+      title: 'Điểm vận hành', count: scores.length, icon: 'chart',
+      body: ui.table(
+        [{ label: 'Cán bộ' }, { label: 'Đúng hạn', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Tồn quá hạn', cls: 'num' }, { label: 'Điểm', cls: 'num' }],
+        scores.map(function (x) {
+          var tone = x.score === null ? '' : (x.score >= 80 ? 'ok' : (x.score >= 60 ? 'warn' : 'danger'));
+          return { cls: x.lateOpen ? 'flag-warn' : '', cells: [
+            '<div class="t1">' + U.esc(x.user.full_name) + '</div>',
+            x.score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '/' + x.done + '</span>',
+            x.score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.done + '/' + x.eligible + '</span>',
+            x.score === null ? '<span class="t2">—</span>' : (x.lateOpen ? ui.tag(String(x.lateOpen), 'danger') : '<span class="tid">0</span>'),
+            x.score === null ? '<span class="t2">Chưa có dữ liệu</span>' : ui.tag(String(x.score), tone)
+          ] };
+        }),
+        { icon: 'users', title: 'Chưa có cán bộ LS', text: '' }
+      )
+    });
+
+    var snapshots = (s.operationalScoreSnapshots || []).slice().sort(function (a, b) {
+      return String(b.month_key || '').localeCompare(String(a.month_key || '')) ||
+        String(b.captured_at || '').localeCompare(String(a.captured_at || '')) ||
+        String(a.full_name || '').localeCompare(String(b.full_name || ''));
+    });
+    out += ui.block({
+      title: 'Lịch sử điểm đã chốt', count: snapshots.length, icon: 'history',
+      body: ui.table(
+        [{ label: 'Kỳ', cls: 'fit' }, { label: 'Cán bộ' }, { label: 'Điểm', cls: 'num' },
+          { label: 'Hoàn thành / đúng hạn', cls: 'fit' }, { label: 'Chất lượng dữ liệu' }, { label: 'Chốt lúc', cls: 'fit' }],
+        snapshots.slice(0, 120).map(function (x) {
+          var score = x.score === '' || x.score === null || x.score === undefined ? '—' : String(x.score);
+          var tone = score === '—' ? '' : (Number(x.score) >= 80 ? 'ok' : (Number(x.score) >= 60 ? 'warn' : 'danger'));
+          return { cells: [
+            '<span class="tid">' + U.esc(x.month_key || '—') + '</span>',
+            '<div class="t1">' + U.esc(x.full_name || x.user_id || '—') + '</div>',
+            score === '—' ? '<span class="t2">—</span>' : ui.tag(score, tone),
+            '<span class="tid">' + U.esc(String(x.done || 0)) + ' / ' + U.esc(String(x.on_time || 0)) + '</span>',
+            '<span class="t2">' + U.esc(x.data_quality || 'DAT_CHUAN') + '</span>',
+            '<span class="tid">' + U.fmtDT(x.captured_at || '') + '</span>'
+          ] };
+        }),
+        { icon: 'chart', title: 'Chưa có snapshot', text: 'Điểm sẽ xuất hiện sau khi một kỳ được chốt.' }
+      )
+    });
+
+    var workerAt = String(s.settings.worker_last_run_at || '').trim();
+    var workerStatus = String(s.settings.worker_last_run_status || '').trim();
+    var workerTone = workerStatus === 'OK' ? 'ok' : (workerStatus ? 'warn' : '');
+    out += ui.block({
+      title: 'Worker thông báo', icon: 'activity',
+      body: ui.pad(workerAt
+        ? ui.kv([
+          ['Trạng thái lần chạy gần nhất', ui.tag(workerStatus || 'CHƯA CÓ', workerTone)],
+          ['Thời điểm', U.fmtDT(workerAt)],
+          ['Đã gửi / lỗi / còn lại', String(s.settings.worker_last_run_sent || 0) + ' / ' + String(s.settings.worker_last_run_failed || 0) + ' / ' + String(s.settings.worker_last_run_remaining || 0)],
+          ['Backup kho gần nhất', s.settings.backup_last_at ? U.fmtDT(s.settings.backup_last_at) : 'Chưa có']
+        ])
+        : ui.banner('warn', 'Worker chưa ghi nhận lần chạy', 'Trigger sẽ tự cài khi kho được mở lần đầu sau deploy.'))
+    });
 
     out += ui.block({
       title: 'Tình trạng kênh gửi tin', icon: 'zap',
@@ -6280,8 +6411,7 @@ LS.admin = (function () {
           return {
             cls: miss.length ? 'flag-warn' : '',
             cells: [
-              '<div class="t1">' + U.esc(def.name) + '</div><div class="t2">' +
-              U.esc(def.to === 'KHACH' ? 'gửi khách hàng' : def.to === 'NOI_BO' ? 'nội bộ' : 'nội bộ và khách hàng') + '</div>',
+              '<div class="t1">' + U.esc(def.name) + '</div>',
               ui.tag(D.CHANNEL_STATUS[c.status].label, D.CHANNEL_STATUS[c.status].tone),
               miss.length
                 ? '<div class="t2">' + miss.map(function (x) { return U.esc(x.label); }).join('<br>') + '</div>'
@@ -6293,11 +6423,11 @@ LS.admin = (function () {
     });
 
     var warnings = [];
-    if (h.failed) warnings.push([h.failed + ' tin thất bại chưa xử lý', 'Mở hàng đợi để xem mã lỗi và gửi lại.']);
-    if (h.backlog > s.settings.backlog_alert) warnings.push(['Hàng đợi vượt ngưỡng cảnh báo', 'Đang tồn ' + h.backlog + ' tin, ngưỡng đặt ở ' + s.settings.backlog_alert + '.']);
-    if (pendingTpl.length) warnings.push([pendingTpl.length + ' mẫu tin chờ duyệt', 'Mẫu chưa duyệt thì tin liên quan sẽ không gửi.']);
-    if (emailQuota > 0 && quotaLeft <= 10) warnings.push(['Sắp hết hạn mức thư trong ngày', 'Còn ' + quotaLeft + ' thư trên hạn mức ' + emailQuota + '.']);
-    if (notReady.length) warnings.push([notReady.length + ' kênh chưa sẵn sàng', 'Tin đi qua các kênh này sẽ được ghi là không gửi.']);
+    if (h.failed) warnings.push([h.failed + ' tin thất bại chưa xử lý', '']);
+    if (h.backlog > s.settings.backlog_alert) warnings.push(['Hàng đợi vượt ngưỡng cảnh báo', '']);
+    if (pendingTpl.length) warnings.push([pendingTpl.length + ' mẫu tin chờ duyệt', '']);
+    if (emailQuota > 0 && quotaLeft <= 10) warnings.push(['Sắp hết hạn mức thư trong ngày', '']);
+    if (notReady.length) warnings.push([notReady.length + ' kênh chưa sẵn sàng', '']);
 
     out += ui.block({
       title: 'Cảnh báo vận hành', count: warnings.length, icon: 'warn',
@@ -6315,10 +6445,7 @@ LS.admin = (function () {
 
   function channels() {
     var s = st();
-    return ui.banner('info', 'Kênh chỉ bật khi đủ điều kiện',
-      'Tin không gửi được luôn ghi rõ lý do.') +
-
-      '<div class="chan-list">' + s.channels.filter(function (c) { return D.CHANNELS[c.code] && D.CHANNEL_STATUS[c.status]; }).map(function (c) {
+    return '<div class="chan-list">' + s.channels.filter(function (c) { return D.CHANNELS[c.code] && D.CHANNEL_STATUS[c.status]; }).map(function (c) {
         var def = D.CHANNELS[c.code];
         var rd = D.channelReady(c.code, s);
         var usable = D.channelUsable(c.code, s);
@@ -6380,9 +6507,7 @@ LS.admin = (function () {
 
     ui.openDialog('Cấu hình ' + def.name,
       '<form data-form="channel" data-code="' + U.attr(code) + '">' +
-      ui.banner('info', def.desc, def.docs ? 'Tài liệu nhà cung cấp: ' + def.docs : '') +
-
-      '<div style="margin-top:1.125rem">' + ui.sectionTitle('Kết nối') +
+      '<div>' + ui.sectionTitle('Kết nối') +
       '<div class="f-row">' + fields + '</div></div>' +
 
       '<div style="margin-top:1.125rem">' + ui.sectionTitle('An toàn khi gửi') +
@@ -6507,17 +6632,14 @@ LS.admin = (function () {
     U.save();
     section = 'outbox';
     LS.app.render();
-    ui.toast('Đã xếp tin thử vào hàng đợi. Bấm chạy hàng đợi để gửi.');
+    ui.toast('Đã xếp tin thử vào hàng đợi.');
   }
 
   /* ============================ Mẫu tin ============================ */
 
   function templates() {
     var s = st();
-    return ui.banner('info', 'Mẫu gửi khách phải được nhà cung cấp duyệt trước',
-      'Tự tạo mẫu không đồng nghĩa mẫu đã được duyệt. Mẫu chưa duyệt thì tin liên quan sẽ không gửi.') +
-
-      ui.block({
+    return ui.block({
         title: 'Mẫu tin', count: s.templates.length, icon: 'file',
         actions: ui.btn('Thêm mẫu', { kind: 'primary', act: 'tpl-edit', sm: true, icon: 'plus' }),
         body: ui.table(
@@ -6546,7 +6668,7 @@ LS.admin = (function () {
               ]
             };
           }),
-          { icon: 'file', title: 'Chưa có mẫu tin nào', text: 'Thêm mẫu rồi gửi duyệt trước khi bật kênh.' }
+          { icon: 'file', title: 'Chưa có mẫu tin nào', text: '' }
         )
       });
   }
@@ -6567,9 +6689,9 @@ LS.admin = (function () {
       ui.field('Kênh', ui.select('channel', chanOpts, cur.channel, { attrs: ' id="tplChannel"' })) +
       '</div>' +
       ui.field('Tên mẫu', ui.input('name', cur.name, { required: true })) +
-      ui.field('Tiêu đề', ui.input('subject', cur.subject), 'chỉ dùng cho email') +
+      ui.field('Tiêu đề', ui.input('subject', cur.subject)) +
       ui.field('Nội dung', ui.textarea('body', cur.body, { id: 'tplBody', required: true, attrs: ' rows="7"' }),
-        'dùng {{bien}} để chèn dữ liệu') +
+        '') +
       '<div id="tplErrors">' + tplErrorHtml(chk) + '</div>' +
       '</div>' +
 
@@ -6702,10 +6824,7 @@ LS.admin = (function () {
 
   function rules() {
     var s = st();
-    return ui.banner('info', 'Quy tắc nhận tin và thứ tự kênh',
-      'Các kênh được thử theo thứ tự đã cấu hình.') +
-
-      ui.block({
+    return ui.block({
         title: 'Quy tắc thông báo', count: s.notifyRules.length, icon: 'bell',
         body: ui.table(
           [{ label: 'Sự kiện' }, { label: 'Người nhận' }, { label: 'Thứ tự kênh' }, { label: 'Mẫu' },
@@ -6740,15 +6859,12 @@ LS.admin = (function () {
 
     ui.openDialog('Quy tắc thông báo',
       '<form data-form="rule" data-id="' + U.attr(id) + '">' +
-      ui.banner('info', D.NOTIFY_EVENTS[r.event] || r.event, 'Gửi cho: ' + D.AUDIENCE[r.audience]) +
-      '<div style="margin-top:1.125rem">' + ui.sectionTitle('Kênh theo thứ tự ưu tiên') +
+      '<div>' + ui.sectionTitle('Kênh') +
       '<div class="f-stack">' + Object.keys(D.CHANNELS).map(function (c) {
         var on = r.channels.indexOf(c) !== -1;
         var usable = D.channelUsable(c, st());
-        return ui.checkbox('ch_' + c, on, D.CHANNELS[c].name,
-          usable ? 'sẵn sàng gửi' : 'chưa sẵn sàng, sẽ bị bỏ qua khi chạy');
+        return ui.checkbox('ch_' + c, on, D.CHANNELS[c].name);
       }).join('') + '</div>' +
-      '<p class="t2" style="margin-top:.5rem">Thứ tự thử theo danh sách trên xuống. Kênh đầu tiên dùng được sẽ nhận tin.</p>' +
       '</div>' +
       '<div style="margin-top:1.125rem"><div class="f-row">' +
       ui.field('Mẫu tin', ui.select('template', tplOpts, r.template, { blank: 'Không dùng mẫu (chỉ báo trong app)' })) +
@@ -6818,12 +6934,9 @@ LS.admin = (function () {
       ui.metric('Không gửi', h.skipped)
     ]) +
 
-      ui.banner('warn', 'Bản trình duyệt không gửi ra ngoài',
-        'GAS dùng worker và provider thật sau khi cấu hình gateway.') +
-
       ui.block({
         title: 'Hàng đợi gửi', count: list.length + '/' + s.outbox.length, icon: 'send',
-        actions: ui.btn('Chạy hàng đợi', { kind: 'primary', sm: true, act: 'out-run', icon: 'play' }) +
+        actions: (!U.isGas() ? ui.btn('Chạy hàng đợi', { kind: 'primary', sm: true, act: 'out-run', icon: 'play' }) : '') +
           ui.btn('Gửi lại tin lỗi', { sm: true, act: 'out-retry-all', icon: 'refresh', disabled: !h.failed }),
         filters: ui.select('', Object.keys(D.OUT_STATUS).map(function (k) { return [k, D.OUT_STATUS[k].label]; }),
           oFilter.status, { blank: 'Mọi trạng thái', attrs: ' data-ofilter="status" style="flex:0 1 190px"' }) +
@@ -6895,7 +7008,6 @@ LS.admin = (function () {
       ui.metric('Chi phí', currencies.length === 1 ? money(cost, currencies[0]) : money(cost, '') + ' (nhiều loại tiền)')
     ]) + ui.block({
       title: 'Chi phí và hiệu quả gửi tin', count: grouped.length, icon: 'chart',
-      note: 'Chi phí tính theo đơn giá của kênh tại thời điểm gửi; mỗi outbox chỉ tính một lần.',
       body: ui.table(
         [{ label: 'Kỳ', cls: 'fit' }, { label: 'Kênh', cls: 'fit' }, { label: 'Lượt ghi nhận', cls: 'num' },
           { label: 'Đã gửi', cls: 'num' }, { label: 'Lỗi', cls: 'num' }, { label: 'Không gửi', cls: 'num' }, { label: 'Chi phí', cls: 'num' }],
@@ -7031,7 +7143,6 @@ LS.admin = (function () {
   function types() {
     return ui.block({
       title: 'Loại việc', count: st().workTypes.length, icon: 'tag',
-      note: 'Loại việc đã dùng thì ẩn đi, không xóa, để báo cáo cũ giữ đúng nhãn lúc phát sinh.',
       actions: ui.btn('Thêm loại việc', { kind: 'primary', sm: true, act: 'type-edit', icon: 'plus' }),
       body: ui.table(
         [{ label: 'Mã', cls: 'fit' }, { label: 'Nhóm' }, { label: 'Tên hiển thị' }, { label: 'SLA', cls: 'num' },
@@ -7063,20 +7174,18 @@ LS.admin = (function () {
     ui.openDialog(w ? 'Sửa loại việc' : 'Thêm loại việc',
       '<form data-form="work-type"' + (w ? ' data-code="' + U.attr(w.code) + '"' : '') + '>' +
       '<div class="f-row">' +
-      ui.field('Mã', ui.input('code', cur.code, { required: true, disabled: !!w, placeholder: 'VT_...' }), w ? 'không đổi sau khi đã dùng' : '') +
+      ui.field('Mã', ui.input('code', cur.code, { required: true, disabled: !!w, placeholder: 'VT_...' })) +
       ui.field('Nhóm', ui.input('group', cur.group, { required: true })) +
       ui.field('Tên hiển thị', ui.input('name', cur.name, { required: true })) +
-      ui.field('SLA (giờ làm việc)', ui.input('sla_hours', cur.sla_hours, { type: 'number', min: 1, max: 720, required: true }),
-        'tính theo lịch làm việc, không tính giờ nghỉ') +
+      ui.field('SLA (giờ làm việc)', ui.input('sla_hours', cur.sla_hours, { type: 'number', min: 1, max: 720, required: true })) +
       '</div>' +
       '<div class="f-stack" style="margin-top:1rem">' +
-      ui.checkbox('needs_appointment', cur.needs_appointment, 'Cần hẹn khách ký hồ sơ', 'không cho hoàn thành thẳng khi chưa có kết quả hẹn') +
-      ui.checkbox('needs_ks_approval', cur.needs_ks_approval, 'Cần kiểm soát duyệt hoàn thành', 'cán bộ trình, kiểm soát chốt') +
-      ui.checkbox('active', cur.active, 'Đang hoạt động', 'bỏ chọn để ẩn thay vì xóa') +
+      ui.checkbox('needs_appointment', cur.needs_appointment, 'Cần hẹn khách ký hồ sơ') +
+      ui.checkbox('needs_ks_approval', cur.needs_ks_approval, 'Cần kiểm soát duyệt hoàn thành') +
+      ui.checkbox('active', cur.active, 'Đang hoạt động') +
       '</div>' +
       '<div style="margin-top:1.125rem">' +
-      ui.field('Việc phải làm', ui.textarea('checklist', cur.checklist.join('\n'), { placeholder: 'mỗi dòng một mục' }),
-        'cán bộ phải tích đủ mới báo soạn xong được') +
+      ui.field('Việc phải làm', ui.textarea('checklist', cur.checklist.join('\n'), { placeholder: 'mỗi dòng một mục' })) +
       '</div>' +
       ui.formEnd('Lưu') + '</form>',
       { size: 'md' });
@@ -7194,7 +7303,7 @@ LS.admin = (function () {
       title: 'Người dùng', count: st().users.length, icon: 'users',
       actions: ui.btn('Thêm người dùng', { kind: 'primary', sm: true, act: 'user-edit', icon: 'plus' }) +
         ui.btn('Nhập Excel/CSV', { sm: true, act: 'user-import', icon: 'upload' }),
-      body: '<p class="t2" style="margin:0 0 .75rem">Mã cán bộ gắn với đúng một phòng/PGD. Phòng/PGD đăng nhập bằng mã; LS, kiểm soát và quản trị dùng mã kèm mật khẩu. Có thể xuất Excel thành CSV UTF-8 để nhập nhiều dòng.</p>' + ui.table(
+      body: ui.table(
         [{ label: 'Mã đăng nhập', cls: 'fit' }, { label: 'Họ tên' }, { label: 'Email' }, { label: 'Đơn vị' },
         { label: 'Vai trò', cls: 'fit' }, { label: 'Việc đang mở', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: 'Nghỉ', cls: 'fit' }, { label: '', cls: 'fit' }],
         st().users.map(function (u) {
@@ -7211,6 +7320,7 @@ LS.admin = (function () {
               open ? '<span class="tid">' + open + '</span>' : '<span class="t2">—</span>',
               !u.active ? ui.tag('Đã khóa', 'neutral') : D.userOff(u) ? ui.tag('Đang nghỉ', 'warn') : ui.tag('Hoạt động', 'ok'),
               u.active && D.userOff(u) ? '<div class="t2">' + U.esc((u.off_from || '') + (u.off_to ? ' → ' + u.off_to : '')) + '</div>' : '',
+              (u.auth_group !== 'EXTERNAL' ? ui.iconBtn('lock', { act: 'user-reset-password', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Đặt lại mật khẩu' }) : '') +
               ui.iconBtn('pencil', { act: 'user-edit', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Sửa người dùng' })
             ]
           };
@@ -7237,15 +7347,49 @@ LS.admin = (function () {
       ui.field('Nghỉ từ', ui.input('off_from', cur.off_from || '', { type: 'date' })) +
       ui.field('Nghỉ đến', ui.input('off_to', cur.off_to || '', { type: 'date' })) +
       ui.field('Cán bộ thay thế', ui.select('replacement_user_id', st().users.filter(function (x) { return x.role === 'CAN_BO_LS' && x.active && x.user_id !== cur.user_id; }).map(function (x) { return [x.user_id, x.full_name]; }), cur.replacement_user_id || '', { blank: 'Không chỉ định' }), 'Nếu đổi khỏi Cán bộ LS khi còn việc mở, chọn cán bộ thay thế; hệ thống sẽ bàn giao trong cùng thao tác.') +
-      ui.field('Tên trong nhóm Zalo', ui.input('zalo_name', cur.zalo_name || ''), 'dùng để gắn thẻ khi nhắn nhóm') +
+      ui.field('Tên trong nhóm Zalo', ui.input('zalo_name', cur.zalo_name || '')) +
       ui.field('Số Zalo', ui.input('zalo_phone', cur.zalo_phone || '', { type: 'tel' })) +
-      ui.field('Chat ID Telegram', ui.input('telegram_chat_id', cur.telegram_chat_id || ''), 'bot chỉ nhắn được cho người đã bắt đầu trò chuyện') +
+      ui.field('Chat ID Telegram', ui.input('telegram_chat_id', cur.telegram_chat_id || '')) +
       '</div>' +
       ui.field('Mật khẩu mới', ui.input('new_password', '', { type: 'password', placeholder: 'Để trống để giữ nguyên; phòng/PGD không cần nhập' })) +
       '<div style="margin-top:1rem">' +
-      ui.checkbox('active', cur.active, 'Tài khoản đang hoạt động', 'khóa tài khoản khi nghỉ hoặc chuyển công tác') + '</div>' +
+      ui.checkbox('active', cur.active, 'Tài khoản đang hoạt động') + '</div>' +
       ui.field('Lý do nghỉ', ui.textarea('off_reason', cur.off_reason || '', { placeholder: 'Ví dụ: nghỉ phép, nghỉ ốm, đi công tác' })) +
       ui.formEnd('Lưu') + '</form>');
+  }
+
+  function resetUserPasswordDialog(id) {
+    var u = U.byId(st().users, 'user_id', id);
+    if (!u || u.auth_group === 'EXTERNAL') { ui.toast('Tài khoản Phòng/PGD không dùng mật khẩu.', 'warn'); return; }
+    ui.openDialog('Đặt lại mật khẩu',
+      '<form data-form="user-reset-password" data-id="' + U.attr(u.user_id) + '">' +
+      '<p class="t2" style="margin:0 0 1rem">Mật khẩu tạm mới sẽ buộc ' + U.esc(u.full_name) + ' đổi ngay ở lần đăng nhập kế tiếp.</p>' +
+      ui.field('Mật khẩu tạm mới', ui.input('next_password', '', { type: 'password', required: true, autocomplete: 'new-password' }), 'Tối thiểu 8 ký tự, có cả chữ và số.') +
+      ui.field('Nhập lại mật khẩu tạm', ui.input('confirm_password', '', { type: 'password', required: true, autocomplete: 'new-password' })) +
+      ui.formEnd('Đặt mật khẩu') + '</form>');
+  }
+
+  function resetUserPassword(form) {
+    var id = form.getAttribute('data-id');
+    var d = new FormData(form);
+    var next = String(d.get('next_password') || '');
+    if (next !== String(d.get('confirm_password') || '')) { ui.toast('Hai lần nhập mật khẩu chưa khớp.', 'err'); return; }
+    if (next.length < 8 || !/[0-9]/.test(next) || !/[a-zA-Z]/.test(next)) {
+      ui.toast('Mật khẩu tạm phải từ 8 ký tự và có cả chữ lẫn số.', 'err'); return;
+    }
+    if (U.isGas()) {
+      LS.api.resetUserPassword(id, next).then(function () {
+        ui.closeDialog();
+        return LS.app.refreshServer('Đã đặt mật khẩu tạm. Người dùng phải đổi mật khẩu ở lần đăng nhập kế tiếp.');
+      }).catch(function (error) { ui.toast(error.message || 'Không thể đặt lại mật khẩu.', 'err'); });
+      return;
+    }
+    var u = U.byId(st().users, 'user_id', id);
+    if (!u) { ui.toast('Không tìm thấy người dùng.', 'err'); return; }
+    u.must_change_password = true;
+    logCfg('Người dùng', 'Đặt lại mật khẩu tạm cho ' + u.full_name + ' (bản xem thử không lưu mật khẩu).');
+    U.save(); ui.closeDialog(); LS.app.render();
+    ui.toast('Đã đánh dấu yêu cầu đổi mật khẩu. Bản xem thử không lưu mật khẩu.', 'warn');
   }
 
   function saveUser(form) {
@@ -7320,9 +7464,7 @@ LS.admin = (function () {
   function userImportDialog() {
     ui.openDialog('Nhập danh sách cán bộ',
       '<form data-form="user-import">' +
-      '<p class="t2">Chọn file CSV/TSV UTF-8 xuất từ Excel. Cột bắt buộc: <b>login_code, full_name, unit_id</b>. Có thể thêm email, role, password, is_active.</p>' +
       ui.field('Tệp Excel đã xuất CSV', '<input class="input" type="file" name="file" accept=".csv,.tsv,.txt" required>') +
-      '<p class="t2">Phòng/PGD tự vào nhóm EXTERNAL; các vai trò LS/KS/QUAN_LY_LS/ADMIN vào nhóm INTERNAL.</p>' +
       ui.formEnd('Nhập dữ liệu') + '</form>');
   }
 
@@ -7379,7 +7521,6 @@ LS.admin = (function () {
     var groups = { BO_SUNG: 'Trả bổ sung', TAM_DUNG: 'Tạm dừng', HUY: 'Hủy việc' };
     return ui.block({
       title: 'Danh mục lý do', count: st().reasons.length, icon: 'clipboard',
-      note: 'Lý do chọn sẵn giúp báo cáo gom nhóm được. Cán bộ vẫn ghi thêm diễn giải tự do.',
       actions: ui.btn('Thêm lý do', { kind: 'primary', sm: true, act: 'reason-edit', icon: 'plus' }),
       body: ui.table(
         [{ label: 'Mã', cls: 'fit' }, { label: 'Nhóm', cls: 'fit' }, { label: 'Nội dung' }, { label: 'Trạng thái', cls: 'fit' }, { label: '', cls: 'fit' }],
@@ -7408,7 +7549,6 @@ LS.admin = (function () {
     var labels = { REQUESTOR: 'VRM/PRM', PRODUCT: 'Sản phẩm', LS_STAFF: 'Cán bộ LS', ASSIGNMENT_RULE: 'Quy tắc phân công' };
     return ui.block({
       title: 'Dropdown theo Sheet nguồn', count: rows.length, icon: 'list',
-      note: 'Giữ thứ tự STT và nguồn tab; không xoá dòng đã dùng, chỉ ẩn/hiện để bảo toàn lịch sử.',
       actions: ui.btn('Thêm mục dropdown', { kind: 'primary', sm: true, act: 'catalog-option-edit', icon: 'plus' }),
       body: ui.table(
         [{ label: 'Nhóm', cls: 'fit' }, { label: 'Phòng' }, { label: 'Nhãn hiển thị' },
@@ -7423,7 +7563,7 @@ LS.admin = (function () {
             x.active ? ui.tag('Đang dùng', 'ok') : ui.tag('Đã ẩn', 'neutral'),
             ui.iconBtn('pencil', { act: 'catalog-option-edit', data: ' data-id="' + U.attr(x.option_id) + '"', label: 'Sửa dropdown' })
           ] };
-        }), { icon: 'list', title: 'Chưa có dropdown', text: 'Chạy setupSheetDB để nạp danh mục nguồn.' }
+        }), { icon: 'list', title: 'Chưa có dropdown', text: '' }
       )
     });
   }
@@ -7477,7 +7617,6 @@ LS.admin = (function () {
     var rows = assignmentRules();
     return ui.block({
       title: 'Cấu hình phân công nhanh', count: rows.length, icon: 'zap',
-      note: 'Khi bấm phân công nhanh, hệ thống ưu tiên khớp phòng + loại việc + sản phẩm; kiểm soát LS vẫn có thể đổi người trước khi lưu.',
       actions: ui.btn('Thêm quy tắc', { kind: 'primary', sm: true, act: 'assignment-rule-edit', icon: 'plus' }),
       body: ui.table(
         [{ label: 'Phòng' }, { label: 'Loại việc' }, { label: 'Sản phẩm' }, { label: 'Cán bộ LS' }, { label: 'Ưu tiên', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: '', cls: 'fit' }],
@@ -7492,7 +7631,7 @@ LS.admin = (function () {
             x.active ? ui.tag('Đang dùng', 'ok') : ui.tag('Đã ẩn', 'neutral'),
             ui.iconBtn('pencil', { act: 'assignment-rule-edit', data: ' data-id="' + U.attr(x.option_id) + '"', label: 'Sửa quy tắc' })
           ] };
-        }), { icon: 'zap', title: 'Chưa có quy tắc', text: 'Thêm quy tắc theo phòng, nghiệp vụ và cán bộ phụ trách.' }
+        }), { icon: 'zap', title: 'Chưa có quy tắc', text: '' }
       )
     });
   }
@@ -7579,10 +7718,7 @@ LS.admin = (function () {
     var c = st().calendar;
     var sample = D.dueFrom(U.now(), 'LEGACY_03', st());
 
-    return ui.banner('info', 'Hạn xử lý tính theo giờ làm việc thật',
-      'Giao việc lúc 16h thứ Sáu với SLA 4 giờ sẽ đến hạn vào sáng thứ Hai, không phải 20h thứ Sáu.') +
-
-      ui.block({
+    return ui.block({
         title: 'Lịch làm việc', icon: 'calendar',
         body: ui.pad(
           '<form data-form="calendar">' +
@@ -7602,9 +7738,6 @@ LS.admin = (function () {
           '<div style="margin-top:1.125rem">' +
           ui.field('Ngày nghỉ lễ', ui.textarea('holidays', c.holidays.join('\n'), { placeholder: 'mỗi dòng một ngày dạng 2026-09-02' })) +
           '</div>' +
-
-          ui.banner('ok', 'Thử tính ngay',
-            'Giao một việc "Soạn hồ sơ vay mới" (SLA 8 giờ) lúc này thì hạn rơi vào ' + U.fmtDT(sample) + '.') +
 
           '<div class="form-end">' + ui.btn('Lưu lịch', { type: 'submit', kind: 'primary' }) + '</div>' +
           '</form>'
@@ -7648,11 +7781,10 @@ LS.admin = (function () {
         '<form data-form="settings">' +
         ui.sectionTitle('Thông tin tổ chức') +
         '<div class="f-row">' +
-        ui.field('Tên ngân hàng', ui.input('bank_name', s.bank_name, { required: true }), 'dùng trong mẫu tin gửi khách') +
+        ui.field('Tên ngân hàng', ui.input('bank_name', s.bank_name, { required: true })) +
         ui.field('Số tổng đài', ui.input('hotline', s.hotline)) +
-        ui.field('Nơi ký hồ sơ', ui.input('sign_place', s.sign_place || ''),
-          'dùng chung cho mọi đơn vị; cán bộ LS không chọn lại khi hẹn ký') +
-        ui.field('Địa chỉ ứng dụng', ui.input('app_url', s.app_url), 'link cán bộ mở từ thông báo') +
+        ui.field('Nơi ký hồ sơ', ui.input('sign_place', s.sign_place || '')) +
+        ui.field('Địa chỉ ứng dụng', ui.input('app_url', s.app_url)) +
         '</div>' +
 
         '<div style="margin-top:1.125rem">' + ui.sectionTitle('Thời gian và báo cáo') +
@@ -7662,24 +7794,21 @@ LS.admin = (function () {
         ui.field('Thời hạn lưu (tháng)', ui.input('retention_months', s.retention_months, { type: 'number', min: 1 })) +
         ui.field('Giới hạn dòng khi xuất', ui.input('export_row_limit', s.export_row_limit, { type: 'number', min: 100 })) +
         '</div><div class="f-row">' +
-        ui.field('Chỉ tiêu hoàn thành / tháng (toàn LS)', ui.input('target_done_month', s.target_done_month || '', { type: 'number', min: 0 }), 'để trống = không so chỉ tiêu') +
-        ui.field('Chỉ tiêu hoàn thành / tháng (mỗi cán bộ)', ui.input('target_done_staff_month', s.target_done_staff_month || '', { type: 'number', min: 0 }), 'vạch dọc trên đồ thị tải cán bộ') +
+        ui.field('Chỉ tiêu hoàn thành / tháng (toàn LS)', ui.input('target_done_month', s.target_done_month || '', { type: 'number', min: 0 })) +
+        ui.field('Chỉ tiêu hoàn thành / tháng (mỗi cán bộ)', ui.input('target_done_staff_month', s.target_done_staff_month || '', { type: 'number', min: 0 })) +
         '</div></div>' +
 
         '<div style="margin-top:1.125rem">' + ui.sectionTitle('Vận hành') +
         '<div class="f-row">' +
-        ui.field('Ngưỡng cảnh báo hàng đợi', ui.input('backlog_alert', s.backlog_alert, { type: 'number', min: 1 }),
-          'vượt ngưỡng thì hiện cảnh báo ở màn tổng quan') +
+        ui.field('Ngưỡng cảnh báo hàng đợi', ui.input('backlog_alert', s.backlog_alert, { type: 'number', min: 1 })) +
         ui.field('Môi trường', ui.select('env', [['THU_NGHIEM', 'Thử nghiệm'], ['THAT', 'Chạy thật']], s.env)) +
         '</div>' +
 
         '<div style="margin-top:1.125rem">' + ui.sectionTitle('Gateway gửi tin ngoài') +
         '<div class="f-row">' +
-        ui.field('Địa chỉ gateway', ui.input('gateway_url', s.gateway_url || '', { placeholder: 'https://gateway-noi-bo.example/send' }), 'Chỉ lưu địa chỉ, không lưu token') +
-        ui.field('Tên thuộc tính token', ui.input('gateway_auth_ref', s.gateway_auth_ref || 'LS_GATEWAY_TOKEN'), 'Token đặt trong ScriptProperties của GAS') +
+        ui.field('Địa chỉ gateway', ui.input('gateway_url', s.gateway_url || '', { placeholder: 'https://gateway-noi-bo.example/send' })) +
+        ui.field('Tên thuộc tính token', ui.input('gateway_auth_ref', s.gateway_auth_ref || 'LS_GATEWAY_TOKEN')) +
         '</div></div>' +
-        ui.banner('warn', 'Chuyển sang chạy thật là quyết định vận hành',
-          'Chỉ chuyển sau khi đã nghiệm thu nội bộ, kênh gửi đã kiểm thử và có phương án xử lý sự cố.') +
         '</div>' +
 
         '<div class="form-end">' + ui.btn('Lưu cấu hình', { type: 'submit', kind: 'primary' }) + '</div>' +
@@ -7719,7 +7848,6 @@ LS.admin = (function () {
     var s = st();
     return ui.block({
       title: U.isGas() ? 'Kho dữ liệu Google Sheet' : 'Kho dữ liệu cục bộ', icon: 'database',
-      note: U.isGas() ? 'Dữ liệu nghiệp vụ đọc/ghi qua Apps Script vào kho Google Sheet đã cấu hình; cache trình duyệt không phải nguồn chính.' : 'Bản chạy thử lưu trong trình duyệt. Khi triển khai Apps Script, dữ liệu nằm ở Google Sheet do SetupSheetDB.gs tạo.',
       body: ui.pad(
         ui.kv([
           ['Hồ sơ', String(s.requests.length)],
@@ -7740,7 +7868,6 @@ LS.admin = (function () {
   function cfglog() {
     return ui.block({
       title: 'Nhật ký cấu hình', count: st().configLog.length, icon: 'history',
-      note: 'Mọi thay đổi kênh, mẫu tin, danh mục và cấu hình đều được ghi lại.',
       body: ui.table(
         [{ label: 'Thời gian', cls: 'fit' }, { label: 'Người thực hiện' }, { label: 'Khu vực', cls: 'fit' }, { label: 'Nội dung' }],
         st().configLog.map(function (c) {
@@ -7771,6 +7898,7 @@ LS.admin = (function () {
     typeDialog: typeDialog, saveType: saveType,
     unitDialog: unitDialog, saveUnit: saveUnit,
     userDialog: userDialog, saveUser: saveUser, userImportDialog: userImportDialog, importUsers: importUsers,
+    resetUserPasswordDialog: resetUserPasswordDialog, resetUserPassword: resetUserPassword,
     reasonDialog: reasonDialog, saveReason: saveReason,
     catalogOptionDialog: catalogOptionDialog, saveCatalogOption: saveCatalogOption,
     assignmentRuleDialog: assignmentRuleDialog, saveAssignmentRule: saveAssignmentRule,
@@ -7779,7 +7907,7 @@ LS.admin = (function () {
   };
 })();
 
-/* js/app.js?v=20260920-catalog-v2 */
+/* js/app.js?v=20260922-adminscore-v1 */
 /**
  * app.js — khung ứng dụng: đăng nhập, điều hướng, phân phối sự kiện.
  */
@@ -7789,6 +7917,7 @@ LS.app = (function () {
   var U = LS, D = LS.domain, ui = LS.ui, S = LS.screens, A = LS.admin;
   var root;
   var gasError = '';
+  var inboxTab = 'UNREAD';
 
   function st() { return U.db(); }
   function me() { return st().session ? U.byId(st().users, 'user_id', st().session) : null; }
@@ -7898,29 +8027,49 @@ LS.app = (function () {
 
   /* ============================ Đăng nhập ============================ */
 
+  function passwordControl(name, opts) {
+    opts = opts || {};
+    var id = opts.id || ('password-' + name);
+    var label = 'Hiện mật khẩu';
+    var attr = opts.autocomplete ? ' autocomplete="' + U.attr(opts.autocomplete) + '"' : '';
+    return '<div class="password-control">' +
+      ui.input(name, '', { type: 'password', required: !!opts.required, placeholder: opts.placeholder || '', id: id, attrs: attr }) +
+      '<button type="button" class="password-toggle" data-act="toggle-password" data-target="' + U.attr(id) + '" aria-label="' + label + '" title="' + label + '">' +
+      U.icon('eye', 18) + '<span class="sr-only">' + label + '</span></button></div>';
+  }
+
+  function togglePassword(el) {
+    var input = document.getElementById(el.getAttribute('data-target'));
+    if (!input) return;
+    var visible = input.type === 'password';
+    var label = visible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu';
+    input.type = visible ? 'text' : 'password';
+    el.setAttribute('aria-label', label);
+    el.setAttribute('title', label);
+    el.innerHTML = U.icon(visible ? 'eye-off' : 'eye', 18) + '<span class="sr-only">' + U.esc(label) + '</span>';
+    input.focus();
+  }
+
   function authView() {
     var gasNote = U.isGas()
       ? 'Phòng/PGD dùng mã cán bộ. LS, kiểm soát và quản trị dùng mã cán bộ kèm mật khẩu.'
       : 'Bản xem thử trên trình duyệt dùng cùng quy tắc mã cán bộ như bản GAS.';
     return '<div class="auth">' +
       '<div class="auth-side">' +
-      '<div><div class="rail-mark" style="width:44px;height:44px">LS</div></div>' +
-      '<div>' +
-      '<h2 class="auth-lead">Một hồ sơ đi qua <em>đúng một luồng</em>, có dấu vết từ đầu đến cuối.</h2>' +
-      '<div class="auth-steps">' +
-      '<div class="auth-step"><b>1</b><span>Phòng hoặc PGD đăng ký một khách với nhiều loại việc, mỗi việc một ngày phát sinh riêng.</span></div>' +
-      '<div class="auth-step"><b>2</b><span>Kiểm soát LS tiếp nhận, kiểm tra đủ thông tin rồi giao cho cán bộ chịu trách nhiệm chính.</span></div>' +
-      '<div class="auth-step"><b>3</b><span>Cán bộ xử lý theo danh sách việc phải làm, hẹn khách khi loại việc yêu cầu.</span></div>' +
-      '<div class="auth-step"><b>4</b><span>Mọi thao tác, mọi tin gửi ra ngoài đều vào nhật ký, không sửa được về sau.</span></div>' +
-      '</div></div>' +
+      '<div class="auth-brand"><div class="rail-mark">LS</div><span>LS-Routing</span></div>' +
+      '<div class="auth-copy"><p class="auth-eyebrow">Điều phối tín dụng</p>' +
+      '<h2 class="auth-lead">Hồ sơ đến <em>đúng người</em>, đúng thời điểm.</h2>' +
+      '<p class="auth-summary">Theo dõi một luồng xử lý rõ ràng từ tiếp nhận, phân công đến hoàn tất — không phải dò lại qua nhiều nhóm trao đổi.</p>' +
+      '<div class="auth-highlights"><span>Phân công rõ ràng</span><span>Nhật ký thao tác</span><span>Nhắc việc đúng hạn</span></div></div>' +
       '<p class="auth-note">' + U.esc(gasNote) + '</p>' +
       '</div>' +
 
       '<div class="auth-main"><div class="auth-form">' +
-      '<h1>Đăng nhập</h1><p>Hỗ trợ tín dụng LS</p>' +
+      '<div class="auth-form-kicker">' + U.icon('lock', 16) + '<span>Không gian nội bộ</span></div>' +
+      '<h1>Đăng nhập</h1><p>Nhập thông tin tài khoản được cấp để tiếp tục.</p>' +
       '<form data-form="login">' +
-      ui.field('Mã cán bộ / user', ui.input('login_code', '', { required: true, placeholder: 'Ví dụ: 164392 hoặc admin', id: 'loginCode' })) +
-      ui.field('Mật khẩu', ui.input('password', '', { type: 'password', placeholder: 'Chỉ bắt buộc với tài khoản nội bộ', id: 'loginPassword' })) +
+      ui.field('Mã cán bộ / user', ui.input('login_code', '', { required: true, placeholder: 'Ví dụ: 164392 hoặc admin', id: 'loginCode', attrs: ' autocomplete="username"' })) +
+      ui.field('Mật khẩu', passwordControl('password', { id: 'loginPassword', placeholder: 'Chỉ bắt buộc với tài khoản nội bộ', autocomplete: 'current-password' })) +
       '<div style="margin-top:1rem">' + ui.btn('Đăng nhập', { type: 'submit', kind: 'primary', icon: 'arrow' }) + '</div>' +
       '</form>' +
       (U.isGas() ? '' : '<div class="auth-divider">Tài khoản thử nghiệm</div>' +
@@ -7936,16 +8085,16 @@ LS.app = (function () {
 
   function passwordView(u) {
     return '<div class="auth"><div class="auth-side">' +
-      '<div><div class="rail-mark" style="width:44px;height:44px">LS</div></div>' +
-      '<div><h2 class="auth-lead">Mật khẩu tạm chỉ dùng được <em>một lần</em>.</h2>' +
+      '<div class="auth-brand"><div class="rail-mark">LS</div><span>LS-Routing</span></div>' +
+      '<div class="auth-copy"><h2 class="auth-lead">Mật khẩu tạm chỉ dùng được <em>một lần</em>.</h2>' +
       '<p class="auth-note">Mật khẩu do quản trị cấp không gắn với riêng ai. Đặt mật khẩu của bạn trước khi vào hệ thống; tài khoản quản trị phải hoàn tất bước này trước khi đổi quyền người dùng.</p>' +
       '</div></div>' +
       '<div class="auth-main"><div class="auth-form">' +
       '<h1>Đổi mật khẩu</h1><p>' + U.esc(u.full_name) + '</p>' +
       '<form data-form="change-password">' +
-      ui.field('Mật khẩu hiện tại', ui.input('current', '', { type: 'password', required: true })) +
-      ui.field('Mật khẩu mới', ui.input('next', '', { type: 'password', required: true }), 'tối thiểu 8 ký tự, có cả chữ và số') +
-      ui.field('Nhập lại mật khẩu mới', ui.input('again', '', { type: 'password', required: true })) +
+      ui.field('Mật khẩu hiện tại', passwordControl('current', { required: true, autocomplete: 'current-password' })) +
+      ui.field('Mật khẩu mới', passwordControl('next', { required: true, autocomplete: 'new-password' }), 'tối thiểu 8 ký tự, có cả chữ và số') +
+      ui.field('Nhập lại mật khẩu mới', passwordControl('again', { required: true, autocomplete: 'new-password' })) +
       '<div style="margin-top:1rem">' + ui.btn('Đặt mật khẩu', { type: 'submit', kind: 'primary', icon: 'arrow' }) + '</div>' +
       '</form>' +
       '<div style="margin-top:1rem">' + ui.btn('Đăng xuất', { act: 'logout', kind: 'quiet', icon: 'logout' }) + '</div>' +
@@ -8034,39 +8183,72 @@ LS.app = (function () {
     return 'Bạn xem được toàn bộ việc của ban LS.';
   }
 
-  function inboxDialog() {
+  function markInboxRead(ids, done) {
     var u = me();
-    var list = st().inbox
+    var markAll = !Array.isArray(ids);
+    var wanted = {};
+    (Array.isArray(ids) ? ids : []).forEach(function (id) { wanted[String(id)] = true; });
+    var marked = st().inbox.filter(function (n) {
+      return n.user_id === u.user_id && !n.read && (markAll || wanted[String(n.id)]);
+    });
+    if (!marked.length) { if (done) done(); return; }
+
+    function apply() {
+      marked.forEach(function (n) { n.read = true; });
+      if (!U.isGas()) U.save();
+      if (done) done();
+    }
+
+    if (U.isGas()) {
+      LS.api.markInboxRead(markAll ? undefined : marked.map(function (n) { return n.id; }))
+        .then(apply)
+        .catch(function (error) { ui.toast(error.message || 'Không thể đánh dấu thông báo đã xem.', 'err'); });
+    } else apply();
+  }
+
+  function inboxDialog(tab) {
+    if (tab) inboxTab = tab;
+    var u = me();
+    var all = st().inbox
       .filter(function (n) { return n.user_id === u.user_id; })
-      .sort(function (a, b) { return new Date(b.at) - new Date(a.at); })
-      .slice(0, 30);
-    var unread = list.filter(function (n) { return !n.read; }).length;
+      .sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
+    var unread = all.filter(function (n) { return !n.read; }).length;
+    var viewed = all.length - unread;
+    var list = all.filter(function (n) { return inboxTab === 'READ' ? n.read : !n.read; }).slice(0, 30);
+    var emptyText = inboxTab === 'READ'
+      ? 'Các thông báo bạn đã xem sẽ được giữ tại đây.'
+      : 'Thông báo giao việc và nhắc hạn mới sẽ hiện ở đây.';
 
     ui.openDialog('Thông báo',
+      '<div class="btn-row" style="margin-bottom:1rem">' +
+      ui.btn('Chưa xem' + (unread ? ' (' + unread + ')' : ''), { act: 'inbox-show-unread', kind: inboxTab === 'UNREAD' ? 'primary' : 'line', sm: true }) +
+      ui.btn('Đã xem' + (viewed ? ' (' + viewed + ')' : ''), { act: 'inbox-show-read', kind: inboxTab === 'READ' ? 'primary' : 'line', sm: true }) +
+      (unread ? ui.btn('Đánh dấu tất cả đã xem', { act: 'inbox-mark-all', kind: 'quiet', sm: true }) : '') +
+      '</div>' +
       (list.length
         ? '<div class="tl">' + list.map(function (n) {
           var item = U.byId(st().items, 'item_id', n.item_id);
+          var action = '';
+          if (inboxTab === 'UNREAD') {
+            action = item
+              ? ui.btn('Xem việc', { act: 'inbox-view', kind: 'quiet', sm: true, data: ' data-notification-id="' + U.attr(n.id) + '" data-item-id="' + U.attr(n.item_id) + '"' })
+              : ui.btn('Đánh dấu đã xem', { act: 'inbox-mark-read', kind: 'quiet', sm: true, data: ' data-notification-id="' + U.attr(n.id) + '"' });
+          } else if (item) {
+            action = ui.btn('Xem việc', { act: 'detail', kind: 'quiet', sm: true, data: ' data-id="' + U.attr(n.item_id) + '"' });
+          }
           return '<div class="tl-item"><div class="tl-head">' +
             '<b>' + U.esc(D.NOTIFY_EVENTS[n.event] || D.label(n.event)) + '</b>' +
             (n.read ? '' : ui.tag('Mới', 'gold')) +
             '<time>' + U.fmtDT(n.at) + '</time></div>' +
             '<div class="tl-body">' +
-            (item
-              ? '<button class="btn btn-quiet btn-sm" data-act="detail" data-id="' + U.attr(n.item_id) + '">' +
-                U.esc(S.itemLabel(item)) + '</button>'
-              : '<span class="t2">Việc ' + U.esc(n.item_id) + ' không còn trong phạm vi bạn xem được.</span>') +
+            (item ? '<span class="t2">' + U.esc(S.itemLabel(item)) + '</span>' :
+              '<span class="t2">Việc ' + U.esc(n.item_id) + ' không còn trong phạm vi bạn xem được.</span>') +
+            action +
             '</div></div>';
         }).join('') + '</div>'
-        : ui.empty({ icon: 'bell', title: 'Không có thông báo', text: 'Thông báo giao việc và nhắc hạn sẽ hiện ở đây.' })) +
+        : ui.empty({ icon: 'bell', title: inboxTab === 'READ' ? 'Chưa có thông báo đã xem' : 'Không có thông báo mới', text: emptyText })) +
       '<div class="form-end">' + ui.btn('Đóng', { act: 'close-dialog', kind: 'quiet' }) + '</div>',
       { sub: unread ? unread + ' thông báo mới' : '' });
-
-    if (!unread) return;
-    st().inbox.forEach(function (n) { if (n.user_id === u.user_id) n.read = true; });
-
-    // Đánh dấu đã đọc phải ghi xuống kho, nếu không lần tải sau chuông lại đỏ.
-    if (U.isGas()) LS.app.background(LS.api.markInboxRead(), { label: 'Đánh dấu đã đọc' });
-    else U.save();
   }
 
   /* ============================ Tiện ích ============================ */
@@ -8141,7 +8323,18 @@ LS.app = (function () {
     shortcuts: shortcutHelp,
     logout: logout,
     account: accountDialog,
+    'toggle-password': togglePassword,
     inbox: inboxDialog,
+    'inbox-show-unread': function () { inboxDialog('UNREAD'); },
+    'inbox-show-read': function () { inboxDialog('READ'); },
+    'inbox-mark-all': function () { markInboxRead(undefined, function () { inboxDialog('UNREAD'); }); },
+    'inbox-mark-read': function (el) {
+      markInboxRead([el.getAttribute('data-notification-id')], function () { inboxDialog(inboxTab); });
+    },
+    'inbox-view': function (el) {
+      var itemId = el.getAttribute('data-item-id');
+      markInboxRead([el.getAttribute('data-notification-id')], function () { S.detail(itemId); });
+    },
     'login-as': function (el) { login(el.getAttribute('data-code'), '', true); },
 
     'new-request': S.newRequest,
@@ -8197,6 +8390,7 @@ LS.app = (function () {
     'type-edit': function (el) { A.typeDialog(el.getAttribute('data-code')); },
     'unit-edit': function (el) { A.unitDialog(el.getAttribute('data-id')); },
     'user-edit': function (el) { A.userDialog(el.getAttribute('data-id')); },
+    'user-reset-password': function (el) { A.resetUserPasswordDialog(el.getAttribute('data-id')); },
     'user-import': A.userImportDialog,
     'reason-edit': function (el) { A.reasonDialog(el.getAttribute('data-code')); },
     'catalog-option-edit': function (el) { A.catalogOptionDialog(el.getAttribute('data-id')); },
@@ -8246,6 +8440,7 @@ LS.app = (function () {
     'work-type': A.saveType,
     unit: A.saveUnit,
     user: A.saveUser,
+    'user-reset-password': A.resetUserPassword,
     'user-import': A.importUsers,
     reason: A.saveReason,
     'catalog-option': A.saveCatalogOption,

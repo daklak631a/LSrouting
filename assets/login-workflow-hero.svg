@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" role="img" aria-label="Luồng xử lý hồ sơ tín dụng">
+  <defs>
+    <linearGradient id="panel" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#0b817c"/><stop offset="1" stop-color="#075f61"/></linearGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop stop-color="#ffc62f"/><stop offset="1" stop-color="#f5a900"/></linearGradient>
+  </defs>
+  <g fill="none" stroke="#b9e5df" stroke-opacity=".16"><path d="M760 120h500M860 220h380M680 320h600M780 420h500M740 520h560M880 620h350"/><path d="M1080 60v690M900 120v610M1260 170v500"/></g>
+  <path d="M610 695C790 535 830 745 1012 563s224 52 380-102" fill="none" stroke="url(#gold)" stroke-width="7" stroke-linecap="round"/>
+  <g transform="translate(790 278)"><rect width="256" height="184" rx="18" fill="url(#panel)" stroke="#68b9ae" stroke-opacity=".48"/><path d="M25 66h67l16 18h122v71H25z" fill="#e0f2ee" fill-opacity=".95"/><path d="M25 66h67l16 18H25z" fill="#ffc62f"/><rect x="47" y="112" width="116" height="10" rx="5" fill="#0b7774" opacity=".55"/><rect x="47" y="135" width="83" height="8" rx="4" fill="#0b7774" opacity=".35"/><circle cx="211" cy="42" r="19" fill="#ffc62f"/><path d="M204 42l5 5 10-12" fill="none" stroke="#075f61" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <g transform="translate(1080 468)"><rect width="190" height="150" rx="17" fill="#0b7674" stroke="#8fd4ca" stroke-opacity=".42"/><path d="M56 77V60a39 39 0 0 1 78 0v17" fill="none" stroke="#e5f6f2" stroke-width="10" stroke-linecap="round"/><rect x="41" y="76" width="108" height="55" rx="9" fill="#e5f6f2"/><circle cx="95" cy="101" r="8" fill="#0a7673"/><path d="M95 109v10" stroke="#0a7673" stroke-width="6" stroke-linecap="round"/></g>
+  <g transform="translate(650 603)"><rect width="180" height="92" rx="16" fill="#076b6d" stroke="#71beb4" stroke-opacity=".38"/><circle cx="42" cy="46" r="20" fill="#e0f2ee"/><path d="M33 46h18M42 37v18" stroke="#07716f" stroke-width="4" stroke-linecap="round"/><rect x="76" y="32" width="70" height="9" rx="4.5" fill="#dff0ee" opacity=".85"/><rect x="76" y="52" width="48" height="7" rx="3.5" fill="#dff0ee" opacity=".42"/></g>
+</svg>

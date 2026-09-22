@@ -13,10 +13,15 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(dir, p), 'utf8');
 
 let html = read('index.html');
+const loginSvg = 'data:image/svg+xml,' + encodeURIComponent(read('assets/login-workflow-hero.svg'));
+const styles = read('css/styles.css').replace(
+  /url\((['"]?)\.\.\/assets\/login-workflow-hero\.svg\1\)/g,
+  'url("' + loginSvg + '")'
+);
 
 html = html.replace(
   '<link rel="stylesheet" href="css/styles.css">',
-  '<style>\n' + read('css/styles.css') + '\n  </style>'
+  '<style>\n' + styles + '\n  </style>'
 );
 
 // Gom mọi thẻ script ngoài thành một khối, giữ nguyên thứ tự nạp.

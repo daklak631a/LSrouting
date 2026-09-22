@@ -52,6 +52,34 @@ var Notifications = (function () {
     return out;
   }
 
+  function putSetting_(t, key, value, description) {
+    var fields = { value: String(value === undefined || value === null ? '' : value), updated_at: new Date().toISOString() };
+    var found = t.find('Settings', 'key', key);
+    if (found) t.write(found, fields);
+    else t.append('Settings', { key: key, value: fields.value, description: description || '', updated_at: fields.updated_at });
+  }
+
+  /** Ghi dấu vết sống của worker để admin biết trigger còn chạy hay đã im. */
+  function recordWorkerRun_(result) {
+    try {
+      DataRepository.tx(function (t) {
+        var now = new Date().toISOString();
+        var failed = Number(result && result.failed || 0);
+        var remaining = Number(result && result.remaining);
+        var status = failed ? 'DEGRADED' : (remaining > 0 ? 'BACKLOG' : 'OK');
+        putSetting_(t, 'worker_last_run_at', now, 'Lần worker gửi thông báo gần nhất');
+        putSetting_(t, 'worker_last_run_status', status, 'Trạng thái lần worker gần nhất');
+        putSetting_(t, 'worker_last_run_sent', Number(result && result.sent || 0), 'Số tin gửi thành công ở lần worker gần nhất');
+        putSetting_(t, 'worker_last_run_failed', failed, 'Số tin lỗi ở lần worker gần nhất');
+        putSetting_(t, 'worker_last_run_remaining', isFinite(remaining) ? remaining : -1, 'Số tin còn lại sau lần worker gần nhất');
+        if (result && result.error) putSetting_(t, 'worker_last_run_error', String(result.error).substring(0, 300), 'Lỗi lần worker gần nhất');
+        else putSetting_(t, 'worker_last_run_error', '', 'Lỗi lần worker gần nhất');
+      });
+    } catch (err) {
+      Logger.log('Không ghi được heartbeat worker: ' + err.message);
+    }
+  }
+
   function gateway_(t) {
     var set = settings_(t);
     var authRef = String(set.gateway_auth_ref || 'LS_GATEWAY_TOKEN').trim();
@@ -316,11 +344,34 @@ var Notifications = (function () {
     if (existing) t.write(existing, row); else t.append('NotificationMetrics', row);
   }
 
+  /** Đặt chỗ khóa idempotency trong cùng transaction với dòng outbox. */
+  function reserveIdempotency_(t, key, outboxId, createdAt) {
+    if (!key) return true;
+    try {
+      var existing = t.find('NotificationIdempotency', 'idem_key', key);
+      if (existing) return false;
+      return true;
+    } catch (err) {
+      // Kho cũ chưa chạy migration: vẫn chống trùng bằng toàn bộ lịch sử outbox,
+      // không quay lại cách quét đuôi 2.000 dòng. setupSheetDB() sẽ tạo index.
+      return !t.rows('NotificationOutbox').some(function (o) { return String(o.idem_key || '') === key; });
+    }
+  }
+
+  function rememberIdempotency_(t, key, outboxId, createdAt) {
+    if (!key) return;
+    try {
+      if (!t.find('NotificationIdempotency', 'idem_key', key)) {
+        t.append('NotificationIdempotency', { idem_key: key, outbox_id: outboxId, created_at: createdAt });
+      }
+    } catch (ignore) { /* kho cũ sẽ được backfill khi chạy setupSheetDB */ }
+  }
+
   /**
    * Xếp tin cho một sự kiện. Gọi bên trong giao dịch của Code.gs, không tự mở khóa.
    * Trả về số tin đã tạo (gồm cả tin ghi KHONG_GUI).
    */
-  function queue(t, item, event, actorId, sharedSeen) {
+  function queue(t, item, event, actorId, sharedSeen, channelMode) {
     // Hẹn ký báo thẳng khách và báo qua nhóm nội bộ là hai đường loại trừ nhau.
     var appt = item.appointment_json ? JSON.parse(item.appointment_json) : null;
     var viaGroup = !!(appt && appt.via_group);
@@ -330,21 +381,18 @@ var Notifications = (function () {
       if (x.when_case === 'DIRECT' && viaGroup) return false;
       return true;
     });
-    // Khóa chống trùng chỉ cần soi phần đuôi gần nhất: tin của cùng một việc
-    // luôn nằm sát nhau về thời gian. Đọc trọn bảng outbox mỗi lần phân công
-    // là cái giá không đáng trả.
-    var existing = sharedSeen;
-    if (!existing) {
-      existing = {};
-      t.tail('NotificationOutbox', 2000).forEach(function (o) { existing[o.idem_key] = true; });
-    }
+    // sharedSeen chỉ tối ưu các rule/recipient lặp trong cùng transaction; lịch
+    // sử dài được kiểm bằng NotificationIdempotency, không phụ thuộc tail.
+    var existing = sharedSeen || {};
     var made = 0;
     var ctx = context_(t, item);
     var now = new Date().toISOString();
 
     rules.forEach(function (rule) {
       var requested = requestedChannel_(item, event);
-      var channels = requested ? [requested] : String(rule.channels || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+      var channels = channelMode === 'IN_APP'
+        ? ['IN_APP']
+        : (requested ? [requested] : String(rule.channels || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean));
 
       recipients_(t, rule.audience, item).forEach(function (rcp) {
         if (rcp.id === actorId && rule.audience !== 'KHACH') return;
@@ -352,7 +400,7 @@ var Notifications = (function () {
         var bucket = Number(rule.throttle_minutes) > 0
           ? ':' + Math.floor(Date.now() / (Number(rule.throttle_minutes) * 60000)) : '';
         var key = [item.item_id, event, rule.audience, rcp.id].join(':') + bucket;
-        if (existing[key]) return;
+        if (existing[key] || !reserveIdempotency_(t, key, 'PENDING', now)) return;
         existing[key] = true;
 
         var chosen = '', why = '', address = '', tpl = null;
@@ -407,7 +455,10 @@ var Notifications = (function () {
           created_at: now,
           sent_at: ''
         };
+        // Ghi outbox trước rồi mới ghi index để không để lại khóa PENDING mồ côi
+        // nếu tiến trình bị dừng giữa chừng.
         t.append('NotificationOutbox', outbox);
+        rememberIdempotency_(t, key, outbox.outbox_id, now);
         recordMetric_(t, outbox, chosen ? 'QUEUED' : 'KHONG_GUI', '');
         made += 1;
       });
@@ -420,132 +471,188 @@ var Notifications = (function () {
    * Worker: chạy bằng installable trigger theo phút, KHÔNG dùng onEdit.
    * Mỗi lượt xử lý một lô nhỏ để không chạm giới hạn thời gian chạy của Apps Script.
    */
-  function runOutbox(batchSize) {
+  var CLAIM_MINUTES = 15;
+
+  /** Claim ngắn hạn dưới lock; provider luôn được gọi sau khi lock đã nhả. */
+  function claimPending_(batchSize) {
     var limit = batchSize || 20;
-
     return DataRepository.tx(function (t) {
-      var nowIso = new Date().toISOString();
-
-      // THAT_BAI là "sẽ thử lại", không phải "bỏ luôn". Không đưa nó quay lại hàng
-      // đợi thì max_retry chỉ còn là một con số trang trí trong màn cấu hình.
-      var pending = t.rows('NotificationOutbox').filter(function (o) {
-        if (o.status === 'CHO_GUI') return true;
-        if (o.status !== 'THAT_BAI') return false;
-        var max = Number((cfg_(t, o.channel) || {}).max_retry || 3);
-        if (Number(o.retry_count || 0) >= max) return false;
-        return !o.next_try_at || String(o.next_try_at) <= nowIso;
-      });
-      var done = 0, failed = 0;
-
-      function backoff_(tries) {
-        // 5, 15, 45 phút — đủ thưa để nhà cung cấp kịp hồi, đủ dày để không quên.
-        var minutes = 5 * Math.pow(3, Math.max(0, tries - 1));
-        return new Date(Date.now() + Math.min(minutes, 240) * 60000).toISOString();
-      }
-
-      function fail_(found, o, note) {
-        var ch = cfg_(t, o.channel) || {};
-        var tries = Number(o.retry_count || 0) + 1;
-        var give = tries >= Number(ch.max_retry || 3);
-        var fields = {
-          status: give ? 'KHONG_GUI' : 'THAT_BAI',
-          note: String(note).substring(0, 300),
-          retry_count: tries,
-          next_try_at: give ? '' : backoff_(tries)
-        };
-        t.write(found, fields);
-        o.status = fields.status;
-        o.retry_count = tries;
-        recordMetric_(t, o, metricStatus_(fields.status), '');
-        failed += 1;
-      }
-
-      pending.slice(0, limit).forEach(function (o) {
-        var found = t.find('NotificationOutbox', 'outbox_id', o.outbox_id);
-        var blocked = blocker_(t, o.channel);
-
-        if (blocked) { fail_(found, o, blocked); return; }
-
-        try {
-          var res = send_(t, o);
-          var sentAt = new Date().toISOString();
-          t.write(found, {
-            status: 'DA_GUI', provider_msg_id: res.id, note: res.note || '',
-            sent_at: sentAt, next_try_at: ''
-          });
-          o.status = 'DA_GUI';
-          o.provider_msg_id = res.id;
-          o.sent_at = sentAt;
-          recordMetric_(t, o, 'SENT', res.id);
-          done += 1;
-        } catch (err) {
-          fail_(found, o, err);
+      var now = new Date();
+      var nowIso = now.toISOString();
+      var claimUntil = new Date(now.getTime() + CLAIM_MINUTES * 60000).toISOString();
+      var sentCount = {};
+      t.rows('NotificationMetrics').forEach(function (metric) {
+        if (metric.status !== 'SENT' || !metric.sent_at) return;
+        var sentAt = new Date(metric.sent_at).getTime();
+        if (isFinite(sentAt) && sentAt <= now.getTime() && now.getTime() - sentAt < 60 * 60 * 1000) {
+          sentCount[metric.channel] = (sentCount[metric.channel] || 0) + 1;
         }
       });
-
-      return { sent: done, failed: failed, remaining: Math.max(0, pending.length - limit) };
+      var pending = t.rows('NotificationOutbox').filter(function (o) {
+        var leaseExpired = !o.claim_until || String(o.claim_until) <= nowIso;
+        if (!leaseExpired) return false;
+        if (o.status === 'CHO_GUI') return true;
+        // MailApp không có idempotency key; lease hết hạn có thể là đã gửi xong
+        // nhưng Apps Script rớt trước khi ghi DA_GUI. Đưa email sang đối soát tay.
+        if (o.status === 'DANG_GUI') return o.channel !== 'EMAIL';
+        if (o.status !== 'THAT_BAI') return false;
+        var max = Number((cfg_(t, o.channel) || {}).max_retry || 3);
+        return Number(o.retry_count || 0) < max && (!o.next_try_at || String(o.next_try_at) <= nowIso);
+      });
+      var claimed = [], blockedCount = 0, rateLimitedCount = 0;
+      pending.slice(0, limit).forEach(function (o) {
+        var found = t.find('NotificationOutbox', 'outbox_id', o.outbox_id);
+        if (!found) return;
+        var blocked = blocker_(t, o.channel);
+        if (blocked) {
+          var blockedCh = cfg_(t, o.channel) || {};
+          var blockedTries = Number(o.retry_count || 0) + 1;
+          var blockedGiveUp = blockedTries >= Number(blockedCh.max_retry || 3);
+          var blockedFields = { status: blockedGiveUp ? 'KHONG_GUI' : 'THAT_BAI', note: blocked,
+            retry_count: blockedTries, next_try_at: blockedGiveUp ? '' : backoff_(blockedTries),
+            claim_token: '', claim_until: '' };
+          t.write(found, blockedFields);
+          o.status = blockedFields.status; o.retry_count = blockedTries;
+          recordMetric_(t, o, metricStatus_(o.status), '');
+          blockedCount += 1;
+          return;
+        }
+        var channelConfig = cfg_(t, o.channel) || {};
+        var rate = Number(channelConfig.rate_per_hour || 0);
+        if (rate > 0 && (sentCount[o.channel] || 0) >= rate) {
+          rateLimitedCount += 1;
+          return;
+        }
+        var token = Utilities.getUuid();
+        t.write(found, { status: 'DANG_GUI', claim_token: token, claim_until: claimUntil });
+        var copy = {};
+        Object.keys(o).forEach(function (key) { copy[key] = o[key]; });
+        copy.status = 'DANG_GUI'; copy.claim_token = token; copy.claim_until = claimUntil;
+        claimed.push(copy);
+        if (rate > 0) sentCount[o.channel] = (sentCount[o.channel] || 0) + 1;
+      });
+      return { items: claimed, blocked: blockedCount, remaining: Math.max(0, pending.length - claimed.length - blockedCount), rate_limited: rateLimitedCount };
     });
   }
 
-  /**
-   * Điểm nối duy nhất tới thế giới bên ngoài.
-   * Chưa cấu hình xong thì ném lỗi rõ ràng thay vì giả vờ đã gửi.
-   */
-  function send_(t, o) {
-    var ch = cfg_(t, o.channel);
-    var k = ch._config;
+  function backoff_(tries) {
+    var minutes = 5 * Math.pow(3, Math.max(0, tries - 1));
+    return new Date(Date.now() + Math.min(minutes, 240) * 60000).toISOString();
+  }
 
-    if (o.channel === 'IN_APP') {
-      t.append('Inbox', {
-        id: 'NTF_' + Utilities.getUuid().replace(/-/g, '').substring(0, 10).toUpperCase(),
-        user_id: o.recipient, item_id: o.item_id, event: o.event,
-        at: new Date().toISOString(), is_read: false
-      });
-      return { id: 'INAPP', note: '' };
+  function channelSnapshot_(code) {
+    var row = DataRepository.getAll('Channels').filter(function (x) { return x.code === code; })[0];
+    if (!row) throw new Error('Kênh chưa khai báo');
+    var config = {};
+    try { config = row.config_json ? JSON.parse(row.config_json) : {}; } catch (err) { config = {}; }
+    return { row: row, config: config };
+  }
+
+  function gatewaySnapshot_() {
+    var set = {};
+    DataRepository.getAll('Settings').forEach(function (row) { set[row.key] = row.value; });
+    var authRef = String(set.gateway_auth_ref || 'LS_GATEWAY_TOKEN').trim();
+    return { url: String(set.gateway_url || '').trim(), token: PropertiesService.getScriptProperties().getProperty(authRef) || '' };
+  }
+
+  function subjectSnapshot_(o) {
+    if (!o.template_code) return 'Thông báo LS — ' + o.item_id;
+    var tpl = DataRepository.getAll('Templates').filter(function (x) { return x.code === o.template_code; })[0];
+    return tpl && tpl.subject ? render_(tpl.subject, { ma_viec: o.item_id }) : 'Thông báo LS — ' + o.item_id;
+  }
+
+  /** Gọi provider ngoài lock, chỉ đọc cấu hình và trả message_id. */
+  function sendClaimed_(o) {
+    var snapshot = channelSnapshot_(o.channel);
+    if (snapshot.row.status === 'TAM_NGUNG' || snapshot.row.status === 'CHUA_KICH_HOAT') {
+      throw new Error('Kênh đang tạm ngưng hoặc chưa kích hoạt.');
     }
-
+    var allow = String(snapshot.row.allowlist || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (bool_(snapshot.row.test_mode) && allow.indexOf(String(o.recipient || '')) === -1) {
+      throw new Error('Kênh đang ở chế độ thử nghiệm; người nhận chưa nằm trong allowlist.');
+    }
+    var k = snapshot.config;
+    if (o.channel === 'IN_APP') return { id: 'INAPP', note: '' };
     if (o.channel === 'EMAIL') {
-      if (k.mode === 'MAILAPP') {
-        MailApp.sendEmail({ to: o.recipient, subject: subject_(t, o), body: o.body, noReply: true });
-        var quota = emailQuota_(k);
-        k.used_today = quota.used + 1;
-        k.quota_date = quota.day;
-        t.write(t.find('Channels', 'code', 'EMAIL'), { config_json: JSON.stringify(k) });
-        return { id: 'MAILAPP', note: 'Gửi thành công không đồng nghĩa người nhận đã đọc' };
-      }
-      throw new Error('Gmail API chưa được nối. Cần hộp thư tổ chức và quyền gmail.send đã phê duyệt.');
+      if (k.mode !== 'MAILAPP') throw new Error('Gmail API chưa được nối. Cần hộp thư tổ chức và quyền gmail.send đã phê duyệt.');
+      MailApp.sendEmail({ to: o.recipient, subject: subjectSnapshot_(o), body: o.body, noReply: true });
+      return { id: 'MAILAPP', note: 'Gửi thành công không đồng nghĩa người nhận đã đọc' };
     }
 
-    // Các kênh còn lại đi qua gateway; token chỉ nằm trong ScriptProperties.
-    var gateway = gateway_(t);
-    if (!gateway.url || !gateway.token) {
-      throw new Error('Chưa cấu hình gateway gửi tin cho kênh ' + o.channel + '.');
-    }
-
+    var gateway = gatewaySnapshot_();
+    if (!gateway.url || !gateway.token) throw new Error('Chưa cấu hình gateway gửi tin cho kênh ' + o.channel + '.');
     var resp = UrlFetchApp.fetch(gateway.url, {
-      method: 'post',
-      contentType: 'application/json',
-      muteHttpExceptions: true,
-      headers: {
-        'X-Idempotency-Key': o.idem_key,
-        'Authorization': 'Bearer ' + gateway.token
-      },
-      payload: JSON.stringify({
-        channel: o.channel, provider: k.provider || o.channel, to: o.recipient,
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { 'X-Idempotency-Key': o.idem_key, 'Authorization': 'Bearer ' + gateway.token },
+      payload: JSON.stringify({ channel: o.channel, provider: k.provider || o.channel, to: o.recipient,
         template: o.template_code, body: o.body, item_id: o.item_id,
-        provider_config: {
-          oa_id: k.oa_id || '', app_id: k.app_id || '', sender_id: k.sender_id || '',
-          secret_ref: k.secret_ref || ''
-        }
-      })
+        provider_config: { oa_id: k.oa_id || '', app_id: k.app_id || '', sender_id: k.sender_id || '', secret_ref: k.secret_ref || '' } })
     });
-
     var code = resp.getResponseCode();
     if (code < 200 || code >= 300) throw new Error('Gateway trả mã ' + code + ': ' + resp.getContentText().substring(0, 200));
-
     var data = JSON.parse(resp.getContentText() || '{}');
     if (!data.message_id) throw new Error('Gateway không trả mã tin, chưa coi là đã gửi.');
     return { id: data.message_id, note: '' };
+  }
+
+  function finishClaim_(o, result) {
+    return DataRepository.tx(function (t) {
+      var found = t.find('NotificationOutbox', 'outbox_id', o.outbox_id);
+      if (!found || String(found.object.claim_token || '') !== String(o.claim_token || '')) return false;
+      var sentAt = new Date().toISOString();
+      if (o.channel === 'IN_APP') {
+        t.append('Inbox', { id: 'NTF_' + Utilities.getUuid().replace(/-/g, '').substring(0, 10).toUpperCase(),
+          user_id: o.recipient, item_id: o.item_id, event: o.event, at: sentAt, is_read: false });
+      }
+      if (o.channel === 'EMAIL') {
+        var ch = cfg_(t, o.channel), k = ch._config, quota = emailQuota_(k);
+        k.used_today = quota.used + 1; k.quota_date = quota.day;
+        t.write(t.find('Channels', 'code', 'EMAIL'), { config_json: JSON.stringify(k) });
+      }
+      t.write(found, { status: 'DA_GUI', provider_msg_id: result.id, note: result.note || '', sent_at: sentAt,
+        next_try_at: '', claim_token: '', claim_until: '' });
+      o.status = 'DA_GUI'; o.provider_msg_id = result.id; o.sent_at = sentAt;
+      recordMetric_(t, o, 'SENT', result.id);
+      return true;
+    });
+  }
+
+  function failClaim_(o, note) {
+    return DataRepository.tx(function (t) {
+      var found = t.find('NotificationOutbox', 'outbox_id', o.outbox_id);
+      if (!found || String(found.object.claim_token || '') !== String(o.claim_token || '')) return false;
+      var ch = cfg_(t, o.channel) || {};
+      var tries = Number(o.retry_count || 0) + 1;
+      var give = tries >= Number(ch.max_retry || 3);
+      var fields = { status: give ? 'KHONG_GUI' : 'THAT_BAI', note: String(note).substring(0, 300),
+        retry_count: tries, next_try_at: give ? '' : backoff_(tries), claim_token: '', claim_until: '' };
+      t.write(found, fields);
+      o.status = fields.status; o.retry_count = tries;
+      recordMetric_(t, o, metricStatus_(fields.status), '');
+      return true;
+    });
+  }
+
+  function runOutbox(batchSize) {
+    try {
+      var claimed = claimPending_(batchSize || 20);
+      var done = 0, failed = claimed.blocked || 0;
+      claimed.items.forEach(function (o) {
+        try {
+          var result = sendClaimed_(o);
+          if (finishClaim_(o, result)) done += 1;
+        } catch (err) {
+          if (failClaim_(o, err)) failed += 1;
+        }
+      });
+      var output = { sent: done, failed: failed, remaining: claimed.remaining, rate_limited: claimed.rate_limited || 0 };
+      recordWorkerRun_(output);
+      return output;
+    } catch (err) {
+      var failure = { sent: 0, failed: 1, remaining: -1, error: err.message };
+      recordWorkerRun_(failure);
+      throw err;
+    }
   }
 
   function subject_(t, o) {
@@ -558,17 +665,28 @@ var Notifications = (function () {
   /** Đối soát: tin báo đã gửi nhưng không có mã nhà cung cấp là chưa chắc chắn. */
   function reconcile() {
     return DataRepository.tx(function (t) {
+      var nowIso = new Date().toISOString();
       var suspect = t.rows('NotificationOutbox').filter(function (o) {
-        return o.status === 'DA_GUI' && !o.provider_msg_id;
+        return (o.status === 'DA_GUI' && !o.provider_msg_id) ||
+          (o.status === 'DANG_GUI' && o.claim_until && String(o.claim_until) < nowIso);
       });
       suspect.forEach(function (o) {
+        var expired = o.status === 'DANG_GUI';
+        var channel = cfg_(t, o.channel) || {};
+        var tries = Number(o.retry_count || 0) + (expired ? 1 : 0);
+        var emailReview = expired && o.channel === 'EMAIL';
+        var giveUp = emailReview || (expired && tries >= Number(channel.max_retry || 3));
         t.write(t.find('NotificationOutbox', 'outbox_id', o.outbox_id), {
-          status: 'THAT_BAI', note: 'Đối soát: không có mã phản hồi nhà cung cấp', next_try_at: ''
+          status: giveUp ? 'KHONG_GUI' : 'THAT_BAI',
+          note: emailReview ? 'Đối soát: email có thể đã gửi; không tự gửi lại, cần kiểm tra trước khi retry' :
+            (expired ? 'Đối soát: lease gửi tin đã hết hạn' : 'Đối soát: không có mã phản hồi nhà cung cấp'),
+          retry_count: tries, next_try_at: giveUp ? '' : backoff_(tries), claim_token: '', claim_until: ''
         });
         // Không hạ metrics theo thì màn chi phí vẫn tính tiền cho tin vừa bị loại.
-        o.status = 'THAT_BAI';
+        o.status = giveUp ? 'KHONG_GUI' : 'THAT_BAI';
+        o.retry_count = tries;
         o.sent_at = '';
-        recordMetric_(t, o, 'FAILED', '');
+        recordMetric_(t, o, metricStatus_(o.status), '');
       });
       return { flagged: suspect.length };
     });
@@ -587,10 +705,8 @@ var Notifications = (function () {
       var late = t.rows('WorkItems').filter(function (i) {
         return OPEN_FOR_SLA.indexOf(i.status) !== -1 && i.due_at && String(i.due_at) < nowIso;
       });
-      var seen = {};
-      t.tail('NotificationOutbox', 2000).forEach(function (o) { seen[o.idem_key] = true; });
       var made = 0;
-      late.forEach(function (i) { made += queue(t, i, 'QUA_HAN', '', seen); });
+      late.forEach(function (i) { made += queue(t, i, 'QUA_HAN', ''); });
       return { late: late.length, queued: made };
     });
   }
@@ -618,6 +734,7 @@ var Notifications = (function () {
       provider_msg_id: '', created_at: now, sent_at: ''
     };
     t.append('NotificationOutbox', outbox);
+    rememberIdempotency_(t, outbox.idem_key, outbox.outbox_id, now);
     recordMetric_(t, outbox, 'QUEUED', '');
     return outbox.outbox_id;
   }

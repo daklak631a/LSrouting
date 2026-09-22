@@ -568,7 +568,7 @@ LS.domain = (function () {
    * Không kênh nào dùng được thì vẫn tạo bản ghi KHONG_GUI kèm lý do —
    * im lặng bỏ qua là cách nhanh nhất để không ai biết tin đã không tới nơi.
    */
-  function queueNotifications(item, event, st, actorId) {
+  function queueNotifications(item, event, st, actorId, channelMode) {
     // Quy tắc có điều kiện: hẹn ký báo thẳng khách hay báo qua nhóm nội bộ
     // là hai đường loại trừ nhau, không phát cả hai.
     var viaGroup = !!(item.appointment && item.appointment.via_group);
@@ -596,7 +596,9 @@ LS.domain = (function () {
         var selected = event === 'DANG_HEN_KH' && item.appointment && !item.appointment.via_group
           ? item.appointment.channel : '';
         if (selected === 'ZALO') selected = 'ZBS';
-        var candidateChannels = selected && ['EMAIL', 'ZBS', 'SMS'].indexOf(selected) !== -1 ? [selected] : rule.channels;
+        var candidateChannels = channelMode === 'IN_APP'
+          ? ['IN_APP']
+          : (selected && ['EMAIL', 'ZBS', 'SMS'].indexOf(selected) !== -1 ? [selected] : rule.channels);
         var chosen = null, reason = '', address = '', tpl = null;
         for (var i = 0; i < candidateChannels.length; i++) {
           var code = candidateChannels[i];
@@ -865,6 +867,69 @@ LS.domain = (function () {
       if (item.status === 'HOAN_THANH_LS') row.done += 1;
     });
     return { groups: groups, rows: users.map(function (u) { return byUser[u.user_id]; }) };
+  }
+
+  /**
+   * Điểm vận hành tự tính từ dữ liệu công việc, không có bước nhập hay duyệt điểm.
+   * 60 điểm đúng hạn + 25 điểm hoàn thành + 15 điểm không để tồn quá hạn.
+   * Việc hủy và bản sao đã chuyển sang kỳ sau không làm lệch kết quả của cán bộ.
+   */
+  function operationalScorecard(fromDate, toDate, st, now) {
+    var from = dateOnly(fromDate), to = dateOnly(toDate);
+    var at = now instanceof Date ? now : new Date(now || U.now());
+    var users = (st.users || []).filter(function (u) {
+      return u.role === 'CAN_BO_LS' && u.active !== false && String(u.is_active).toLowerCase() !== 'false';
+    });
+    var byUser = {};
+    users.forEach(function (u) {
+      byUser[u.user_id] = { user: u, eligible: 0, done: 0, timedDone: 0, onTime: 0, lateOpen: 0, open: 0 };
+    });
+
+    (st.items || []).forEach(function (item) {
+      var day = dateOnly(item.occurrence_date || item.submitted_at);
+      var row = byUser[item.assigned_user_id];
+      if (!row || !day || (from && day < from) || (to && day > to) || item.status === 'HUY' || item.carried_to_item_id) return;
+
+      row.eligible += 1;
+      if (item.status === 'HOAN_THANH_LS') {
+        row.done += 1;
+        if (item.due_at && item.completed_at) {
+          row.timedDone += 1;
+          if (new Date(item.completed_at).getTime() <= new Date(item.due_at).getTime()) row.onTime += 1;
+        }
+      }
+      if (STATUS[item.status] && STATUS[item.status].open) {
+        row.open += 1;
+        if (item.due_at && at.getTime() > new Date(item.due_at).getTime()) row.lateOpen += 1;
+      }
+    });
+
+    return users.map(function (u) {
+      var row = byUser[u.user_id];
+      if (!row.eligible) return Object.assign(row, { score: null, onTimeRate: null, completionRate: null, backlogRate: null, dataQuality: 'NO_WORK' });
+      if (!row.timedDone) {
+        row.score = null;
+        row.onTimeRate = null;
+        row.completionRate = Math.round((row.done / row.eligible) * 100);
+        row.backlogRate = Math.round((row.open ? Math.max(0, 1 - row.lateOpen / row.open) : 1) * 100);
+        row.dataQuality = 'THIEU_HAN_SLA';
+        return row;
+      }
+      var onTimeRate = row.onTime / row.timedDone;
+      var completionRate = row.done / row.eligible;
+      var backlogRate = row.open ? Math.max(0, 1 - row.lateOpen / row.open) : 1;
+      row.onTimeRate = Math.round(onTimeRate * 100);
+      row.completionRate = Math.round(completionRate * 100);
+      row.backlogRate = Math.round(backlogRate * 100);
+      row.score = Math.round(60 * onTimeRate + 25 * completionRate + 15 * backlogRate);
+      row.dataQuality = row.timedDone === row.done ? 'OK' : 'THIEU_HAN_SLA';
+      return row;
+    }).sort(function (a, b) {
+      if (a.score === null && b.score === null) return String(a.user.full_name || '').localeCompare(String(b.user.full_name || ''));
+      if (a.score === null) return 1;
+      if (b.score === null) return -1;
+      return b.score - a.score || String(a.user.full_name || '').localeCompare(String(b.user.full_name || ''));
+    });
   }
 
   /**
@@ -1296,7 +1361,7 @@ LS.domain = (function () {
     addressFor: addressFor, templateFor: templateFor, emailUsedToday: emailUsedToday,
     REPORT_PRESETS: REPORT_PRESETS, presetRange: presetRange, monthsInRange: monthsInRange,
     reportFromItems: reportFromItems, monthKey: monthKey,
-    dateOnly: dateOnly, userOff: userOff, userAvailable: userAvailable, staffWorkloadByGroup: staffWorkloadByGroup,
+    dateOnly: dateOnly, userOff: userOff, userAvailable: userAvailable, staffWorkloadByGroup: staffWorkloadByGroup, operationalScorecard: operationalScorecard,
     VARS: VARS, FORBIDDEN: FORBIDDEN, TPL_STATUS: TPL_STATUS,
     NOTIFY_EVENTS: NOTIFY_EVENTS, AUDIENCE: AUDIENCE, OUT_STATUS: OUT_STATUS,
     label: label, tone: tone,

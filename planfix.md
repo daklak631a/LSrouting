@@ -9,8 +9,8 @@ Phạm vi chỉ là app và kho dữ liệu do app tạo. **Không sửa workboo
 ## Baseline đã xác nhận
 
 - `build-gas.mjs`, `verify-gas-contract.mjs`, `verify-storage-schema.mjs`, `verify-monthly-plan-flow.mjs` đang đạt.
-- Schema hiện có 17 bảng; Admin có 16 mục con.
-- Baseline lỗi đã ghi nhận: Admin bootstrap lộ trường khách hàng; SMS chưa có channel thật; lựa chọn kênh hẹn khách bị bỏ qua ở server; ZBS chỉ gọi gateway tổng quát nhưng gateway chưa cấu hình được; Gmail API còn stub; outbox trigger còn cài thủ công; `sign_place` bị backend bỏ qua; README đã cũ.
+- Schema hiện có 20 bảng; Admin có 16 mục con.
+- Các baseline về lọc dữ liệu Admin, SMS/kênh hẹn, gateway, trigger và `sign_place` đã được xử lý trong source hiện tại. Phần còn phải nghiệm thu thật là provider sandbox và E2E 5 role.
 
 ## Đã triển khai trong lượt này
 
@@ -18,6 +18,8 @@ Phạm vi chỉ là app và kho dữ liệu do app tạo. **Không sửa workboo
 - Email chốt MailApp; ZBS và SMS tách riêng, tôn trọng kênh hẹn khách; gateway nhận provider config và token từ ScriptProperties.
 - `createStorageWorkbook()`/`setupSheetDB()` tự cài worker; `sign_place` và gateway settings đã có round-trip.
 - Thêm bảng `NotificationMetrics`, cập nhật theo outbox và trang Admin `Chi phí & hiệu quả`.
+- Thêm `NotificationIdempotency` để chống trùng không phụ thuộc số dòng outbox; worker claim lease trước khi gọi provider.
+- Thêm `OperationalScoreSnapshots` để chốt điểm theo kỳ, có version công thức và cờ dữ liệu thiếu SLA.
 - Cập nhật README, schema contract và bundle GAS. Phần provider sandbox, E2E 5 role và deploy pilot vẫn cần nghiệm thu thật.
 
 ## Tasks triển khai
@@ -82,7 +84,7 @@ Phạm vi chỉ là app và kho dữ liệu do app tạo. **Không sửa workboo
 ### 6. Sửa các cấu hình bị rơi và đồng bộ schema/tài liệu
 
 - Thêm `sign_place` vào allowlist `adminSaveSettings()` và kiểm tra round-trip UI → GAS → bootstrap.
-- Cập nhật README theo 17 bảng, 16 mục Admin, SMS/provider status và runbook trigger tự động.
+- Cập nhật README theo 20 bảng, 16 mục Admin, SMS/provider status và runbook trigger tự động.
 - Sửa tài liệu nói về Sheet mẫu: chỉ đọc/copy, không sửa trực tiếp workbook mẫu.
 - Ghi rõ Email hiện dùng MailApp; ZBS/SMS chỉ gọi được sau khi provider health đạt.
 

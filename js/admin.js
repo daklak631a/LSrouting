@@ -110,12 +110,18 @@ LS.admin = (function () {
     var emailQuota = Number(email.config.daily_quota || 0);
     var quotaLeft = emailQuota - D.emailUsedToday(email.config);
     var pendingTpl = s.templates.filter(function (t) { return t.status === 'CHO_DUYET'; });
+    var plan = s.activePlan || {};
+    var month = D.monthKey(new Date());
+    var scores = s.operationalScorecard && s.operationalScorecard.length
+      ? s.operationalScorecard
+      : D.operationalScorecard(plan.start_date || (month + '-01'), plan.end_date || (month + '-31'), s);
+    var scored = scores.filter(function (x) { return x.score !== null; });
 
     var out = '';
 
     if (s.settings.env === 'THU_NGHIEM') {
       out += ui.banner('warn', 'Hệ thống đang ở môi trường thử nghiệm',
-        'Chỉ gửi tin cho người nhận trong danh sách cho phép. Chuyển sang môi trường thật ở mục Cấu hình chung sau khi nghiệm thu.');
+        'THU_NGHIEM');
     }
 
     out += ui.strip([
@@ -125,6 +131,65 @@ LS.admin = (function () {
       ui.metric('Không gửi được', h.skipped, h.skipped ? 'warn' : ''),
       ui.metric('Việc quá hạn', late.length, late.length ? 'danger' : '')
     ]);
+
+    out += ui.block({
+      title: 'Điểm vận hành', count: scores.length, icon: 'chart',
+      body: ui.table(
+        [{ label: 'Cán bộ' }, { label: 'Đúng hạn', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Tồn quá hạn', cls: 'num' }, { label: 'Điểm', cls: 'num' }],
+        scores.map(function (x) {
+          var tone = x.score === null ? '' : (x.score >= 80 ? 'ok' : (x.score >= 60 ? 'warn' : 'danger'));
+          return { cls: x.lateOpen ? 'flag-warn' : '', cells: [
+            '<div class="t1">' + U.esc(x.user.full_name) + '</div>',
+            x.score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '/' + x.done + '</span>',
+            x.score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.done + '/' + x.eligible + '</span>',
+            x.score === null ? '<span class="t2">—</span>' : (x.lateOpen ? ui.tag(String(x.lateOpen), 'danger') : '<span class="tid">0</span>'),
+            x.score === null ? '<span class="t2">Chưa có dữ liệu</span>' : ui.tag(String(x.score), tone)
+          ] };
+        }),
+        { icon: 'users', title: 'Chưa có cán bộ LS', text: '' }
+      )
+    });
+
+    var snapshots = (s.operationalScoreSnapshots || []).slice().sort(function (a, b) {
+      return String(b.month_key || '').localeCompare(String(a.month_key || '')) ||
+        String(b.captured_at || '').localeCompare(String(a.captured_at || '')) ||
+        String(a.full_name || '').localeCompare(String(b.full_name || ''));
+    });
+    out += ui.block({
+      title: 'Lịch sử điểm đã chốt', count: snapshots.length, icon: 'history',
+      body: ui.table(
+        [{ label: 'Kỳ', cls: 'fit' }, { label: 'Cán bộ' }, { label: 'Điểm', cls: 'num' },
+          { label: 'Hoàn thành / đúng hạn', cls: 'fit' }, { label: 'Chất lượng dữ liệu' }, { label: 'Chốt lúc', cls: 'fit' }],
+        snapshots.slice(0, 120).map(function (x) {
+          var score = x.score === '' || x.score === null || x.score === undefined ? '—' : String(x.score);
+          var tone = score === '—' ? '' : (Number(x.score) >= 80 ? 'ok' : (Number(x.score) >= 60 ? 'warn' : 'danger'));
+          return { cells: [
+            '<span class="tid">' + U.esc(x.month_key || '—') + '</span>',
+            '<div class="t1">' + U.esc(x.full_name || x.user_id || '—') + '</div>',
+            score === '—' ? '<span class="t2">—</span>' : ui.tag(score, tone),
+            '<span class="tid">' + U.esc(String(x.done || 0)) + ' / ' + U.esc(String(x.on_time || 0)) + '</span>',
+            '<span class="t2">' + U.esc(x.data_quality || 'DAT_CHUAN') + '</span>',
+            '<span class="tid">' + U.fmtDT(x.captured_at || '') + '</span>'
+          ] };
+        }),
+        { icon: 'chart', title: 'Chưa có snapshot', text: 'Điểm sẽ xuất hiện sau khi một kỳ được chốt.' }
+      )
+    });
+
+    var workerAt = String(s.settings.worker_last_run_at || '').trim();
+    var workerStatus = String(s.settings.worker_last_run_status || '').trim();
+    var workerTone = workerStatus === 'OK' ? 'ok' : (workerStatus ? 'warn' : '');
+    out += ui.block({
+      title: 'Worker thông báo', icon: 'activity',
+      body: ui.pad(workerAt
+        ? ui.kv([
+          ['Trạng thái lần chạy gần nhất', ui.tag(workerStatus || 'CHƯA CÓ', workerTone)],
+          ['Thời điểm', U.fmtDT(workerAt)],
+          ['Đã gửi / lỗi / còn lại', String(s.settings.worker_last_run_sent || 0) + ' / ' + String(s.settings.worker_last_run_failed || 0) + ' / ' + String(s.settings.worker_last_run_remaining || 0)],
+          ['Backup kho gần nhất', s.settings.backup_last_at ? U.fmtDT(s.settings.backup_last_at) : 'Chưa có']
+        ])
+        : ui.banner('warn', 'Worker chưa ghi nhận lần chạy', 'Trigger sẽ tự cài khi kho được mở lần đầu sau deploy.'))
+    });
 
     out += ui.block({
       title: 'Tình trạng kênh gửi tin', icon: 'zap',
@@ -138,8 +203,7 @@ LS.admin = (function () {
           return {
             cls: miss.length ? 'flag-warn' : '',
             cells: [
-              '<div class="t1">' + U.esc(def.name) + '</div><div class="t2">' +
-              U.esc(def.to === 'KHACH' ? 'gửi khách hàng' : def.to === 'NOI_BO' ? 'nội bộ' : 'nội bộ và khách hàng') + '</div>',
+              '<div class="t1">' + U.esc(def.name) + '</div>',
               ui.tag(D.CHANNEL_STATUS[c.status].label, D.CHANNEL_STATUS[c.status].tone),
               miss.length
                 ? '<div class="t2">' + miss.map(function (x) { return U.esc(x.label); }).join('<br>') + '</div>'
@@ -151,11 +215,11 @@ LS.admin = (function () {
     });
 
     var warnings = [];
-    if (h.failed) warnings.push([h.failed + ' tin thất bại chưa xử lý', 'Mở hàng đợi để xem mã lỗi và gửi lại.']);
-    if (h.backlog > s.settings.backlog_alert) warnings.push(['Hàng đợi vượt ngưỡng cảnh báo', 'Đang tồn ' + h.backlog + ' tin, ngưỡng đặt ở ' + s.settings.backlog_alert + '.']);
-    if (pendingTpl.length) warnings.push([pendingTpl.length + ' mẫu tin chờ duyệt', 'Mẫu chưa duyệt thì tin liên quan sẽ không gửi.']);
-    if (emailQuota > 0 && quotaLeft <= 10) warnings.push(['Sắp hết hạn mức thư trong ngày', 'Còn ' + quotaLeft + ' thư trên hạn mức ' + emailQuota + '.']);
-    if (notReady.length) warnings.push([notReady.length + ' kênh chưa sẵn sàng', 'Tin đi qua các kênh này sẽ được ghi là không gửi.']);
+    if (h.failed) warnings.push([h.failed + ' tin thất bại chưa xử lý', '']);
+    if (h.backlog > s.settings.backlog_alert) warnings.push(['Hàng đợi vượt ngưỡng cảnh báo', '']);
+    if (pendingTpl.length) warnings.push([pendingTpl.length + ' mẫu tin chờ duyệt', '']);
+    if (emailQuota > 0 && quotaLeft <= 10) warnings.push(['Sắp hết hạn mức thư trong ngày', '']);
+    if (notReady.length) warnings.push([notReady.length + ' kênh chưa sẵn sàng', '']);
 
     out += ui.block({
       title: 'Cảnh báo vận hành', count: warnings.length, icon: 'warn',
@@ -173,10 +237,7 @@ LS.admin = (function () {
 
   function channels() {
     var s = st();
-    return ui.banner('info', 'Kênh chỉ bật khi đủ điều kiện',
-      'Tin không gửi được luôn ghi rõ lý do.') +
-
-      '<div class="chan-list">' + s.channels.filter(function (c) { return D.CHANNELS[c.code] && D.CHANNEL_STATUS[c.status]; }).map(function (c) {
+    return '<div class="chan-list">' + s.channels.filter(function (c) { return D.CHANNELS[c.code] && D.CHANNEL_STATUS[c.status]; }).map(function (c) {
         var def = D.CHANNELS[c.code];
         var rd = D.channelReady(c.code, s);
         var usable = D.channelUsable(c.code, s);
@@ -238,9 +299,7 @@ LS.admin = (function () {
 
     ui.openDialog('Cấu hình ' + def.name,
       '<form data-form="channel" data-code="' + U.attr(code) + '">' +
-      ui.banner('info', def.desc, def.docs ? 'Tài liệu nhà cung cấp: ' + def.docs : '') +
-
-      '<div style="margin-top:1.125rem">' + ui.sectionTitle('Kết nối') +
+      '<div>' + ui.sectionTitle('Kết nối') +
       '<div class="f-row">' + fields + '</div></div>' +
 
       '<div style="margin-top:1.125rem">' + ui.sectionTitle('An toàn khi gửi') +
@@ -365,17 +424,14 @@ LS.admin = (function () {
     U.save();
     section = 'outbox';
     LS.app.render();
-    ui.toast('Đã xếp tin thử vào hàng đợi. Bấm chạy hàng đợi để gửi.');
+    ui.toast('Đã xếp tin thử vào hàng đợi.');
   }
 
   /* ============================ Mẫu tin ============================ */
 
   function templates() {
     var s = st();
-    return ui.banner('info', 'Mẫu gửi khách phải được nhà cung cấp duyệt trước',
-      'Tự tạo mẫu không đồng nghĩa mẫu đã được duyệt. Mẫu chưa duyệt thì tin liên quan sẽ không gửi.') +
-
-      ui.block({
+    return ui.block({
         title: 'Mẫu tin', count: s.templates.length, icon: 'file',
         actions: ui.btn('Thêm mẫu', { kind: 'primary', act: 'tpl-edit', sm: true, icon: 'plus' }),
         body: ui.table(
@@ -404,7 +460,7 @@ LS.admin = (function () {
               ]
             };
           }),
-          { icon: 'file', title: 'Chưa có mẫu tin nào', text: 'Thêm mẫu rồi gửi duyệt trước khi bật kênh.' }
+          { icon: 'file', title: 'Chưa có mẫu tin nào', text: '' }
         )
       });
   }
@@ -425,9 +481,9 @@ LS.admin = (function () {
       ui.field('Kênh', ui.select('channel', chanOpts, cur.channel, { attrs: ' id="tplChannel"' })) +
       '</div>' +
       ui.field('Tên mẫu', ui.input('name', cur.name, { required: true })) +
-      ui.field('Tiêu đề', ui.input('subject', cur.subject), 'chỉ dùng cho email') +
+      ui.field('Tiêu đề', ui.input('subject', cur.subject)) +
       ui.field('Nội dung', ui.textarea('body', cur.body, { id: 'tplBody', required: true, attrs: ' rows="7"' }),
-        'dùng {{bien}} để chèn dữ liệu') +
+        '') +
       '<div id="tplErrors">' + tplErrorHtml(chk) + '</div>' +
       '</div>' +
 
@@ -560,10 +616,7 @@ LS.admin = (function () {
 
   function rules() {
     var s = st();
-    return ui.banner('info', 'Quy tắc nhận tin và thứ tự kênh',
-      'Các kênh được thử theo thứ tự đã cấu hình.') +
-
-      ui.block({
+    return ui.block({
         title: 'Quy tắc thông báo', count: s.notifyRules.length, icon: 'bell',
         body: ui.table(
           [{ label: 'Sự kiện' }, { label: 'Người nhận' }, { label: 'Thứ tự kênh' }, { label: 'Mẫu' },
@@ -598,15 +651,12 @@ LS.admin = (function () {
 
     ui.openDialog('Quy tắc thông báo',
       '<form data-form="rule" data-id="' + U.attr(id) + '">' +
-      ui.banner('info', D.NOTIFY_EVENTS[r.event] || r.event, 'Gửi cho: ' + D.AUDIENCE[r.audience]) +
-      '<div style="margin-top:1.125rem">' + ui.sectionTitle('Kênh theo thứ tự ưu tiên') +
+      '<div>' + ui.sectionTitle('Kênh') +
       '<div class="f-stack">' + Object.keys(D.CHANNELS).map(function (c) {
         var on = r.channels.indexOf(c) !== -1;
         var usable = D.channelUsable(c, st());
-        return ui.checkbox('ch_' + c, on, D.CHANNELS[c].name,
-          usable ? 'sẵn sàng gửi' : 'chưa sẵn sàng, sẽ bị bỏ qua khi chạy');
+        return ui.checkbox('ch_' + c, on, D.CHANNELS[c].name);
       }).join('') + '</div>' +
-      '<p class="t2" style="margin-top:.5rem">Thứ tự thử theo danh sách trên xuống. Kênh đầu tiên dùng được sẽ nhận tin.</p>' +
       '</div>' +
       '<div style="margin-top:1.125rem"><div class="f-row">' +
       ui.field('Mẫu tin', ui.select('template', tplOpts, r.template, { blank: 'Không dùng mẫu (chỉ báo trong app)' })) +
@@ -676,12 +726,9 @@ LS.admin = (function () {
       ui.metric('Không gửi', h.skipped)
     ]) +
 
-      ui.banner('warn', 'Bản trình duyệt không gửi ra ngoài',
-        'GAS dùng worker và provider thật sau khi cấu hình gateway.') +
-
       ui.block({
         title: 'Hàng đợi gửi', count: list.length + '/' + s.outbox.length, icon: 'send',
-        actions: ui.btn('Chạy hàng đợi', { kind: 'primary', sm: true, act: 'out-run', icon: 'play' }) +
+        actions: (!U.isGas() ? ui.btn('Chạy hàng đợi', { kind: 'primary', sm: true, act: 'out-run', icon: 'play' }) : '') +
           ui.btn('Gửi lại tin lỗi', { sm: true, act: 'out-retry-all', icon: 'refresh', disabled: !h.failed }),
         filters: ui.select('', Object.keys(D.OUT_STATUS).map(function (k) { return [k, D.OUT_STATUS[k].label]; }),
           oFilter.status, { blank: 'Mọi trạng thái', attrs: ' data-ofilter="status" style="flex:0 1 190px"' }) +
@@ -753,7 +800,6 @@ LS.admin = (function () {
       ui.metric('Chi phí', currencies.length === 1 ? money(cost, currencies[0]) : money(cost, '') + ' (nhiều loại tiền)')
     ]) + ui.block({
       title: 'Chi phí và hiệu quả gửi tin', count: grouped.length, icon: 'chart',
-      note: 'Chi phí tính theo đơn giá của kênh tại thời điểm gửi; mỗi outbox chỉ tính một lần.',
       body: ui.table(
         [{ label: 'Kỳ', cls: 'fit' }, { label: 'Kênh', cls: 'fit' }, { label: 'Lượt ghi nhận', cls: 'num' },
           { label: 'Đã gửi', cls: 'num' }, { label: 'Lỗi', cls: 'num' }, { label: 'Không gửi', cls: 'num' }, { label: 'Chi phí', cls: 'num' }],
@@ -889,7 +935,6 @@ LS.admin = (function () {
   function types() {
     return ui.block({
       title: 'Loại việc', count: st().workTypes.length, icon: 'tag',
-      note: 'Loại việc đã dùng thì ẩn đi, không xóa, để báo cáo cũ giữ đúng nhãn lúc phát sinh.',
       actions: ui.btn('Thêm loại việc', { kind: 'primary', sm: true, act: 'type-edit', icon: 'plus' }),
       body: ui.table(
         [{ label: 'Mã', cls: 'fit' }, { label: 'Nhóm' }, { label: 'Tên hiển thị' }, { label: 'SLA', cls: 'num' },
@@ -921,20 +966,18 @@ LS.admin = (function () {
     ui.openDialog(w ? 'Sửa loại việc' : 'Thêm loại việc',
       '<form data-form="work-type"' + (w ? ' data-code="' + U.attr(w.code) + '"' : '') + '>' +
       '<div class="f-row">' +
-      ui.field('Mã', ui.input('code', cur.code, { required: true, disabled: !!w, placeholder: 'VT_...' }), w ? 'không đổi sau khi đã dùng' : '') +
+      ui.field('Mã', ui.input('code', cur.code, { required: true, disabled: !!w, placeholder: 'VT_...' })) +
       ui.field('Nhóm', ui.input('group', cur.group, { required: true })) +
       ui.field('Tên hiển thị', ui.input('name', cur.name, { required: true })) +
-      ui.field('SLA (giờ làm việc)', ui.input('sla_hours', cur.sla_hours, { type: 'number', min: 1, max: 720, required: true }),
-        'tính theo lịch làm việc, không tính giờ nghỉ') +
+      ui.field('SLA (giờ làm việc)', ui.input('sla_hours', cur.sla_hours, { type: 'number', min: 1, max: 720, required: true })) +
       '</div>' +
       '<div class="f-stack" style="margin-top:1rem">' +
-      ui.checkbox('needs_appointment', cur.needs_appointment, 'Cần hẹn khách ký hồ sơ', 'không cho hoàn thành thẳng khi chưa có kết quả hẹn') +
-      ui.checkbox('needs_ks_approval', cur.needs_ks_approval, 'Cần kiểm soát duyệt hoàn thành', 'cán bộ trình, kiểm soát chốt') +
-      ui.checkbox('active', cur.active, 'Đang hoạt động', 'bỏ chọn để ẩn thay vì xóa') +
+      ui.checkbox('needs_appointment', cur.needs_appointment, 'Cần hẹn khách ký hồ sơ') +
+      ui.checkbox('needs_ks_approval', cur.needs_ks_approval, 'Cần kiểm soát duyệt hoàn thành') +
+      ui.checkbox('active', cur.active, 'Đang hoạt động') +
       '</div>' +
       '<div style="margin-top:1.125rem">' +
-      ui.field('Việc phải làm', ui.textarea('checklist', cur.checklist.join('\n'), { placeholder: 'mỗi dòng một mục' }),
-        'cán bộ phải tích đủ mới báo soạn xong được') +
+      ui.field('Việc phải làm', ui.textarea('checklist', cur.checklist.join('\n'), { placeholder: 'mỗi dòng một mục' })) +
       '</div>' +
       ui.formEnd('Lưu') + '</form>',
       { size: 'md' });
@@ -1052,7 +1095,7 @@ LS.admin = (function () {
       title: 'Người dùng', count: st().users.length, icon: 'users',
       actions: ui.btn('Thêm người dùng', { kind: 'primary', sm: true, act: 'user-edit', icon: 'plus' }) +
         ui.btn('Nhập Excel/CSV', { sm: true, act: 'user-import', icon: 'upload' }),
-      body: '<p class="t2" style="margin:0 0 .75rem">Mã cán bộ gắn với đúng một phòng/PGD. Phòng/PGD đăng nhập bằng mã; LS, kiểm soát và quản trị dùng mã kèm mật khẩu. Có thể xuất Excel thành CSV UTF-8 để nhập nhiều dòng.</p>' + ui.table(
+      body: ui.table(
         [{ label: 'Mã đăng nhập', cls: 'fit' }, { label: 'Họ tên' }, { label: 'Email' }, { label: 'Đơn vị' },
         { label: 'Vai trò', cls: 'fit' }, { label: 'Việc đang mở', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: 'Nghỉ', cls: 'fit' }, { label: '', cls: 'fit' }],
         st().users.map(function (u) {
@@ -1069,6 +1112,7 @@ LS.admin = (function () {
               open ? '<span class="tid">' + open + '</span>' : '<span class="t2">—</span>',
               !u.active ? ui.tag('Đã khóa', 'neutral') : D.userOff(u) ? ui.tag('Đang nghỉ', 'warn') : ui.tag('Hoạt động', 'ok'),
               u.active && D.userOff(u) ? '<div class="t2">' + U.esc((u.off_from || '') + (u.off_to ? ' → ' + u.off_to : '')) + '</div>' : '',
+              (u.auth_group !== 'EXTERNAL' ? ui.iconBtn('lock', { act: 'user-reset-password', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Đặt lại mật khẩu' }) : '') +
               ui.iconBtn('pencil', { act: 'user-edit', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Sửa người dùng' })
             ]
           };
@@ -1095,15 +1139,49 @@ LS.admin = (function () {
       ui.field('Nghỉ từ', ui.input('off_from', cur.off_from || '', { type: 'date' })) +
       ui.field('Nghỉ đến', ui.input('off_to', cur.off_to || '', { type: 'date' })) +
       ui.field('Cán bộ thay thế', ui.select('replacement_user_id', st().users.filter(function (x) { return x.role === 'CAN_BO_LS' && x.active && x.user_id !== cur.user_id; }).map(function (x) { return [x.user_id, x.full_name]; }), cur.replacement_user_id || '', { blank: 'Không chỉ định' }), 'Nếu đổi khỏi Cán bộ LS khi còn việc mở, chọn cán bộ thay thế; hệ thống sẽ bàn giao trong cùng thao tác.') +
-      ui.field('Tên trong nhóm Zalo', ui.input('zalo_name', cur.zalo_name || ''), 'dùng để gắn thẻ khi nhắn nhóm') +
+      ui.field('Tên trong nhóm Zalo', ui.input('zalo_name', cur.zalo_name || '')) +
       ui.field('Số Zalo', ui.input('zalo_phone', cur.zalo_phone || '', { type: 'tel' })) +
-      ui.field('Chat ID Telegram', ui.input('telegram_chat_id', cur.telegram_chat_id || ''), 'bot chỉ nhắn được cho người đã bắt đầu trò chuyện') +
+      ui.field('Chat ID Telegram', ui.input('telegram_chat_id', cur.telegram_chat_id || '')) +
       '</div>' +
       ui.field('Mật khẩu mới', ui.input('new_password', '', { type: 'password', placeholder: 'Để trống để giữ nguyên; phòng/PGD không cần nhập' })) +
       '<div style="margin-top:1rem">' +
-      ui.checkbox('active', cur.active, 'Tài khoản đang hoạt động', 'khóa tài khoản khi nghỉ hoặc chuyển công tác') + '</div>' +
+      ui.checkbox('active', cur.active, 'Tài khoản đang hoạt động') + '</div>' +
       ui.field('Lý do nghỉ', ui.textarea('off_reason', cur.off_reason || '', { placeholder: 'Ví dụ: nghỉ phép, nghỉ ốm, đi công tác' })) +
       ui.formEnd('Lưu') + '</form>');
+  }
+
+  function resetUserPasswordDialog(id) {
+    var u = U.byId(st().users, 'user_id', id);
+    if (!u || u.auth_group === 'EXTERNAL') { ui.toast('Tài khoản Phòng/PGD không dùng mật khẩu.', 'warn'); return; }
+    ui.openDialog('Đặt lại mật khẩu',
+      '<form data-form="user-reset-password" data-id="' + U.attr(u.user_id) + '">' +
+      '<p class="t2" style="margin:0 0 1rem">Mật khẩu tạm mới sẽ buộc ' + U.esc(u.full_name) + ' đổi ngay ở lần đăng nhập kế tiếp.</p>' +
+      ui.field('Mật khẩu tạm mới', ui.input('next_password', '', { type: 'password', required: true, autocomplete: 'new-password' }), 'Tối thiểu 8 ký tự, có cả chữ và số.') +
+      ui.field('Nhập lại mật khẩu tạm', ui.input('confirm_password', '', { type: 'password', required: true, autocomplete: 'new-password' })) +
+      ui.formEnd('Đặt mật khẩu') + '</form>');
+  }
+
+  function resetUserPassword(form) {
+    var id = form.getAttribute('data-id');
+    var d = new FormData(form);
+    var next = String(d.get('next_password') || '');
+    if (next !== String(d.get('confirm_password') || '')) { ui.toast('Hai lần nhập mật khẩu chưa khớp.', 'err'); return; }
+    if (next.length < 8 || !/[0-9]/.test(next) || !/[a-zA-Z]/.test(next)) {
+      ui.toast('Mật khẩu tạm phải từ 8 ký tự và có cả chữ lẫn số.', 'err'); return;
+    }
+    if (U.isGas()) {
+      LS.api.resetUserPassword(id, next).then(function () {
+        ui.closeDialog();
+        return LS.app.refreshServer('Đã đặt mật khẩu tạm. Người dùng phải đổi mật khẩu ở lần đăng nhập kế tiếp.');
+      }).catch(function (error) { ui.toast(error.message || 'Không thể đặt lại mật khẩu.', 'err'); });
+      return;
+    }
+    var u = U.byId(st().users, 'user_id', id);
+    if (!u) { ui.toast('Không tìm thấy người dùng.', 'err'); return; }
+    u.must_change_password = true;
+    logCfg('Người dùng', 'Đặt lại mật khẩu tạm cho ' + u.full_name + ' (bản xem thử không lưu mật khẩu).');
+    U.save(); ui.closeDialog(); LS.app.render();
+    ui.toast('Đã đánh dấu yêu cầu đổi mật khẩu. Bản xem thử không lưu mật khẩu.', 'warn');
   }
 
   function saveUser(form) {
@@ -1178,9 +1256,7 @@ LS.admin = (function () {
   function userImportDialog() {
     ui.openDialog('Nhập danh sách cán bộ',
       '<form data-form="user-import">' +
-      '<p class="t2">Chọn file CSV/TSV UTF-8 xuất từ Excel. Cột bắt buộc: <b>login_code, full_name, unit_id</b>. Có thể thêm email, role, password, is_active.</p>' +
       ui.field('Tệp Excel đã xuất CSV', '<input class="input" type="file" name="file" accept=".csv,.tsv,.txt" required>') +
-      '<p class="t2">Phòng/PGD tự vào nhóm EXTERNAL; các vai trò LS/KS/QUAN_LY_LS/ADMIN vào nhóm INTERNAL.</p>' +
       ui.formEnd('Nhập dữ liệu') + '</form>');
   }
 
@@ -1237,7 +1313,6 @@ LS.admin = (function () {
     var groups = { BO_SUNG: 'Trả bổ sung', TAM_DUNG: 'Tạm dừng', HUY: 'Hủy việc' };
     return ui.block({
       title: 'Danh mục lý do', count: st().reasons.length, icon: 'clipboard',
-      note: 'Lý do chọn sẵn giúp báo cáo gom nhóm được. Cán bộ vẫn ghi thêm diễn giải tự do.',
       actions: ui.btn('Thêm lý do', { kind: 'primary', sm: true, act: 'reason-edit', icon: 'plus' }),
       body: ui.table(
         [{ label: 'Mã', cls: 'fit' }, { label: 'Nhóm', cls: 'fit' }, { label: 'Nội dung' }, { label: 'Trạng thái', cls: 'fit' }, { label: '', cls: 'fit' }],
@@ -1266,7 +1341,6 @@ LS.admin = (function () {
     var labels = { REQUESTOR: 'VRM/PRM', PRODUCT: 'Sản phẩm', LS_STAFF: 'Cán bộ LS', ASSIGNMENT_RULE: 'Quy tắc phân công' };
     return ui.block({
       title: 'Dropdown theo Sheet nguồn', count: rows.length, icon: 'list',
-      note: 'Giữ thứ tự STT và nguồn tab; không xoá dòng đã dùng, chỉ ẩn/hiện để bảo toàn lịch sử.',
       actions: ui.btn('Thêm mục dropdown', { kind: 'primary', sm: true, act: 'catalog-option-edit', icon: 'plus' }),
       body: ui.table(
         [{ label: 'Nhóm', cls: 'fit' }, { label: 'Phòng' }, { label: 'Nhãn hiển thị' },
@@ -1281,7 +1355,7 @@ LS.admin = (function () {
             x.active ? ui.tag('Đang dùng', 'ok') : ui.tag('Đã ẩn', 'neutral'),
             ui.iconBtn('pencil', { act: 'catalog-option-edit', data: ' data-id="' + U.attr(x.option_id) + '"', label: 'Sửa dropdown' })
           ] };
-        }), { icon: 'list', title: 'Chưa có dropdown', text: 'Chạy setupSheetDB để nạp danh mục nguồn.' }
+        }), { icon: 'list', title: 'Chưa có dropdown', text: '' }
       )
     });
   }
@@ -1335,7 +1409,6 @@ LS.admin = (function () {
     var rows = assignmentRules();
     return ui.block({
       title: 'Cấu hình phân công nhanh', count: rows.length, icon: 'zap',
-      note: 'Khi bấm phân công nhanh, hệ thống ưu tiên khớp phòng + loại việc + sản phẩm; kiểm soát LS vẫn có thể đổi người trước khi lưu.',
       actions: ui.btn('Thêm quy tắc', { kind: 'primary', sm: true, act: 'assignment-rule-edit', icon: 'plus' }),
       body: ui.table(
         [{ label: 'Phòng' }, { label: 'Loại việc' }, { label: 'Sản phẩm' }, { label: 'Cán bộ LS' }, { label: 'Ưu tiên', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: '', cls: 'fit' }],
@@ -1350,7 +1423,7 @@ LS.admin = (function () {
             x.active ? ui.tag('Đang dùng', 'ok') : ui.tag('Đã ẩn', 'neutral'),
             ui.iconBtn('pencil', { act: 'assignment-rule-edit', data: ' data-id="' + U.attr(x.option_id) + '"', label: 'Sửa quy tắc' })
           ] };
-        }), { icon: 'zap', title: 'Chưa có quy tắc', text: 'Thêm quy tắc theo phòng, nghiệp vụ và cán bộ phụ trách.' }
+        }), { icon: 'zap', title: 'Chưa có quy tắc', text: '' }
       )
     });
   }
@@ -1437,10 +1510,7 @@ LS.admin = (function () {
     var c = st().calendar;
     var sample = D.dueFrom(U.now(), 'LEGACY_03', st());
 
-    return ui.banner('info', 'Hạn xử lý tính theo giờ làm việc thật',
-      'Giao việc lúc 16h thứ Sáu với SLA 4 giờ sẽ đến hạn vào sáng thứ Hai, không phải 20h thứ Sáu.') +
-
-      ui.block({
+    return ui.block({
         title: 'Lịch làm việc', icon: 'calendar',
         body: ui.pad(
           '<form data-form="calendar">' +
@@ -1460,9 +1530,6 @@ LS.admin = (function () {
           '<div style="margin-top:1.125rem">' +
           ui.field('Ngày nghỉ lễ', ui.textarea('holidays', c.holidays.join('\n'), { placeholder: 'mỗi dòng một ngày dạng 2026-09-02' })) +
           '</div>' +
-
-          ui.banner('ok', 'Thử tính ngay',
-            'Giao một việc "Soạn hồ sơ vay mới" (SLA 8 giờ) lúc này thì hạn rơi vào ' + U.fmtDT(sample) + '.') +
 
           '<div class="form-end">' + ui.btn('Lưu lịch', { type: 'submit', kind: 'primary' }) + '</div>' +
           '</form>'
@@ -1506,11 +1573,10 @@ LS.admin = (function () {
         '<form data-form="settings">' +
         ui.sectionTitle('Thông tin tổ chức') +
         '<div class="f-row">' +
-        ui.field('Tên ngân hàng', ui.input('bank_name', s.bank_name, { required: true }), 'dùng trong mẫu tin gửi khách') +
+        ui.field('Tên ngân hàng', ui.input('bank_name', s.bank_name, { required: true })) +
         ui.field('Số tổng đài', ui.input('hotline', s.hotline)) +
-        ui.field('Nơi ký hồ sơ', ui.input('sign_place', s.sign_place || ''),
-          'dùng chung cho mọi đơn vị; cán bộ LS không chọn lại khi hẹn ký') +
-        ui.field('Địa chỉ ứng dụng', ui.input('app_url', s.app_url), 'link cán bộ mở từ thông báo') +
+        ui.field('Nơi ký hồ sơ', ui.input('sign_place', s.sign_place || '')) +
+        ui.field('Địa chỉ ứng dụng', ui.input('app_url', s.app_url)) +
         '</div>' +
 
         '<div style="margin-top:1.125rem">' + ui.sectionTitle('Thời gian và báo cáo') +
@@ -1520,24 +1586,21 @@ LS.admin = (function () {
         ui.field('Thời hạn lưu (tháng)', ui.input('retention_months', s.retention_months, { type: 'number', min: 1 })) +
         ui.field('Giới hạn dòng khi xuất', ui.input('export_row_limit', s.export_row_limit, { type: 'number', min: 100 })) +
         '</div><div class="f-row">' +
-        ui.field('Chỉ tiêu hoàn thành / tháng (toàn LS)', ui.input('target_done_month', s.target_done_month || '', { type: 'number', min: 0 }), 'để trống = không so chỉ tiêu') +
-        ui.field('Chỉ tiêu hoàn thành / tháng (mỗi cán bộ)', ui.input('target_done_staff_month', s.target_done_staff_month || '', { type: 'number', min: 0 }), 'vạch dọc trên đồ thị tải cán bộ') +
+        ui.field('Chỉ tiêu hoàn thành / tháng (toàn LS)', ui.input('target_done_month', s.target_done_month || '', { type: 'number', min: 0 })) +
+        ui.field('Chỉ tiêu hoàn thành / tháng (mỗi cán bộ)', ui.input('target_done_staff_month', s.target_done_staff_month || '', { type: 'number', min: 0 })) +
         '</div></div>' +
 
         '<div style="margin-top:1.125rem">' + ui.sectionTitle('Vận hành') +
         '<div class="f-row">' +
-        ui.field('Ngưỡng cảnh báo hàng đợi', ui.input('backlog_alert', s.backlog_alert, { type: 'number', min: 1 }),
-          'vượt ngưỡng thì hiện cảnh báo ở màn tổng quan') +
+        ui.field('Ngưỡng cảnh báo hàng đợi', ui.input('backlog_alert', s.backlog_alert, { type: 'number', min: 1 })) +
         ui.field('Môi trường', ui.select('env', [['THU_NGHIEM', 'Thử nghiệm'], ['THAT', 'Chạy thật']], s.env)) +
         '</div>' +
 
         '<div style="margin-top:1.125rem">' + ui.sectionTitle('Gateway gửi tin ngoài') +
         '<div class="f-row">' +
-        ui.field('Địa chỉ gateway', ui.input('gateway_url', s.gateway_url || '', { placeholder: 'https://gateway-noi-bo.example/send' }), 'Chỉ lưu địa chỉ, không lưu token') +
-        ui.field('Tên thuộc tính token', ui.input('gateway_auth_ref', s.gateway_auth_ref || 'LS_GATEWAY_TOKEN'), 'Token đặt trong ScriptProperties của GAS') +
+        ui.field('Địa chỉ gateway', ui.input('gateway_url', s.gateway_url || '', { placeholder: 'https://gateway-noi-bo.example/send' })) +
+        ui.field('Tên thuộc tính token', ui.input('gateway_auth_ref', s.gateway_auth_ref || 'LS_GATEWAY_TOKEN')) +
         '</div></div>' +
-        ui.banner('warn', 'Chuyển sang chạy thật là quyết định vận hành',
-          'Chỉ chuyển sau khi đã nghiệm thu nội bộ, kênh gửi đã kiểm thử và có phương án xử lý sự cố.') +
         '</div>' +
 
         '<div class="form-end">' + ui.btn('Lưu cấu hình', { type: 'submit', kind: 'primary' }) + '</div>' +
@@ -1577,7 +1640,6 @@ LS.admin = (function () {
     var s = st();
     return ui.block({
       title: U.isGas() ? 'Kho dữ liệu Google Sheet' : 'Kho dữ liệu cục bộ', icon: 'database',
-      note: U.isGas() ? 'Dữ liệu nghiệp vụ đọc/ghi qua Apps Script vào kho Google Sheet đã cấu hình; cache trình duyệt không phải nguồn chính.' : 'Bản chạy thử lưu trong trình duyệt. Khi triển khai Apps Script, dữ liệu nằm ở Google Sheet do SetupSheetDB.gs tạo.',
       body: ui.pad(
         ui.kv([
           ['Hồ sơ', String(s.requests.length)],
@@ -1598,7 +1660,6 @@ LS.admin = (function () {
   function cfglog() {
     return ui.block({
       title: 'Nhật ký cấu hình', count: st().configLog.length, icon: 'history',
-      note: 'Mọi thay đổi kênh, mẫu tin, danh mục và cấu hình đều được ghi lại.',
       body: ui.table(
         [{ label: 'Thời gian', cls: 'fit' }, { label: 'Người thực hiện' }, { label: 'Khu vực', cls: 'fit' }, { label: 'Nội dung' }],
         st().configLog.map(function (c) {
@@ -1629,6 +1690,7 @@ LS.admin = (function () {
     typeDialog: typeDialog, saveType: saveType,
     unitDialog: unitDialog, saveUnit: saveUnit,
     userDialog: userDialog, saveUser: saveUser, userImportDialog: userImportDialog, importUsers: importUsers,
+    resetUserPasswordDialog: resetUserPasswordDialog, resetUserPassword: resetUserPassword,
     reasonDialog: reasonDialog, saveReason: saveReason,
     catalogOptionDialog: catalogOptionDialog, saveCatalogOption: saveCatalogOption,
     assignmentRuleDialog: assignmentRuleDialog, saveAssignmentRule: saveAssignmentRule,

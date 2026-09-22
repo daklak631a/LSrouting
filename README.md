@@ -19,7 +19,7 @@ Bản trình duyệt không gửi ra ngoài; chỉ GAS gọi provider thật.
 
 ### URL web app đang dùng
 
-Deployment chuẩn đã được cập nhật lên **Version 22**, chạy dưới tài khoản
+Deployment chuẩn đã được cập nhật lên **Version 29**, chạy dưới tài khoản
 `daklak631a@gmail.com`, quyền truy cập `Anyone`:
 
 `https://script.google.com/macros/s/AKfycbylljXwRUkxUCL_wnxztLAzotSNi9iiOvgpGtXPCwzIQHjCgpPz6d_zvG_XC1urUlCH/exec`
@@ -30,7 +30,7 @@ gửi liên kết đó.
 Khi sửa mã, cập nhật đúng deployment này để giữ nguyên URL; không tạo deployment
 mới nếu không muốn phải đổi liên kết người dùng.
 
-Version 19 giữ nguyên bàn giao tự động các việc đang mở sang cán bộ thay thế khi
+Bản hiện tại giữ nguyên bàn giao tự động các việc đang mở sang cán bộ thay thế khi
 quản trị đổi vai trò khỏi `CAN_BO_LS` hoặc khóa tài khoản. Nếu chưa chọn người
 thay thế, hệ thống vẫn chặn thao tác và báo rõ số việc cần xử lý.
 
@@ -77,6 +77,12 @@ năm hoặc khoảng ≥ 1 tháng) và vạch chỉ tiêu trên đồ thị cán
 tiêu trên đồ thị theo tháng. File Excel dùng SheetJS nạp từ cdnjs khi bấm xuất; mạng chặn CDN
 thì tự xuất CSV thay thế.
 
+Quản trị có bảng **Điểm vận hành** theo kỳ đang hoạt động. Điểm được tính tự động từ
+đúng hạn (60%), hoàn thành (25%) và tồn quá hạn (15%); cán bộ chưa có việc được để trống,
+không bị xếp 0. GAS tính điểm ngay trong bootstrap, còn bản trình duyệt dùng cùng công
+thức làm phương án dự phòng. Khi kỳ đóng, hệ thống chốt snapshot kèm version công thức;
+việc thiếu mốc SLA được đánh dấu dữ liệu chưa đủ và không bị chấm ngầm.
+
 **Báo cáo nhiều kỳ chỉ chạy khi bấm "Chạy báo cáo".** Mở màn hay đổi ô lọc không tự gọi máy
 chủ; đổi lọc sau khi đã chạy thì kết quả cũ vẫn hiện kèm cảnh báo "kết quả cũ".
 
@@ -109,7 +115,7 @@ Lệnh này gộp `index.html` + `css/styles.css` + toàn bộ `js/*.js` thành 
 
 Đẩy lên Apps Script: `Code.gs`, `DataRepository.gs`, `Notifications.gs`, `SetupSheetDB.gs`,
 `Index.gas.html`. Chạy `createStorageWorkbook()` một lần để tạo một file Google Sheet
-lưu trữ độc lập, gồm toàn bộ 18 bảng dữ liệu và danh mục đơn vị/loại việc/dropdown theo mẫu kế
+lưu trữ độc lập, gồm toàn bộ 20 bảng dữ liệu và danh mục đơn vị/loại việc/dropdown theo mẫu kế
 hoạch. Mỗi việc còn giữ `source_stt`/`source_tab` để hiển thị lại số thứ tự theo phòng giống file gốc.
 Hàm trả về URL file và lưu ID vào thuộc tính `LS_SHEET_ID` của dự án GAS.
 
@@ -158,8 +164,8 @@ Web app vẫn nên giới hạn người được phép mở bằng Google Works
 là lớp đăng nhập nghiệp vụ của app, còn quyền ghi dữ liệu và kiểm tra vai trò vẫn nằm ở
 `Code.gs`. App GAS không dùng `localStorage` làm nguồn dữ liệu.
 
-`createStorageWorkbook()` và `setupSheetDB()` tự cài trigger worker 5 phút/lượt. Có thể
-chạy lại `installOutboxWorker()` khi cần thay trigger. Chỉ bật kênh sau khi kiểm thử;
+`createStorageWorkbook()` và `setupSheetDB()` tự cài/dedupe trigger worker 5 phút/lượt.
+`installOutboxWorker()` chỉ là hàm tương thích để cài lại trigger khi cần. Chỉ bật kênh sau khi kiểm thử;
 tin khách cần xác nhận vẫn đứng ở hàng chờ trước khi worker gửi.
 
 Nếu kho đã tạo từ phiên bản cũ và màn Kênh gửi tin chưa có SMS, sau khi cập nhật mã hãy
@@ -168,9 +174,12 @@ chạy lại `setupSheetDB()`. Hàm sẽ bổ sung dòng `SMS` vào `Channels` v
 
 Chạy lại `setupSheetDB()` cũng bổ sung các cột `telegram_chat_id`, `availability_status`,
 `off_from`, `off_to`, `off_reason`, `replacement_user_id` cho `Users`, cột
-`next_try_at` cho `NotificationOutbox`, mẫu `TPL_MAIL_HEN_KY` và `TPL_NHOM_HEN_KY`,
+`next_try_at`, `claim_token`, `claim_until` cho `NotificationOutbox`, chỉ mục `NotificationIdempotency`,
+snapshot `OperationalScoreSnapshots`, mẫu `TPL_MAIL_HEN_KY` và `TPL_NHOM_HEN_KY`,
 quy tắc `R8` báo nhóm nội bộ, và đánh dấu quy tắc hẹn khách `R6` là đường báo thẳng
-khách. Sau đó chạy `installOutboxWorker()` một lần để cài thêm trigger quét quá hạn.
+khách. Worker và trigger quét quá hạn được tự cài/dedupe khi chạy `setupSheetDB()`.
+Kho cũ cũng tự kiểm tra và nâng cấp các bảng/cột hardening ở lượt bootstrap đầu tiên
+sau deploy; vẫn nên chạy `setupSheetDB()` chủ động khi có quyền Apps Script để xem báo cáo migration.
 
 ### Cấu hình email, ZBS, SMS và Telegram
 
@@ -305,7 +314,7 @@ thu hồi ở <https://myaccount.google.com/permissions> khi không dùng nữa.
 | `Code.gs` | API máy chủ: quyền, luật trạng thái, đề nghị sửa, quản trị, SLA theo lịch làm việc |
 | `Notifications.gs` | Hàng đợi gửi, worker, đối soát |
 | `DataRepository.gs` | Đọc/ghi Sheet, một lần giữ khóa mỗi giao dịch |
-| `SetupSheetDB.gs` | Tạo và nâng cấp 18 bảng dữ liệu, gồm `CatalogOptions`, `NotificationMetrics` và `PeriodSummary` |
+| `SetupSheetDB.gs` | Tạo và nâng cấp 20 bảng dữ liệu, gồm `CatalogOptions`, `NotificationMetrics`, `NotificationIdempotency`, `OperationalScoreSnapshots` và `PeriodSummary` |
 
 Tên trường và luật trạng thái của `Code.gs` khớp `js/domain.js`. Sửa một bên phải sửa bên kia.
 

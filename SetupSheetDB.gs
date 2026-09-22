@@ -64,7 +64,12 @@ var SCHEMA = {
 
   NotificationOutbox: ['outbox_id', 'idem_key', 'item_id', 'event', 'audience', 'channel',
     'recipient_kind', 'recipient', 'recipient_name', 'template_code', 'body',
-    'status', 'note', 'retry_count', 'next_try_at', 'provider_msg_id', 'created_at', 'sent_at'],
+    'status', 'note', 'retry_count', 'next_try_at', 'provider_msg_id', 'created_at', 'sent_at',
+    'claim_token', 'claim_until'],
+
+  // Chỉ mục bền vững cho khóa chống tạo/gửi trùng. Không quét đuôi outbox vì
+  // lịch sử có thể dài hơn mọi ngưỡng hiển thị.
+  NotificationIdempotency: ['idem_key', 'outbox_id', 'created_at'],
 
   // Một dòng cho mỗi outbox_id; retry chỉ cập nhật dòng cũ, không tạo lượt tính phí mới.
   NotificationMetrics: ['metric_id', 'outbox_id', 'idem_key', 'period_id', 'month_key',
@@ -81,6 +86,12 @@ var SCHEMA = {
     'phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'ton_cuoi_ky', 'qua_han',
     'tong_gio_tiep_nhan', 'so_tiep_nhan', 'tong_gio_phan_cong', 'so_phan_cong',
     'tong_gio_xu_ly', 'so_xu_ly', 'tong_gio_toan_trinh', 'so_toan_trinh', 'updated_at'],
+
+  // Điểm vận hành được chốt một lần khi kỳ đóng; không tính lại ngược lịch sử.
+  OperationalScoreSnapshots: ['snapshot_id', 'period_id', 'month_key', 'formula_version',
+    'user_id', 'full_name', 'eligible', 'done', 'timed_done', 'on_time', 'late_open', 'open',
+    'on_time_rate', 'completion_rate', 'backlog_rate', 'score', 'data_quality',
+    'captured_at', 'captured_by'],
 
   // --- Vận hành ---
   ConfigLog: ['id', 'at', 'by', 'area', 'detail'],
@@ -110,6 +121,7 @@ function createStorageWorkbook() {
   var starter = created ? ss.getSheets()[0] : null;
   var report = setupSheetDB_(ss);
   installMonthlyPlanTrigger();
+  installMaintenanceTrigger();
   Notifications.installWorker();
 
   // Sheet1 chỉ là tab mặc định của file mới, không thuộc mô hình dữ liệu.
@@ -138,6 +150,7 @@ function setupSheetDB() {
   }
   var report = setupSheetDB_(ss);
   installMonthlyPlanTrigger();
+  installMaintenanceTrigger();
   Notifications.installWorker();
   Logger.log(report.length ? report.join('\n') : 'Kho dữ liệu đã đúng cấu trúc.');
   notify_(report.length ? report.join('\n') : 'Kho dữ liệu đã đúng cấu trúc.');
@@ -154,6 +167,72 @@ function installMonthlyPlanTrigger() {
     ScriptApp.newTrigger('activateMonthlyPlans').timeBased().everyHours(1).create();
   }
   return { installed: true, existing: exists };
+}
+
+/** Cài maintenance hằng ngày để backup kho và ghi trạng thái vận hành. */
+function installMaintenanceTrigger() {
+  var triggers = ScriptApp.getProjectTriggers();
+  var exists = triggers.some(function (trigger) {
+    return trigger.getHandlerFunction() === 'maintenanceTick';
+  });
+  if (!exists) {
+    ScriptApp.newTrigger('maintenanceTick').timeBased().everyDays(1).atHour(2).create();
+  }
+  return { installed: true, existing: exists };
+}
+
+function maintenanceSetting_(t, key, value, description) {
+  var fields = { value: String(value === undefined || value === null ? '' : value), updated_at: new Date().toISOString() };
+  var found = t.find('Settings', 'key', key);
+  if (found) t.write(found, fields);
+  else t.append('Settings', { key: key, value: fields.value, description: description || '', updated_at: fields.updated_at });
+}
+
+/**
+ * Backup an toàn, lặp lại được: tối đa một bản/ngày, không xóa bản cũ.
+ * Backup xong mới ghi dấu vết vào Settings để admin biết bản nào có thể phục hồi.
+ */
+function backupStorageWorkbook_() {
+  var id = PropertiesService.getScriptProperties().getProperty('LS_SHEET_ID');
+  if (!id) return { ok: false, skipped: true, reason: 'missing_storage_id' };
+  var now = new Date();
+  var settings = {};
+  DataRepository.getAll('Settings').forEach(function (row) { settings[row.key] = row.value; });
+  var lastMs = Date.parse(String(settings.backup_last_at || ''));
+  if (isFinite(lastMs) && now.getTime() - lastMs < 24 * 60 * 60 * 1000) {
+    return { ok: true, skipped: true, last_backup_at: settings.backup_last_at, backup_id: settings.backup_last_id || '' };
+  }
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return { ok: false, skipped: true, reason: 'backup_in_progress' };
+  try {
+    var stamp = Utilities.formatDate(now, Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd_HHmm');
+    var copy = DriveApp.getFileById(id).makeCopy('LS-Routing backup ' + stamp);
+    var result = { ok: true, skipped: false, backup_id: copy.getId(), backup_url: copy.getUrl(), backup_at: now.toISOString() };
+    DataRepository.tx(function (t) {
+      maintenanceSetting_(t, 'backup_last_at', result.backup_at, 'Thời điểm backup kho gần nhất');
+      maintenanceSetting_(t, 'backup_last_id', result.backup_id, 'ID file backup kho gần nhất');
+      maintenanceSetting_(t, 'backup_last_url', result.backup_url, 'URL file backup kho gần nhất');
+      maintenanceSetting_(t, 'backup_last_error', '', 'Lỗi backup kho gần nhất');
+      maintenanceSetting_(t, 'retention_last_check_at', result.backup_at, 'Lần kiểm tra thời hạn lưu dữ liệu gần nhất');
+    });
+    return result;
+  } catch (err) {
+    try {
+      DataRepository.tx(function (t) {
+        maintenanceSetting_(t, 'backup_last_error', String(err.message || err).substring(0, 300), 'Lỗi backup kho gần nhất');
+        maintenanceSetting_(t, 'retention_last_check_at', new Date().toISOString(), 'Lần kiểm tra thời hạn lưu dữ liệu gần nhất');
+      });
+    } catch (ignore) {}
+    throw err;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function maintenanceTick() {
+  var result = backupStorageWorkbook_();
+  Logger.log('Maintenance: ' + JSON.stringify(result));
+  return result;
 }
 
 function setupSheetDB_(ss) {
@@ -195,7 +274,50 @@ function setupSheetDB_(ss) {
   seedCatalog_(ss, report);
   ensureSourceTemplateSetting_(ss, report);
   upgradeWorkTypeAppointment_(ss, report);
+  ensureNotificationIdempotency_(ss, report);
   return report;
+}
+
+/** Bổ sung chỉ mục idempotency cho outbox cũ mà không tạo bản ghi trùng. */
+function ensureNotificationIdempotency_(ss, report) {
+  var index = ss.getSheetByName('NotificationIdempotency');
+  var outbox = ss.getSheetByName('NotificationOutbox');
+  if (!index || !outbox || outbox.getLastRow() <= 1) return;
+
+  var indexValues = index.getDataRange().getValues();
+  var indexHeader = indexValues[0] || [];
+  var keyCol = indexHeader.indexOf('idem_key');
+  if (keyCol === -1) return;
+  var known = {};
+  for (var i = 1; i < indexValues.length; i++) {
+    var existingKey = String(indexValues[i][keyCol] || '').trim();
+    if (existingKey) known[existingKey] = true;
+  }
+
+  var outboxValues = outbox.getDataRange().getValues();
+  var outboxHeader = outboxValues[0] || [];
+  var outboxKeyCol = outboxHeader.indexOf('idem_key');
+  var outboxIdCol = outboxHeader.indexOf('outbox_id');
+  var createdCol = outboxHeader.indexOf('created_at');
+  if (outboxKeyCol === -1 || outboxIdCol === -1) return;
+
+  var rows = [];
+  for (var j = 1; j < outboxValues.length; j++) {
+    var key = String(outboxValues[j][outboxKeyCol] || '').trim();
+    if (!key || known[key]) continue;
+    known[key] = true;
+    var row = indexHeader.map(function (column) {
+      if (column === 'idem_key') return key;
+      if (column === 'outbox_id') return outboxValues[j][outboxIdCol] || '';
+      if (column === 'created_at') return createdCol === -1 ? '' : outboxValues[j][createdCol] || '';
+      return '';
+    });
+    rows.push(row);
+  }
+  if (rows.length) {
+    index.getRange(index.getLastRow() + 1, 1, rows.length, indexHeader.length).setValues(rows);
+    report.push('Bổ sung chỉ mục idempotency cho ' + rows.length + ' tin cũ');
+  }
 }
 
 /** Bổ sung một dòng danh mục theo mã mà không đụng dữ liệu đã có. */

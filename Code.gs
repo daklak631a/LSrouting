@@ -228,6 +228,25 @@ function changeOwnPassword(currentPassword, nextPassword) {
   });
 }
 
+/** Quản trị cấp mật khẩu tạm; người dùng bắt buộc tự đổi ở lần vào kế tiếp. */
+function adminResetUserPassword(userId, nextPassword) {
+  var admin = requireAdmin_();
+  var targetId = String(userId || '').trim();
+  var next = String(nextPassword || '');
+  if (!targetId) throw new Error('Thiếu tài khoản cần đặt lại mật khẩu.');
+  if (next.length < 8 || !/[0-9]/.test(next) || !/[a-zA-Z]/.test(next)) {
+    throw new Error('Mật khẩu tạm phải từ 8 ký tự và có cả chữ lẫn số.');
+  }
+  return DataRepository.tx(function (t) {
+    var found = t.find('Users', 'user_id', targetId);
+    if (!found) throw new Error('Không tìm thấy tài khoản.');
+    if (authGroup_(found.object) !== 'INTERNAL') throw new Error('Tài khoản Phòng/PGD không dùng mật khẩu.');
+    t.write(found, { password_hash: passwordHash_(next), must_change_password: true });
+    logConfig_(t, admin, 'Người dùng', 'Đặt lại mật khẩu tạm cho ' + targetId + '.');
+    return { ok: true, user_id: targetId, must_change_password: true };
+  });
+}
+
 function logoutUser() {
   PropertiesService.getUserProperties().deleteProperty('LS_AUTH_USER_ID');
   return { ok: true };
@@ -339,7 +358,10 @@ function activateDueMonthlyPlans_() {
     carryOpenWorkToPlan_(pair.from, pair.to, { user_id: 'SYSTEM', full_name: 'Hệ thống' });
     // Chốt số liệu kỳ vừa đóng *sau* khi chuyển tiếp, để `ton_cuoi_ky` phản ánh
     // đúng phần còn lại chứ không đếm cả việc vừa sang kỳ mới.
-    try { writePeriodSummary_(pair.from); }
+    try {
+      writePeriodSummary_(pair.from);
+      writeOperationalScoreSnapshot_(pair.from);
+    }
     catch (err) { Logger.log('Chưa chốt được số liệu kỳ ' + pair.from + ': ' + err); }
     provisionMonthlyPlanWorkbook_(pair.to);
   });
@@ -425,7 +447,7 @@ function usePlanTemplate(spreadsheetId) {
 
 /** KS tạo trước đúng tháng kế tiếp; dữ liệu toàn hệ thống chưa chuyển cho tới activation_at. */
 function createNextMonthlyPlan() {
-  var u = planManager_(currentUser_());
+  var u = planManager_(requireActor_());
   var active = activePlan_();
   var start = new Date(String(active.start_date) + 'T12:00:00');
   var nextKey = monthKey_(new Date(start.getFullYear(), start.getMonth() + 1, 1));
@@ -812,12 +834,14 @@ function writePeriodSummary_(periodId) {
 
 /** Dựng lại số liệu chốt cho mọi kỳ. Gọi tay khi nghi số liệu lệch. */
 function rebuildPeriodSummaries() {
-  var u = currentUser_();
+  var u = requireActor_();
   if (['KS_LS', 'QUAN_LY_LS', 'ADMIN'].indexOf(u.role) === -1) {
     throw new Error('Vai trò ' + u.role + ' không được dựng lại số liệu báo cáo.');
   }
   var plans = DataRepository.getAll('MonthlyPlans');
-  var done = plans.map(function (p) { return { month_key: p.month_key, rows: writePeriodSummary_(p.period_id) }; });
+  var done = plans.map(function (p) {
+    return { month_key: p.month_key, rows: writePeriodSummary_(p.period_id), score: writeOperationalScoreSnapshot_(p.period_id) };
+  });
   Logger.log(JSON.stringify(done));
   return { periods: done.length, detail: done };
 }
@@ -936,6 +960,117 @@ function getReport(opts) {
     periods: plans.length, generated_at: stamp_() };
 }
 
+/**
+ * Điểm vận hành do máy chủ tính để Admin không phụ thuộc vào dữ liệu đã sửa ở trình duyệt.
+ * 60 điểm đúng hạn + 25 điểm hoàn thành + 15 điểm không tồn quá hạn.
+ */
+var SCORE_FORMULA_VERSION = 'score_formula_v1';
+
+function operationalScorecard_(items, users, fromDate, toDate, now) {
+  var from = dateOnly_(fromDate), to = dateOnly_(toDate);
+  var at = now instanceof Date ? now : new Date(now || stamp_());
+  var staff = (users || []).filter(function (u) {
+    return String(u.role || '').trim().toUpperCase() === 'CAN_BO_LS' && truthy_(u.is_active);
+  });
+  var byUser = {};
+  staff.forEach(function (u) {
+    byUser[u.user_id] = { user: { user_id: u.user_id, full_name: u.full_name || u.user_id },
+      eligible: 0, done: 0, timedDone: 0, onTime: 0, lateOpen: 0, open: 0 };
+  });
+
+  (items || []).forEach(function (item) {
+    var day = dateOnly_(item.occurrence_date || item.submitted_at);
+    var row = byUser[item.assigned_user_id];
+    if (!row || !day || (from && day < from) || (to && day > to) || item.status === 'HUY' || item.carried_to_item_id) return;
+    row.eligible += 1;
+    if (item.status === 'HOAN_THANH_LS') {
+      row.done += 1;
+      if (item.due_at && item.completed_at) {
+        row.timedDone += 1;
+        if (new Date(item.completed_at).getTime() <= new Date(item.due_at).getTime()) row.onTime += 1;
+      }
+    }
+    if (OPEN_STATUS.indexOf(item.status) !== -1) {
+      row.open += 1;
+      if (item.due_at && at.getTime() > new Date(item.due_at).getTime()) row.lateOpen += 1;
+    }
+  });
+
+  return staff.map(function (u) {
+    var row = byUser[u.user_id];
+    if (!row.eligible) {
+      row.score = null; row.onTimeRate = null; row.completionRate = null; row.backlogRate = null;
+      row.dataQuality = 'NO_WORK';
+      return row;
+    }
+    // Không chấm đúng hạn khi kỳ không có mốc SLA hợp lệ; tránh phạt hoặc
+    // thưởng ngầm do dữ liệu thiếu due_at.
+    if (!row.timedDone) {
+      row.score = null; row.onTimeRate = null;
+      row.completionRate = Math.round((row.done / row.eligible) * 100);
+      row.backlogRate = Math.round((row.open ? Math.max(0, 1 - row.lateOpen / row.open) : 1) * 100);
+      row.dataQuality = 'THIEU_HAN_SLA';
+      return row;
+    }
+    var onTimeRate = row.onTime / row.timedDone;
+    var completionRate = row.done / row.eligible;
+    var backlogRate = row.open ? Math.max(0, 1 - row.lateOpen / row.open) : 1;
+    row.onTimeRate = Math.round(onTimeRate * 100);
+    row.completionRate = Math.round(completionRate * 100);
+    row.backlogRate = Math.round(backlogRate * 100);
+    row.score = Math.round(60 * onTimeRate + 25 * completionRate + 15 * backlogRate);
+    row.dataQuality = row.timedDone === row.done ? 'OK' : 'THIEU_HAN_SLA';
+    return row;
+  }).sort(function (a, b) {
+    if (a.score === null && b.score === null) return String(a.user.full_name).localeCompare(String(b.user.full_name));
+    if (a.score === null) return 1;
+    if (b.score === null) return -1;
+    return b.score - a.score || String(a.user.full_name).localeCompare(String(b.user.full_name));
+  });
+}
+
+/** Chốt điểm vận hành của kỳ đã đóng, giữ nguyên công thức và dữ liệu tại thời điểm chốt. */
+function writeOperationalScoreSnapshot_(periodId) {
+  var plan = DataRepository.find('MonthlyPlans', 'period_id', periodId);
+  if (!plan) throw new Error('Không tìm thấy kỳ ' + periodId + '.');
+  if (plan.status !== 'ARCHIVED') {
+    return { period_id: periodId, month_key: plan.month_key, rows: 0, skipped: true,
+      reason: 'Chỉ chốt điểm khi kỳ đã đóng', formula_version: SCORE_FORMULA_VERSION };
+  }
+  var items = DataRepository.getAll('WorkItems').filter(function (i) { return i.period_id === periodId; });
+  var rows = operationalScorecard_(items, DataRepository.getAll('Users'), plan.start_date, plan.end_date,
+    new Date(String(plan.end_date || '').substring(0, 10) + 'T23:59:59+07:00'));
+  var capturedAt = stamp_();
+  DataRepository.tx(function (t) {
+    var existing = {};
+    t.rows('OperationalScoreSnapshots').forEach(function (r) {
+      existing[r.period_id + '\u0000' + r.user_id] = r.snapshot_id;
+    });
+    rows.forEach(function (row) {
+      var key = periodId + '\u0000' + row.user.user_id;
+      var fields = {
+        period_id: periodId, month_key: plan.month_key, formula_version: SCORE_FORMULA_VERSION,
+        user_id: row.user.user_id, full_name: row.user.full_name, eligible: row.eligible,
+        done: row.done, timed_done: row.timedDone, on_time: row.onTime, late_open: row.lateOpen,
+        open: row.open, on_time_rate: row.onTimeRate == null ? '' : row.onTimeRate,
+        completion_rate: row.completionRate == null ? '' : row.completionRate,
+        backlog_rate: row.backlogRate == null ? '' : row.backlogRate,
+        score: row.score == null ? '' : row.score, data_quality: row.dataQuality || '',
+        captured_at: capturedAt, captured_by: 'SYSTEM'
+      };
+      if (existing[key] && plan.status !== 'ARCHIVED') {
+        var found = t.find('OperationalScoreSnapshots', 'snapshot_id', existing[key]);
+        if (found) t.write(found, fields);
+      } else if (!existing[key]) {
+        fields.snapshot_id = id_('SCORE');
+        t.append('OperationalScoreSnapshots', fields);
+      }
+    });
+  });
+  return { period_id: periodId, month_key: plan.month_key, rows: rows.length, captured_at: capturedAt,
+    formula_version: SCORE_FORMULA_VERSION };
+}
+
 /* ---------------------------- Đọc dữ liệu ---------------------------- */
 
 /** ADMIN chỉ cần dữ liệu vận hành, không nhận dữ liệu định danh khách hàng. */
@@ -984,9 +1119,47 @@ function sanitizeAdminItem_(row) {
   return out;
 }
 
+/**
+ * Kho cũ phải tự nhận schema hardening ở lượt đăng nhập đầu tiên sau deploy.
+ * Không phụ thuộc clasp run/OAuth máy phát hành: nếu thiếu bảng/cột mới thì
+ * nâng cấp ngay dưới tài khoản triển khai rồi xóa cache đọc của lượt chạy.
+ */
+function ensureRuntimeSchema_() {
+  var id = PropertiesService.getScriptProperties().getProperty('LS_SHEET_ID');
+  if (!id) return { upgraded: false, reason: 'missing_storage_id' };
+  var ss = SpreadsheetApp.openById(id);
+  function hasColumns_(name, columns) {
+    var sheet = ss.getSheetByName(name);
+    if (!sheet || sheet.getLastColumn() < 1) return false;
+    var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    return columns.every(function (column) { return header.indexOf(column) !== -1; });
+  }
+  var ready = hasColumns_('NotificationIdempotency', ['idem_key', 'outbox_id']) &&
+    hasColumns_('NotificationOutbox', ['claim_token', 'claim_until']) &&
+    hasColumns_('OperationalScoreSnapshots', ['period_id', 'formula_version']);
+  if (ready) {
+    installMaintenanceTrigger();
+    return { upgraded: false, reason: 'ready' };
+  }
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return { upgraded: false, reason: 'upgrade_in_progress' };
+  try {
+    setupSheetDB_(ss);
+    installMonthlyPlanTrigger();
+    installMaintenanceTrigger();
+    Notifications.installWorker();
+    DataRepository.clearCache();
+    return { upgraded: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /** Dữ liệu khởi tạo, đã lọc theo phạm vi vai trò. */
 function getBootstrap() {
   var t0 = Date.now();
+  ensureRuntimeSchema_();
   var u = currentUser_();
   var activePlan = activePlan_();
   var requests = DataRepository.getAll('Requests').filter(function (r) { return r.period_id === activePlan.period_id; });
@@ -1049,6 +1222,12 @@ function getBootstrap() {
     })
   };
   if (u.role === 'ADMIN') {
+    result.operationalScorecard = operationalScorecard_(items, DataRepository.getAll('Users'),
+      activePlan.start_date, activePlan.end_date, new Date());
+    result.operationalScorecardMeta = { period_id: activePlan.period_id, month_key: activePlan.month_key,
+      source: 'LIVE_ACTIVE_PERIOD', formula_version: SCORE_FORMULA_VERSION };
+    try { result.operationalScoreSnapshots = DataRepository.tail('OperationalScoreSnapshots', 2000); }
+    catch (ignore) { result.operationalScoreSnapshots = []; }
     result.channels = DataRepository.getAll('Channels');
     result.templates = DataRepository.getAll('Templates');
     result.notifyRules = DataRepository.getAll('NotifyRules');
@@ -1198,18 +1377,37 @@ function createRequest(payload) {
 /* ---------------------------- Chuyển trạng thái ---------------------------- */
 
 /**
- * opts = { reason, assignee_id, appointment:{at,channel,result}, expected_version }
+ * opts = { reason, assignee_id, appointment:{at,channel,result}, expected_version,
+ *          notification_mode: DEFAULT|IN_APP|NONE }
  * Trả lỗi khi trạng thái nguồn không cho phép chuyển, hoặc vai trò không đủ quyền,
  * hoặc bản ghi đã bị người khác sửa (expected_version lệch).
  */
+function transitionIdempotent_(t, item, to, actor, opts) {
+  // Cùng một lần bấm từ giao diện cũ có thể tới GAS hai lần. Chỉ coi là thành
+  // công lặp khi chính người vừa đổi đã tạo sự kiện đó và trạng thái hiện tại
+  // đúng là đích; không bỏ qua quyền hay biến một chuyển người thành no-op.
+  if (item.status !== to || (FLOW_SERVER[item.status] || {})[to]) return false;
+  if (opts.expected_version !== undefined && Number(item.version) !== Number(opts.expected_version) + 1) return false;
+  return t.rows('Events').some(function (e) {
+    return e.item_id === item.item_id && e.type === to && e.by === actor.user_id;
+  });
+}
+
 function transitionItem(itemId, to, opts) {
   var u = requireActor_();
   opts = opts || {};
+  var notificationMode = String(opts.notification_mode || 'DEFAULT').toUpperCase();
+  if (['DEFAULT', 'IN_APP', 'NONE'].indexOf(notificationMode) === -1) throw new Error('Lựa chọn thông báo không hợp lệ.');
+  if (to !== 'HOAN_THANH_LS' && notificationMode !== 'DEFAULT') throw new Error('Chỉ được chọn cách thông báo khi hoàn thành việc.');
 
   var result = DataRepository.tx(function (t) {
     var found = t.find('WorkItems', 'item_id', itemId);
     if (!found) throw new Error('Không tìm thấy việc ' + itemId + '.');
     var item = found.object;
+
+    if (transitionIdempotent_(t, item, to, u, opts)) {
+      return { ok: true, idempotent: true, status: to, version: Number(item.version), queued: 0, period_id: item.period_id };
+    }
 
     if (opts.expected_version !== undefined && Number(item.version) !== Number(opts.expected_version)) {
       throw new Error('Việc đã được người khác cập nhật. Tải lại trước khi lưu.');
@@ -1301,11 +1499,11 @@ function transitionItem(itemId, to, opts) {
     if (to === 'DA_PHAN_CONG' && item.assigned_user_id && item.assigned_user_id !== opts.assignee_id) {
       event = 'DOI_NGUOI';
     }
-    if (event) {
+    if (event && notificationMode !== 'NONE') {
       var merged = {};
       Object.keys(item).forEach(function (k) { merged[k] = item[k]; });
       Object.keys(fields).forEach(function (k) { merged[k] = fields[k]; });
-      queued = Notifications.queue(t, merged, event, u.user_id);
+      queued = Notifications.queue(t, merged, event, u.user_id, null, notificationMode);
     }
 
     return { ok: true, status: to, version: fields.version, queued: queued, period_id: item.period_id };
@@ -1696,8 +1894,9 @@ function adminSaveCatalog(kind, code, data) {
         data.must_change_password = true;
       }
       delete data.new_password;
+      var targetActive = data.is_active !== undefined ? truthy_(data.is_active) : truthy_(found && found.object.is_active);
       if (found && String(found.object.role || '').trim().toUpperCase() === 'CAN_BO_LS' &&
-          (data.role !== 'CAN_BO_LS' || !truthy_(data.is_active))) {
+          (data.role !== 'CAN_BO_LS' || !targetActive)) {
         var openItems = t.rows('WorkItems').filter(function (i) {
           return i.assigned_user_id === code && OPEN_STATUS.indexOf(i.status) !== -1;
         });
@@ -1710,7 +1909,8 @@ function adminSaveCatalog(kind, code, data) {
         }
       }
       // Khóa nốt tài khoản quản trị cuối cùng là tự nhốt mình ngoài cửa.
-      if (found && found.object.role === 'ADMIN' && (data.role !== 'ADMIN' || data.is_active === false)) {
+      if (found && String(found.object.role || '').trim().toUpperCase() === 'ADMIN' &&
+          (data.role !== 'ADMIN' || !targetActive)) {
         var otherAdmins = t.rows('Users').filter(function (x) {
           return x.role === 'ADMIN' && x.user_id !== code && truthy_(x.is_active);
         });
@@ -1738,6 +1938,7 @@ function adminImportUsers(rows) {
   var result = DataRepository.tx(function (t) {
     var existing = t.rows('Users');
     var seen = {};
+    var seenEmails = {};
     var created = 0;
     var updated = 0;
     rows.forEach(function (raw, index) {
@@ -1756,19 +1957,70 @@ function adminImportUsers(rows) {
         return String(x.login_code || x.user_id).toLowerCase() === code.toLowerCase();
       })[0];
       var id = found ? found.user_id : 'U_' + code.replace(/[^A-Z0-9]/gi, '_').toUpperCase();
+      var activeRaw = row.is_active !== undefined ? row.is_active :
+        (row.hoat_dong !== undefined ? row.hoat_dong : (found && found.is_active !== undefined ? found.is_active : 'true'));
+      var isActive = !(activeRaw === false || String(activeRaw).trim().toLowerCase() === 'false' || String(activeRaw).trim() === '0');
+      var availability = String(row.availability_status || row.trang_thai_nhan_viec || (found && found.availability_status) || 'AVAILABLE').trim().toUpperCase();
+      var offFrom = row.off_from || row.nghi_tu || (found && found.off_from) || '';
+      var offTo = row.off_to || row.nghi_den || (found && found.off_to) || '';
+      offFrom = offFrom ? dateOnly_(offFrom) : '';
+      offTo = offTo ? dateOnly_(offTo) : '';
+      if (['AVAILABLE', 'OFF'].indexOf(availability) === -1) throw new Error('Dòng ' + (index + 2) + ': trạng thái nhận việc không hợp lệ.');
+      if ((row.off_from || row.nghi_tu) && !offFrom) throw new Error('Dòng ' + (index + 2) + ': ngày bắt đầu nghỉ phải có dạng YYYY-MM-DD.');
+      if ((row.off_to || row.nghi_den) && !offTo) throw new Error('Dòng ' + (index + 2) + ': ngày kết thúc nghỉ phải có dạng YYYY-MM-DD.');
+      if (offFrom && offTo && offFrom > offTo) throw new Error('Dòng ' + (index + 2) + ': ngày kết thúc nghỉ không được trước ngày bắt đầu.');
+      var replacementId = String(row.replacement_user_id || row.nguoi_thay || (found && found.replacement_user_id) || '').trim();
+      if (replacementId) {
+        if (replacementId === id) throw new Error('Dòng ' + (index + 2) + ': cán bộ thay thế không được là chính tài khoản đang sửa.');
+        var replacement = t.find('Users', 'user_id', replacementId);
+        if (!replacement || String(replacement.object.role || '').trim().toUpperCase() !== 'CAN_BO_LS' || !truthy_(replacement.object.is_active)) {
+          throw new Error('Dòng ' + (index + 2) + ': cán bộ thay thế phải là cán bộ LS đang hoạt động.');
+        }
+      }
+      var email = String(row.email || row.email_cong_vu || (found && found.email) || '').trim().toLowerCase();
+      if (email && seenEmails[email] && seenEmails[email] !== id) throw new Error('Email bị trùng trong file: ' + email);
+      if (email) {
+        var sameEmail = existing.filter(function (x) {
+          return String(x.email || '').trim().toLowerCase() === email && x.user_id !== id;
+        });
+        if (sameEmail.length) throw new Error('Dòng ' + (index + 2) + ': email đã được cấp cho tài khoản khác.');
+        seenEmails[email] = id;
+      }
       var data = {
-        user_id: id, full_name: name, email: String(row.email || row.email_cong_vu || '').trim().toLowerCase(),
+        user_id: id, full_name: name, email: email,
         login_code: code, auth_group: role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL',
-        unit_id: unit, role: role, sort_order: Number(row.sort_order || row.thu_tu || 9999),
-        source_tab: String(row.source_tab || 'Import Excel'), is_active: String(row.is_active || row.hoat_dong || 'true').toLowerCase() !== 'false',
+        unit_id: unit, role: role, sort_order: Number(row.sort_order || row.thu_tu || (found && found.sort_order) || 9999),
+        source_tab: String(row.source_tab || (found && found.source_tab) || 'Import Excel'), is_active: isActive,
         zalo_name: String(row.zalo_name || '').trim(), zalo_phone: String(row.zalo_phone || '').trim(),
-        telegram_chat_id: String(row.telegram_chat_id || '').trim()
+        telegram_chat_id: String(row.telegram_chat_id || '').trim(), availability_status: availability,
+        off_from: offFrom, off_to: offTo, off_reason: String(row.off_reason || row.ly_do_nghi || (found && found.off_reason) || '').trim(),
+        replacement_user_id: replacementId
       };
       if (row.password || row.mat_khau) {
         data.password_hash = passwordHash_(row.password || row.mat_khau);
         data.must_change_password = true;
       }
       var foundRow = t.find('Users', 'user_id', id);
+      if (foundRow && String(foundRow.object.role || '').trim().toUpperCase() === 'CAN_BO_LS' &&
+          (role !== 'CAN_BO_LS' || !isActive)) {
+        var openItems = t.rows('WorkItems').filter(function (item) {
+          return item.assigned_user_id === id && OPEN_STATUS.indexOf(item.status) !== -1;
+        });
+        if (openItems.length) {
+          if (!replacementId) {
+            throw new Error('Dòng ' + (index + 2) + ': còn ' + openItems.length + ' việc đang mở; chọn cán bộ thay thế trước khi đổi vai trò hoặc khóa.');
+          }
+          handoverOpenWork_(t, id, replacementId, u.user_id, openItems,
+            'Bàn giao do import đổi vai trò hoặc khóa tài khoản ' + id + '.');
+        }
+      }
+      if (foundRow && String(foundRow.object.role || '').trim().toUpperCase() === 'ADMIN' &&
+          (role !== 'ADMIN' || !isActive)) {
+        var otherAdmins = t.rows('Users').filter(function (x) {
+          return String(x.role || '').trim().toUpperCase() === 'ADMIN' && x.user_id !== id && truthy_(x.is_active);
+        });
+        if (!otherAdmins.length) throw new Error('Dòng ' + (index + 2) + ': đây là tài khoản quản trị đang hoạt động duy nhất; tạo tài khoản quản trị khác trước.');
+      }
       if (foundRow) { t.write(foundRow, data); updated += 1; }
       else { t.append('Users', data); created += 1; }
       existing.push(data);
@@ -1848,6 +2100,23 @@ function adminSaveDelivery(kind, code, data) {
 
   if (kind === 'channel' && fields.status !== undefined && CHANNEL_STATUS_VALUES.indexOf(String(fields.status)) === -1) {
     throw new Error('Trạng thái kênh không hợp lệ.');
+  }
+  if (kind === 'channel') {
+    if (fields.rate_per_hour !== undefined) {
+      var rate = Number(fields.rate_per_hour);
+      if (!isFinite(rate) || rate < 0 || rate > 100000) throw new Error('Giới hạn gửi mỗi giờ phải từ 0 đến 100.000.');
+      fields.rate_per_hour = Math.floor(rate);
+    }
+    if (fields.max_retry !== undefined) {
+      var retries = Number(fields.max_retry);
+      if (!isFinite(retries) || retries < 0 || retries > 10) throw new Error('Số lần thử lại phải từ 0 đến 10.');
+      fields.max_retry = Math.floor(retries);
+    }
+  }
+  if (kind === 'rule' && fields.throttle_minutes !== undefined) {
+    var throttle = Number(fields.throttle_minutes);
+    if (!isFinite(throttle) || throttle < 0 || throttle > 10080) throw new Error('Thời gian nhắc lại phải từ 0 đến 10.080 phút.');
+    fields.throttle_minutes = Math.floor(throttle);
   }
 
   return DataRepository.tx(function (t) {
@@ -1972,14 +2241,21 @@ function adminTestChannel(code, recipient) {
 /* ---------------------------- Thông báo trong app ---------------------------- */
 
 /**
- * Đánh dấu đã đọc cho chính người đang đăng nhập.
- * Không nhận danh sách id từ trình duyệt để tránh đọc hộ người khác.
+ * Đánh dấu đã đọc cho chính người đang đăng nhập. Nếu có `ids`, chỉ các thông
+ * báo đó được đánh dấu; nếu không có thì đánh dấu tất cả thông báo chưa xem.
+ * ID từ trình duyệt chỉ là bộ lọc, quyền sở hữu vẫn được kiểm ở máy chủ.
  */
-function markInboxRead() {
-  var u = currentUser_();
+function markInboxRead(ids) {
+  var u = requireActor_();
+  var markAll = !Array.isArray(ids);
+  var wanted = {};
+  (Array.isArray(ids) ? ids : []).forEach(function (id) {
+    if (id) wanted[String(id)] = true;
+  });
   return DataRepository.tx(function (t) {
     var rows = t.rows('Inbox').filter(function (n) {
-      return n.user_id === u.user_id && String(n.is_read) !== 'true' && n.is_read !== true;
+      return n.user_id === u.user_id && String(n.is_read) !== 'true' && n.is_read !== true &&
+        (markAll || wanted[String(n.id)]);
     });
     rows.forEach(function (n) {
       var found = t.find('Inbox', 'id', n.id);
