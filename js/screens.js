@@ -1742,9 +1742,12 @@ LS.screens = (function () {
         ['Loại việc', wt ? (wt.group || wt.name) : i.work_type_code],
         ['Sản phẩm', productLabel(i)],
         ['Ngày phát sinh', U.fmtDate(i.occurrence_date)],
+        // Mốc hồ sơ vào LS — tính từ lúc phòng gửi (submitted_at), không phải lúc
+        // cán bộ bấm "Bắt đầu xử lý". Tách riêng khỏi đồng hồ làm việc bên dưới.
+        ['Hồ sơ vào LS lúc', i.submitted_at ? U.fmtDT(i.submitted_at) : '—'],
         ['Trạng thái', ui.statusTag(i.status), true],
         ['Cán bộ xử lý', userName(i.assigned_user_id) || 'Chưa giao'],
-        ['Thời gian xử lý khách hàng', D.processingLabel(i, st())],
+        ['Giờ làm thực tế của cán bộ', D.processingLabel(i, st())],
         ['Hoàn thành', i.completed_at ? U.fmtDT(i.completed_at) : '—'],
         ['Phiên bản', 'v' + i.version]
       ]) + '</div>';

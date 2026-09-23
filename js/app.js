@@ -158,8 +158,8 @@ LS.app = (function () {
       '<div class="auth-form-kicker">' + U.icon('lock', 16) + '<span>Không gian nội bộ</span></div>' +
       '<h1>Đăng nhập</h1><p>Nhập thông tin tài khoản được cấp để tiếp tục.</p>' +
       '<form data-form="login">' +
-      ui.field('Mã cán bộ / user', ui.input('login_code', '', { required: true, placeholder: 'Ví dụ: 164392 hoặc admin', id: 'loginCode', attrs: ' autocomplete="username"' })) +
-      ui.field('Mật khẩu', passwordControl('password', { id: 'loginPassword', placeholder: 'Chỉ bắt buộc với tài khoản nội bộ', autocomplete: 'current-password' })) +
+      ui.field('Mã cán bộ / user', ui.input('login_code', '', { required: true, placeholder: 'Nhập mã cán bộ hoặc user được cấp', id: 'loginCode', attrs: ' autocomplete="username"' })) +
+      ui.field('Mật khẩu', passwordControl('password', { id: 'loginPassword', placeholder: 'Nhập mật khẩu tại đây', autocomplete: 'current-password' })) +
       '<div style="margin-top:1rem">' + ui.btn('Đăng nhập', { type: 'submit', kind: 'primary', icon: 'arrow' }) + '</div>' +
       '</form>' +
       (U.isGas() ? '' : '<div class="auth-divider">Tài khoản thử nghiệm</div>' +
@@ -202,11 +202,13 @@ LS.app = (function () {
     if (!U.isGas()) {
       st().mustChangePassword = false;
       U.save();
+      ui.closeDialog();
       render();
       ui.toast('Bản trình duyệt không lưu mật khẩu; đã bỏ qua.');
       return;
     }
     LS.api.changePassword(String(d.get('current') || ''), next).then(function () {
+      ui.closeDialog();
       return refreshServer('Đã đổi mật khẩu.');
     }).catch(function (error) { ui.toast(error.message || 'Không đổi được mật khẩu.', 'err'); });
   }
@@ -253,6 +255,9 @@ LS.app = (function () {
 
   function accountDialog() {
     var u = me();
+    // Phòng/PGD đăng nhập bằng mã, không có mật khẩu — chỉ tài khoản nội bộ
+    // (LS, kiểm soát, quản lý, admin) mới cần lối tự đổi mật khẩu ở đây.
+    var canChangePassword = String(u.auth_group || (u.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL')) !== 'EXTERNAL';
     ui.openDialog('Tài khoản',
       ui.kv([
         ['Họ tên', u.full_name], ['Email', u.email],
@@ -262,8 +267,24 @@ LS.app = (function () {
       '<p class="t2">' + U.esc(scopeText(u.role)) + '</p></div>' +
       '<div class="form-end">' +
       ui.btn('Đóng', { act: 'close-dialog', kind: 'quiet' }) +
+      (canChangePassword ? ui.btn('Đổi mật khẩu', { act: 'change-password-dialog', kind: 'line', icon: 'lock' }) : '') +
       ui.btn('Đăng xuất', { act: 'logout', kind: 'danger', icon: 'logout' }) +
       '</div>');
+  }
+
+  /** Đổi mật khẩu chủ động, không phải vì mật khẩu tạm hết hạn — mở từ hộp thoại Tài khoản. */
+  function changePasswordDialog() {
+    var u = me();
+    ui.openDialog('Đổi mật khẩu',
+      '<form data-form="change-password">' +
+      ui.field('Mật khẩu hiện tại', passwordControl('current', { required: true, autocomplete: 'current-password' })) +
+      ui.field('Mật khẩu mới', passwordControl('next', { required: true, autocomplete: 'new-password' }), 'tối thiểu 8 ký tự, có cả chữ và số') +
+      ui.field('Nhập lại mật khẩu mới', passwordControl('again', { required: true, autocomplete: 'new-password' })) +
+      '<div class="form-end">' +
+      ui.btn('Hủy', { act: 'close-dialog', kind: 'quiet' }) +
+      ui.btn('Đổi mật khẩu', { type: 'submit', kind: 'primary', icon: 'arrow' }) +
+      '</div></form>',
+      { sub: u.full_name });
   }
 
   function scopeText(role) {
@@ -413,6 +434,7 @@ LS.app = (function () {
     shortcuts: shortcutHelp,
     logout: logout,
     account: accountDialog,
+    'change-password-dialog': changePasswordDialog,
     'toggle-password': togglePassword,
     inbox: inboxDialog,
     'inbox-show-unread': function () { inboxDialog('UNREAD'); },

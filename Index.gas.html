@@ -86,7 +86,7 @@ html { -webkit-text-size-adjust: 100%; }
 
 body {
   font-family: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
   color: var(--ink);
   background: var(--canvas);
@@ -579,9 +579,9 @@ table.t tbody tr:last-child td { border-bottom: none; }
 table.t td.num, table.t th.num { text-align: right; font-variant-numeric: tabular-nums; }
 table.t td.fit { width: 1%; white-space: nowrap; }
 
-.t1 { font-weight: 600; font-size: 0.86rem; }
-.t2 { font-size: 0.76rem; color: var(--ink-3); }
-.tid { font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; color: var(--ink-3); }
+.t1 { font-weight: 650; font-size: 0.95rem; color: var(--ink); }
+.t2 { font-size: 0.8rem; color: var(--ink-3); }
+.tid { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--ink-3); }
 
 .customer-main { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
 .priority-tags { display: inline-flex; align-items: center; gap: 0.25rem; }
@@ -791,9 +791,9 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 
 .var-chip:hover { border-color: var(--brand); color: var(--brand-800); }
 
-.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 0.75rem 1.25rem; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 0.85rem 1.25rem; }
 .kv dt { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-4); }
-.kv dd { font-size: 0.86rem; font-weight: 500; margin-top: 0.1rem; word-break: break-word; }
+.kv dd { font-size: 0.96rem; font-weight: 600; color: var(--ink); margin-top: 0.15rem; word-break: break-word; }
 
 /* ============================== Hộp thoại ============================== */
 
@@ -932,12 +932,19 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
   .shell { grid-template-columns: 1fr; }
   .rail { display: none; }
 
-  .appbar { min-height: 44px; padding: 0.25rem 0.6rem; gap: 0.35rem; }
-  .appbar-summary .strip { grid-template-columns: repeat(auto-fit, minmax(66px, 1fr)); }
-  .appbar-summary .strip > * { padding: 0.1rem 0.35rem; }
-  .appbar-summary .metric-k { font-size: 0.52rem; }
-  .appbar-summary .metric-v { font-size: 0.95rem; }
-  .appbar-actions { gap: 0.15rem; }
+  /* Appbar hẹp không đủ chỗ nhét vừa dải số liệu bên cạnh các nút — xuống
+     hàng riêng, cuộn ngang, không cắt chữ nhãn (trước đây bị ellipsis). */
+  .appbar { min-height: 44px; padding: 0.4rem 0.6rem; gap: 0.3rem 0.6rem; flex-wrap: wrap; }
+  .appbar-summary { order: 2; flex-basis: 100%; overflow: visible; }
+  .appbar-actions { order: 1; margin-left: auto; gap: 0.15rem; }
+  .appbar-summary .strip {
+    display: flex; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; border-radius: var(--r-sm);
+  }
+  .appbar-summary .strip::-webkit-scrollbar { display: none; }
+  .appbar-summary .strip > * { flex: 0 0 auto; min-width: 5.5rem; padding: 0.3rem 0.65rem; }
+  .appbar-summary .metric-k { font-size: 0.6rem; overflow: visible; text-overflow: clip; }
+  .appbar-summary .metric-v { font-size: 1rem; }
   .view { padding: 0.875rem 0.875rem 5.5rem; }
 
   .strip { grid-template-columns: 1fr 1fr; }
@@ -951,8 +958,12 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
   .list-toolbar .list-search { flex-basis: 100%; }
   .queue-toolbar { flex-direction: column; gap: 0; }
   .queue-tabs { padding-left: 0.875rem; }
-  .queue-tools { margin-left: 0; padding: 0.45rem 0.875rem; justify-content: flex-end; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
+  /* .queue-tools mang flex-basis:460px cho hàng ngang trên desktop; khi cha đổi
+     sang cột ở mobile, trục chính hóa dọc nên 460px kia biến thành CHIỀU CAO
+     chứ không còn là chiều rộng — bung ra một khoảng trắng khổng lồ. Trả về auto. */
+  .queue-tools { flex: 0 1 auto; margin-left: 0; padding: 0.45rem 0.875rem; justify-content: flex-end; align-items: stretch; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
   .queue-tools .list-search { flex-basis: 100%; }
+  .queue-tools .filter-tools, .queue-tools .sort-control { flex: 0 0 auto; }
   .report-filters { flex-wrap: wrap; }
   .report-filters .f { flex: 1 1 145px; }
   .report-filters .report-actions { margin-left: 0; }
@@ -966,6 +977,46 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
   .chan-list { grid-template-columns: 1fr; }
   /* Tên kênh cần trọn dòng, nhãn trạng thái xuống dòng dưới. */
   .chan-top { flex-wrap: wrap; }
+
+  /* Bảng danh sách trên mobile: bảng cuộn ngang buộc phải kéo hai chiều mới đọc
+     hết một dòng. Dựng lại mỗi dòng thành một thẻ, nhãn cột lấy từ data-label
+     (thêm ở ui.table) hiện phía trên giá trị — đọc dọc một mạch như trên điện thoại. */
+  .tw { overflow-x: visible; }
+  table.t, table.t thead, table.t tbody, table.t tr, table.t th, table.t td { display: block; width: 100%; }
+  table.t thead { position: static; display: none; }
+  table.t tbody { display: flex; flex-direction: column; gap: 0.625rem; }
+  table.t tbody tr {
+    border: 1px solid var(--line); border-radius: var(--r);
+    padding: 0.75rem 0.875rem; background: var(--surface);
+  }
+  table.t tbody tr:hover { background: var(--surface); }
+  table.t td, table.t td.fit, table.t td.num {
+    padding: 0.4rem 0; border-bottom: 1px dashed var(--line-2);
+    width: auto; white-space: normal; text-align: left;
+  }
+  table.t td:last-child { border-bottom: none; padding-bottom: 0; }
+  table.t td[data-label]::before {
+    content: attr(data-label); display: block;
+    font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--ink-4); margin-bottom: 0.2rem;
+  }
+  /* Cột đầu (mã việc/tên) là tiêu đề thẻ: không cần nhãn lặp lại, tách hẳn bằng viền dưới. */
+  table.t td:first-child {
+    padding-top: 0; padding-bottom: 0.6rem; margin-bottom: 0.15rem;
+    border-bottom: 1px solid var(--line-2);
+  }
+  table.t td:first-child::before { content: none; }
+  table.t .act-row { justify-content: flex-start; flex-wrap: wrap; }
+  /* Vạch màu ưu tiên/cảnh báo chuyển từ box-shadow trên ô đầu (chỉ cao bằng ô)
+     sang viền trái cả thẻ, để vẫn nhận ra ngay cả khi thẻ đã xếp dọc. */
+  table.t tbody tr { border-left-width: 4px; border-left-style: solid; border-left-color: var(--line); }
+  table.t tbody tr.row-today:not(.flag):not(.flag-warn):not(.priority-urgent):not(.priority-vip):not(.priority-important) { border-left-color: var(--brand); }
+  table.t tbody tr.flag-warn { border-left-color: var(--warn); }
+  table.t tbody tr.flag { border-left-color: var(--danger); }
+  table.t tbody tr.priority-important { border-left-color: var(--info); }
+  table.t tbody tr.priority-vip { border-left-color: var(--gold-700); }
+  table.t tbody tr.priority-urgent { border-left-color: var(--danger); }
+  table.t tbody tr.priority-vip td:first-child, table.t tbody tr.priority-urgent td:first-child, table.t tbody tr.priority-important td:first-child { box-shadow: none; }
 
   .scrim { padding: 0; align-items: flex-end; }
   .dialog { max-width: none; max-height: 92vh; border-radius: var(--r-lg) var(--r-lg) 0 0; }
@@ -1011,6 +1062,7 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 @media (max-width: 380px) {
   .strip { grid-template-columns: 1fr; }
   .strip > *:nth-child(odd) { border-right: none; }
+  .customer-fields { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1091,7 +1143,10 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 tr[data-row]:focus { outline: none; }
 tr[data-row]:focus > td { background: var(--brand-50); }
 tr[data-row]:focus > td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
-[data-hotkeys] [data-hotkey]::after { content: attr(data-hotkey); margin-left: 0.4rem; padding: 0 0.3rem; border: 1px solid currentColor; border-radius: 4px; font: 600 0.62rem/1.35 'IBM Plex Mono', monospace; opacity: 0.6; }
+/* Số phím tắt là gợi ý phụ cho người dùng bàn phím — mờ đi ở trạng thái nghỉ,
+   rõ hẳn khi rê chuột/focus vào đúng nút đó, để không cạnh tranh với nhãn nút. */
+[data-hotkeys] [data-hotkey]::after { content: attr(data-hotkey); margin-left: 0.4rem; padding: 0 0.3rem; border: 1px solid currentColor; border-radius: 4px; font: 600 0.6rem/1.35 'IBM Plex Mono', monospace; opacity: 0.32; transition: opacity var(--fast) var(--ease); }
+[data-hotkeys] [data-hotkey]:hover::after, [data-hotkeys] [data-hotkey]:focus-visible::after { opacity: 0.75; }
 kbd { display: inline-block; min-width: 1.5em; padding: 0.08rem 0.4rem; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--surface-2); color: var(--ink); font: 600 0.72rem/1.4 'IBM Plex Mono', monospace; text-align: center; }
 .keys { display: grid; grid-template-columns: minmax(120px, auto) 1fr; gap: 0.45rem 1rem; margin: 0 0 1.1rem; align-items: center; font-size: 0.84rem; }
 .keys dt { display: flex; gap: 0.25rem; flex-wrap: wrap; }
@@ -3125,7 +3180,9 @@ LS.ui = (function () {
         return '<tr' + (r.cls ? ' class="' + r.cls + '"' : '') + (r.attrs || '') + '>' +
           r.cells.map(function (cell, i) {
             var c = cols[i] || {};
-            return '<td' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + cell + '</td>';
+            // data-label cấp nhãn cột cho bảng thẻ trên mobile (::before lấy attr này khi thead ẩn đi).
+            var label = c.label ? ' data-label="' + U.attr(c.label) + '"' : '';
+            return '<td' + (c.cls ? ' class="' + c.cls + '"' : '') + label + '>' + cell + '</td>';
           }).join('') + '</tr>';
       }).join('') +
       '</tbody></table></div>';
@@ -5282,9 +5339,12 @@ LS.screens = (function () {
         ['Loại việc', wt ? (wt.group || wt.name) : i.work_type_code],
         ['Sản phẩm', productLabel(i)],
         ['Ngày phát sinh', U.fmtDate(i.occurrence_date)],
+        // Mốc hồ sơ vào LS — tính từ lúc phòng gửi (submitted_at), không phải lúc
+        // cán bộ bấm "Bắt đầu xử lý". Tách riêng khỏi đồng hồ làm việc bên dưới.
+        ['Hồ sơ vào LS lúc', i.submitted_at ? U.fmtDT(i.submitted_at) : '—'],
         ['Trạng thái', ui.statusTag(i.status), true],
         ['Cán bộ xử lý', userName(i.assigned_user_id) || 'Chưa giao'],
-        ['Thời gian xử lý khách hàng', D.processingLabel(i, st())],
+        ['Giờ làm thực tế của cán bộ', D.processingLabel(i, st())],
         ['Hoàn thành', i.completed_at ? U.fmtDT(i.completed_at) : '—'],
         ['Phiên bản', 'v' + i.version]
       ]) + '</div>';
@@ -7425,7 +7485,7 @@ LS.admin = (function () {
     ui.openDialog(u ? 'Sửa người dùng' : 'Thêm người dùng',
       '<form data-form="user"' + (u ? ' data-id="' + U.attr(u.user_id) + '"' : '') + '>' +
       '<div class="f-row">' +
-      ui.field('Mã cán bộ / user', ui.input('login_code', cur.login_code || cur.user_id, { required: true, placeholder: '164392 hoặc admin' })) +
+      ui.field('Mã cán bộ / user', ui.input('login_code', cur.login_code || cur.user_id, { required: true, placeholder: 'Nhập mã cán bộ hoặc user' })) +
       ui.field('Họ tên', ui.input('full_name', cur.full_name, { required: true })) +
       ui.field('Email công vụ', ui.input('email', cur.email || '', { type: 'email' })) +
       ui.field('Đơn vị', ui.select('unit_id', st().units.filter(function (x) { return x.active; }).map(function (x) {
@@ -8157,8 +8217,8 @@ LS.app = (function () {
       '<div class="auth-form-kicker">' + U.icon('lock', 16) + '<span>Không gian nội bộ</span></div>' +
       '<h1>Đăng nhập</h1><p>Nhập thông tin tài khoản được cấp để tiếp tục.</p>' +
       '<form data-form="login">' +
-      ui.field('Mã cán bộ / user', ui.input('login_code', '', { required: true, placeholder: 'Ví dụ: 164392 hoặc admin', id: 'loginCode', attrs: ' autocomplete="username"' })) +
-      ui.field('Mật khẩu', passwordControl('password', { id: 'loginPassword', placeholder: 'Chỉ bắt buộc với tài khoản nội bộ', autocomplete: 'current-password' })) +
+      ui.field('Mã cán bộ / user', ui.input('login_code', '', { required: true, placeholder: 'Nhập mã cán bộ hoặc user được cấp', id: 'loginCode', attrs: ' autocomplete="username"' })) +
+      ui.field('Mật khẩu', passwordControl('password', { id: 'loginPassword', placeholder: 'Nhập mật khẩu tại đây', autocomplete: 'current-password' })) +
       '<div style="margin-top:1rem">' + ui.btn('Đăng nhập', { type: 'submit', kind: 'primary', icon: 'arrow' }) + '</div>' +
       '</form>' +
       (U.isGas() ? '' : '<div class="auth-divider">Tài khoản thử nghiệm</div>' +
@@ -8201,11 +8261,13 @@ LS.app = (function () {
     if (!U.isGas()) {
       st().mustChangePassword = false;
       U.save();
+      ui.closeDialog();
       render();
       ui.toast('Bản trình duyệt không lưu mật khẩu; đã bỏ qua.');
       return;
     }
     LS.api.changePassword(String(d.get('current') || ''), next).then(function () {
+      ui.closeDialog();
       return refreshServer('Đã đổi mật khẩu.');
     }).catch(function (error) { ui.toast(error.message || 'Không đổi được mật khẩu.', 'err'); });
   }
@@ -8252,6 +8314,9 @@ LS.app = (function () {
 
   function accountDialog() {
     var u = me();
+    // Phòng/PGD đăng nhập bằng mã, không có mật khẩu — chỉ tài khoản nội bộ
+    // (LS, kiểm soát, quản lý, admin) mới cần lối tự đổi mật khẩu ở đây.
+    var canChangePassword = String(u.auth_group || (u.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL')) !== 'EXTERNAL';
     ui.openDialog('Tài khoản',
       ui.kv([
         ['Họ tên', u.full_name], ['Email', u.email],
@@ -8261,8 +8326,24 @@ LS.app = (function () {
       '<p class="t2">' + U.esc(scopeText(u.role)) + '</p></div>' +
       '<div class="form-end">' +
       ui.btn('Đóng', { act: 'close-dialog', kind: 'quiet' }) +
+      (canChangePassword ? ui.btn('Đổi mật khẩu', { act: 'change-password-dialog', kind: 'line', icon: 'lock' }) : '') +
       ui.btn('Đăng xuất', { act: 'logout', kind: 'danger', icon: 'logout' }) +
       '</div>');
+  }
+
+  /** Đổi mật khẩu chủ động, không phải vì mật khẩu tạm hết hạn — mở từ hộp thoại Tài khoản. */
+  function changePasswordDialog() {
+    var u = me();
+    ui.openDialog('Đổi mật khẩu',
+      '<form data-form="change-password">' +
+      ui.field('Mật khẩu hiện tại', passwordControl('current', { required: true, autocomplete: 'current-password' })) +
+      ui.field('Mật khẩu mới', passwordControl('next', { required: true, autocomplete: 'new-password' }), 'tối thiểu 8 ký tự, có cả chữ và số') +
+      ui.field('Nhập lại mật khẩu mới', passwordControl('again', { required: true, autocomplete: 'new-password' })) +
+      '<div class="form-end">' +
+      ui.btn('Hủy', { act: 'close-dialog', kind: 'quiet' }) +
+      ui.btn('Đổi mật khẩu', { type: 'submit', kind: 'primary', icon: 'arrow' }) +
+      '</div></form>',
+      { sub: u.full_name });
   }
 
   function scopeText(role) {
@@ -8412,6 +8493,7 @@ LS.app = (function () {
     shortcuts: shortcutHelp,
     logout: logout,
     account: accountDialog,
+    'change-password-dialog': changePasswordDialog,
     'toggle-password': togglePassword,
     inbox: inboxDialog,
     'inbox-show-unread': function () { inboxDialog('UNREAD'); },

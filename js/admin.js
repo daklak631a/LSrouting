@@ -1128,7 +1128,7 @@ LS.admin = (function () {
     ui.openDialog(u ? 'Sửa người dùng' : 'Thêm người dùng',
       '<form data-form="user"' + (u ? ' data-id="' + U.attr(u.user_id) + '"' : '') + '>' +
       '<div class="f-row">' +
-      ui.field('Mã cán bộ / user', ui.input('login_code', cur.login_code || cur.user_id, { required: true, placeholder: '164392 hoặc admin' })) +
+      ui.field('Mã cán bộ / user', ui.input('login_code', cur.login_code || cur.user_id, { required: true, placeholder: 'Nhập mã cán bộ hoặc user' })) +
       ui.field('Họ tên', ui.input('full_name', cur.full_name, { required: true })) +
       ui.field('Email công vụ', ui.input('email', cur.email || '', { type: 'email' })) +
       ui.field('Đơn vị', ui.select('unit_id', st().units.filter(function (x) { return x.active; }).map(function (x) {

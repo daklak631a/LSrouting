@@ -75,7 +75,9 @@ LS.ui = (function () {
         return '<tr' + (r.cls ? ' class="' + r.cls + '"' : '') + (r.attrs || '') + '>' +
           r.cells.map(function (cell, i) {
             var c = cols[i] || {};
-            return '<td' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + cell + '</td>';
+            // data-label cấp nhãn cột cho bảng thẻ trên mobile (::before lấy attr này khi thead ẩn đi).
+            var label = c.label ? ' data-label="' + U.attr(c.label) + '"' : '';
+            return '<td' + (c.cls ? ' class="' + c.cls + '"' : '') + label + '>' + cell + '</td>';
           }).join('') + '</tr>';
       }).join('') +
       '</tbody></table></div>';
