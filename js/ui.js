@@ -68,7 +68,8 @@ LS.ui = (function () {
    */
   function table(cols, rows, emptyOpts) {
     if (!rows.length) return empty(emptyOpts || {});
-    return '<div class="tw"><table class="t"><thead><tr>' +
+    var tableClass = emptyOpts && emptyOpts.tableClass ? ' ' + U.attr(emptyOpts.tableClass) : '';
+    return '<div class="tw"><table class="t' + tableClass + '"><thead><tr>' +
       cols.map(function (c) { return '<th' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + (c.header !== undefined ? c.header : U.esc(c.label || '')) + '</th>'; }).join('') +
       '</tr></thead><tbody>' +
       rows.map(function (r) {

@@ -692,7 +692,8 @@ var Notifications = (function () {
     });
   }
 
-  var OPEN_FOR_SLA = ['DA_PHAN_CONG', 'DANG_THUC_HIEN', 'DA_SOAN_XONG', 'DANG_HEN_KH', 'CHO_KS_DUYET'];
+  // Đang hẹn khách/tạm dừng thì hạn đứng yên (SLA_PAUSED_STATUS), không nhắc quá hạn.
+  var OPEN_FOR_SLA = ['DA_PHAN_CONG', 'DANG_THUC_HIEN', 'DA_SOAN_XONG', 'CHO_KS_DUYET'];
 
   /**
    * Quét việc quá hạn và phát sự kiện QUA_HAN. Quy tắc R5 có throttle riêng nên

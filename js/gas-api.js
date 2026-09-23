@@ -25,6 +25,11 @@ LS.api = (function () {
     if (!value) return fallback;
     try { return typeof value === 'string' ? JSON.parse(value) : value; } catch (e) { return fallback; }
   }
+  function finiteNumberOrNull(value) {
+    if (value === null || value === undefined || value === '') return null;
+    var number = Number(value);
+    return isFinite(number) ? number : null;
+  }
 
   /** Chuyển hàng dữ liệu Sheet thành cấu trúc UI duy nhất, không lộ bí mật kênh gửi. */
   function normalize(raw) {
@@ -80,7 +85,7 @@ LS.api = (function () {
       return {
         item_id: i.item_id, period_id: i.period_id || '', parent_item_id: i.parent_item_id || '', collateral_mode: i.collateral_mode || 'NONE', carryover_from_item_id: i.carryover_from_item_id || '', carried_to_item_id: i.carried_to_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
         occurrence_date: i.occurrence_date, status: i.status, assigned_user_id: i.assigned_user_id || '', assigned_by: i.assigned_by || '',
-        submitted_at: i.submitted_at || '', accepted_at: i.accepted_at || '', assigned_at: i.assigned_at || '', due_at: i.due_at || '',
+        submitted_at: i.submitted_at || '', accepted_at: i.accepted_at || '', assigned_at: i.assigned_at || '', due_at: i.due_at || '', sla_paused_at: i.sla_paused_at || '',
         completed_at: i.completed_at || '', processing_started_at: i.processing_started_at || '', pause_log: json(i.pause_log_json, []), appointment: json(i.appointment_json, null), checklist: json(i.checklist_json, []),
         pending: json(i.pending_json, null), note: i.note || '', version: Number(i.version) || 1
       };
@@ -94,10 +99,10 @@ LS.api = (function () {
         user: { user_id: x.user && x.user.user_id || '', full_name: x.user && x.user.full_name || '' },
         eligible: Number(x.eligible) || 0, done: Number(x.done) || 0, timedDone: Number(x.timedDone) || 0,
         onTime: Number(x.onTime) || 0,
-        lateOpen: Number(x.lateOpen) || 0, open: Number(x.open) || 0, score: x.score === null ? null : Number(x.score),
-        onTimeRate: x.onTimeRate === null ? null : Number(x.onTimeRate) || 0,
-        completionRate: x.completionRate === null ? null : Number(x.completionRate) || 0,
-        backlogRate: x.backlogRate === null ? null : Number(x.backlogRate) || 0,
+        lateOpen: Number(x.lateOpen) || 0, open: Number(x.open) || 0, score: finiteNumberOrNull(x.score),
+        onTimeRate: finiteNumberOrNull(x.onTimeRate),
+        completionRate: finiteNumberOrNull(x.completionRate),
+        backlogRate: finiteNumberOrNull(x.backlogRate),
         dataQuality: x.dataQuality || ''
       };
     });
@@ -168,9 +173,10 @@ LS.api = (function () {
     createNextMonthlyPlan: function () { return call('createNextMonthlyPlan'); },
     createRequest: function (payload) { return call('createRequest', payload); },
     transitionItem: function (id, to, opts) { return call('transitionItem', id, to, opts || {}); },
+    assignWorkItemsBatch: function (rows) { return call('assignWorkItemsBatch', rows || []); },
     saveChecklist: function (id, checklist, expectedVersion) { return call('saveChecklist', id, checklist, expectedVersion); },
     addLinkedItem: function (parentId, workTypeCode) { return call('addLinkedItem', parentId, workTypeCode); },
-    proposeRevision: function (id, fields, reason) { return call('proposeRevision', id, fields, reason); },
+    proposeRevision: function (id, fields, reason, expectedVersion) { return call('proposeRevision', id, fields, reason, expectedVersion); },
     resolveRevision: function (id, approve, reason) { return call('resolveRevision', id, approve, reason || ''); },
     saveCatalog: function (kind, code, data) { return call('adminSaveCatalog', kind, code, data); },
     importUsers: function (rows) { return call('adminImportUsers', rows); },

@@ -80,6 +80,24 @@
   --ease: cubic-bezier(0.22, 0.8, 0.3, 1);
 }
 
+/* Danh sách giao theo lô: giữ dòng ngắn để quản lý có thể rà và chỉnh nhiều
+   hồ sơ trong một lượt, nhưng vẫn chừa đủ khoảng thở cho lựa chọn từng cán bộ. */
+.batch-assign-summary {
+  margin: 0 0 .875rem;
+  padding: .75rem .875rem;
+  border: 1px solid var(--info-line);
+  background: var(--info-bg);
+  color: var(--ink-2);
+  font-size: .84rem;
+  line-height: 1.45;
+}
+
+#dialog [data-batch-assignee] { min-width: 15rem; }
+
+@media (max-width: 680px) {
+  #dialog [data-batch-assignee] { min-width: 0; width: 100%; }
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html { -webkit-text-size-adjust: 100%; }
@@ -150,6 +168,7 @@ svg { display: block; flex: none; }
 
 .auth-main { display: grid; place-items: center; padding: 2.5rem 2rem; background: #f4f8f7; }
 .auth-form { width: 100%; max-width: 410px; padding: clamp(1.5rem, 4vw, 2.5rem); border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 18px 50px rgba(10, 62, 59, .09); }
+.auth-mobile-brand { display: none; }
 .auth-form-kicker { display: flex; align-items: center; gap: .5rem; color: var(--brand-700); font-size: .78rem; font-weight: 700; }
 .auth-form-kicker svg { color: var(--gold-700); }
 .auth-form h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.01em; }
@@ -831,6 +850,7 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
   border-bottom: 1px solid var(--line-2);
 }
 
+.dialog-top > [data-act="close-dialog"] { margin: -0.35rem -0.45rem 0 auto; }
 .dialog-top h2 { font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; }
 .dialog-top p { font-size: 0.78rem; color: var(--ink-3); }
 .dialog-body { padding: 1.125rem; overflow-y: auto; }
@@ -920,21 +940,69 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 }
 
 @media (max-width: 760px) {
+  /* Mobile là bề mặt tác nghiệp chính: chữ đọc được ngay, vùng chạm đủ ngón tay
+     và input 16px để Chrome Android không tự phóng đại khi cán bộ bắt đầu gõ. */
+  :root { --tap: 48px; }
+  body { font-size: 16px; }
+  .input, .select, .textarea { font-size: 16px; }
+  .f > label { font-size: 0.88rem; }
+  .t1 { font-size: 1rem; }
+  .t2, .tid { font-size: 0.875rem; }
+  .tag { font-size: 0.8rem; }
+
   .customer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .auth { grid-template-columns: 1fr; }
-  .auth-side { min-height: 340px; padding: 2rem 1.5rem; background-position: 62% center; }
-  .auth-copy { padding: 2.5rem 0 1.25rem; }
-  .auth-lead { max-width: 13ch; }
-  .auth-summary, .auth-highlights { display: none; }
-  .auth-main { padding: 1.75rem 1.25rem 3rem; }
-  .auth-form { max-width: 480px; }
+
+  /* Login mobile là một tác vụ duy nhất: phủ nền nhận diện, đặt thẻ form lớn
+     giữa màn hình và bỏ hero desktop chiếm nửa chiều cao. */
+  .auth {
+    position: relative; display: grid; grid-template-columns: 1fr;
+    min-height: 100dvh; isolation: isolate; background: var(--brand-900);
+  }
+  .auth-side, .auth-main { grid-area: 1 / 1; }
+  .auth-side { min-height: 100dvh; padding: 0; background-position: 56% center; }
+  .auth-side > * { display: none; }
+  .auth-side::after { background: linear-gradient(160deg, rgba(0, 35, 35, .33), rgba(0, 48, 47, .72)); }
+  .auth-main {
+    position: relative; z-index: 1; place-items: center;
+    padding: max(1.5rem, env(safe-area-inset-top)) 1.25rem max(1.75rem, env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(0, 49, 47, .24), rgba(0, 49, 47, .5));
+  }
+  .auth-form {
+    max-width: 520px; padding: clamp(1.75rem, 7vw, 2.5rem);
+    border: 1px solid rgba(213, 243, 238, .22); border-radius: 30px;
+    background: linear-gradient(145deg, rgba(25, 116, 109, .86), rgba(4, 67, 65, .86));
+    box-shadow: 0 24px 64px rgba(0, 19, 18, .38); color: #f5fffd;
+    backdrop-filter: blur(14px);
+  }
+  .auth-mobile-brand { display: flex; flex-direction: column; align-items: center; gap: 0.65rem; margin: 0 auto 1.75rem; color: #e9fffb; font-size: 0.85rem; font-weight: 700; letter-spacing: .04em; }
+  .auth-mobile-brand .rail-mark { width: 64px; height: 64px; margin: 0; border-radius: 20px; font-size: 1.15rem; box-shadow: 0 0 0 8px rgba(185, 255, 246, .08), inset 0 0 0 1px rgba(255,255,255,.25); }
+  .auth-form-kicker { display: none; }
+  .auth-form h1 { font-size: 2.125rem; line-height: 1.1; text-align: center; letter-spacing: -.035em; }
+  .auth-form > p { margin: .75rem auto 2rem; color: rgba(231, 255, 251, .76); font-size: 1rem; line-height: 1.6; text-align: center; }
+  .auth-form .f { gap: .5rem; }
+  .auth-form .f > label { color: rgba(240, 255, 252, .88); font-size: 1rem; font-weight: 600; }
+  .auth-form .input { min-height: 60px; padding: .7rem 1rem; border-color: rgba(220, 255, 251, .19); border-radius: 18px; background: rgba(216, 255, 249, .12); color: #fff; font-size: 1.05rem; }
+  .auth-form .input::placeholder { color: rgba(225, 255, 250, .52); }
+  .auth-form .input:focus { border-color: #46e0d4; box-shadow: 0 0 0 3px rgba(70, 224, 212, .24); }
+  .password-control .input { padding-right: 3.65rem; }
+  .password-toggle { right: .5rem; width: 48px; height: 48px; color: rgba(231, 255, 251, .72); }
+  .password-toggle:hover { background: rgba(227, 255, 251, .12); color: #fff; }
+  .auth-form .btn-primary { min-height: 64px; border-radius: 18px; background: #36d1c5; color: #003e3b; font-size: 1.1rem; font-weight: 700; box-shadow: 0 10px 28px rgba(31, 215, 199, .24); }
+  .auth-form .btn-primary:hover:not(:disabled) { background: #62e5da; }
+  .auth-divider { margin: 1.75rem 0 1rem; color: rgba(231, 255, 251, .58); }
+  .auth-divider::before, .auth-divider::after { background: rgba(231, 255, 251, .16); }
+  .acct-list { border-color: rgba(231, 255, 251, .16); background: rgba(0, 51, 49, .15); }
+  .acct { min-height: 52px; border-bottom-color: rgba(231, 255, 251, .12); color: #effffc; }
+  .acct:hover { background: rgba(231, 255, 251, .1); }
+  .acct-name { font-size: .95rem; }
+  .acct-role { color: rgba(231, 255, 251, .66); font-size: .8rem; }
 
   .shell { grid-template-columns: 1fr; }
   .rail { display: none; }
 
   /* Appbar hẹp không đủ chỗ nhét vừa dải số liệu bên cạnh các nút — xuống
      hàng riêng, cuộn ngang, không cắt chữ nhãn (trước đây bị ellipsis). */
-  .appbar { min-height: 44px; padding: 0.4rem 0.6rem; gap: 0.3rem 0.6rem; flex-wrap: wrap; }
+  .appbar { min-height: 52px; padding: 0.4rem 0.6rem; gap: 0.3rem 0.6rem; flex-wrap: wrap; }
   .appbar-summary { order: 2; flex-basis: 100%; overflow: visible; }
   .appbar-actions { order: 1; margin-left: auto; gap: 0.15rem; }
   .appbar-summary .strip {
@@ -942,15 +1010,16 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
     scrollbar-width: none; border-radius: var(--r-sm);
   }
   .appbar-summary .strip::-webkit-scrollbar { display: none; }
-  .appbar-summary .strip > * { flex: 0 0 auto; min-width: 5.5rem; padding: 0.3rem 0.65rem; }
-  .appbar-summary .metric-k { font-size: 0.6rem; overflow: visible; text-overflow: clip; }
-  .appbar-summary .metric-v { font-size: 1rem; }
-  .view { padding: 0.875rem 0.875rem 5.5rem; }
+  .appbar-summary .strip > * { flex: 0 0 auto; min-width: 6.75rem; padding: 0.4rem 0.75rem; }
+  .appbar-summary .metric-k { font-size: 0.68rem; overflow: visible; text-overflow: clip; }
+  .appbar-summary .metric-v { font-size: 1.15rem; }
+  .view { padding: 1rem 0.875rem calc(5.75rem + env(safe-area-inset-bottom)); }
 
   .strip { grid-template-columns: 1fr 1fr; }
-  .strip > * { border-bottom: 1px solid var(--line-2); }
+  .strip > * { padding: 0.875rem; border-bottom: 1px solid var(--line-2); }
   .strip > *:nth-child(even) { border-right: none; }
-  .metric-v { font-size: 1.3rem; }
+  .metric-k { font-size: 0.75rem; }
+  .metric-v { font-size: 1.5rem; }
 
   /* Tiêu đề khối chỉ lặp lại đúng tên tab đang chọn ở thanh điều hướng dưới —
      ẩn đi trên mobile để dồn chỗ cho nội dung; nút hành động (vd. "Tạo việc
@@ -989,7 +1058,8 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
   .report-filters { flex-wrap: wrap; }
   .report-filters .f { flex: 1 1 145px; }
   .report-filters .report-actions { margin-left: 0; }
-  .dashboard-tabs { padding: 0.55rem 0.875rem; }
+  .dashboard-tabs { gap: 0.5rem; padding: 0.625rem 0.875rem; }
+  .dashboard-tab { min-height: 44px; padding: 0.5rem 0.8rem; font-size: 0.88rem; }
   .report-filters { flex-wrap: wrap; }
   .report-filters .f { flex: 1 1 145px; }
   .report-filters .report-actions { margin-left: 0; }
@@ -1059,29 +1129,95 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
   .toasts { left: 0.875rem; right: 0.875rem; bottom: 5rem; }
   .toast { max-width: none; }
 
+  .filter-trigger { width: 44px; height: 44px; }
+  .list-search .input, .sort-control .select, .report-filters .input, .report-filters .select { min-height: 48px; }
+  .chip > span { min-height: 44px; font-size: 0.88rem; }
+  .btn-sm { min-height: 44px; padding: 0.35rem 0.7rem; font-size: 0.86rem; }
+  .btn-icon { min-height: 44px; width: 44px; }
+  .block-bar { padding: 0.75rem 0.875rem; }
+  .block-bar h2 { font-size: 1rem; }
+  table.t tbody tr { padding: 0.875rem; }
+  table.t td, table.t td.fit, table.t td.num { padding: 0.55rem 0; }
+  table.t td[data-label]::before { font-size: 0.7rem; }
+
+  /* Mỗi loại dữ liệu có nhịp đọc riêng trên điện thoại. Không dùng thẻ bảng
+     cao, giống nhau cho hồ sơ, nhật ký và số liệu tổng hợp. */
+  table.t.mobile-record-table tbody { gap: 0.75rem; }
+  table.t.mobile-record-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr); gap: 0;
+    padding: 0.9rem 1rem;
+  }
+  table.t.mobile-record-table td { padding: 0.5rem 0; }
+  table.t.mobile-record-table td[data-label="Khách hàng"] {
+    padding-top: 0; padding-bottom: 0.7rem; margin-bottom: 0.15rem;
+  }
+  table.t.mobile-record-table td[data-label="Khách hàng"]::before { display: none; }
+  table.t.mobile-record-table td[data-label="Trạng thái"],
+  table.t.mobile-record-table td[data-label="Cán bộ"] { min-height: 32px; }
+  table.t.mobile-record-table td:last-child {
+    padding-top: 0.7rem; margin-top: 0.1rem;
+  }
+  table.t.mobile-record-table .act-row { min-height: 44px; }
+
+  /* Nhật ký là dòng thời gian: thời điểm và mã việc thành một hàng tiêu đề,
+     sự kiện/người thực hiện đi cùng nhau, nội dung giữ một dòng đọc tự nhiên. */
+  table.t.audit-table tbody { gap: 0.75rem; }
+  table.t.audit-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0; padding: 0; overflow: hidden;
+  }
+  table.t.audit-table td { min-width: 0; padding: 0.75rem 0.9rem; border-bottom: 1px solid var(--line-2); }
+  table.t.audit-table td[data-label]::before { display: none; }
+  table.t.audit-table td[data-label="Thời gian"] { grid-column: 1; background: var(--surface-2); }
+  table.t.audit-table td[data-label="Mã việc"] { grid-column: 2; background: var(--surface-2); text-align: right; }
+  table.t.audit-table td[data-label="Mã việc"] .btn { min-height: 36px; padding: 0.2rem 0.35rem; }
+  table.t.audit-table td[data-label="Sự kiện"] { grid-column: 1; border-bottom: 0; padding-bottom: 0.35rem; }
+  table.t.audit-table td[data-label="Người thực hiện"] { grid-column: 2; border-bottom: 0; padding-bottom: 0.35rem; text-align: right; }
+  table.t.audit-table td[data-label="Nội dung"] { grid-column: 1 / -1; padding-top: 0.35rem; color: var(--ink-2); }
+  table.t.audit-table td[data-label="Nội dung"] .t2 { font-size: 0.94rem; line-height: 1.5; }
+
+  /* Bảng dashboard chỉ có vài chỉ số; đưa chúng vào lưới nhỏ để không còn
+     tạo thẻ cao trống trải như bảng desktop bị xếp dọc. */
+  table.t.dashboard-metric-table tbody { gap: 0.75rem; }
+  table.t.dashboard-metric-table tbody tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0; padding: 0.9rem 1rem;
+  }
+  table.t.dashboard-metric-table td { min-width: 0; padding: 0.55rem 0; border-bottom: 0; }
+  table.t.dashboard-metric-table td:first-child { grid-column: 1 / -1; padding-top: 0; padding-bottom: 0.7rem; border-bottom: 1px solid var(--line-2); }
+  table.t.dashboard-metric-table td:first-child::before { display: none; }
+  table.t.dashboard-metric-table td.num { display: flex; flex-direction: column; gap: 0.25rem; }
+  table.t.dashboard-metric-table td.num::before { font-size: 0.7rem; }
+  table.t.dashboard-metric-table .tid { font-size: 1.12rem; color: var(--ink); font-weight: 650; }
+
   .tabbar {
     position: fixed; inset: auto 0 0 0; z-index: 100;
     display: flex;
-    height: 58px;
+    height: 68px;
     padding-bottom: env(safe-area-inset-bottom);
     background: var(--surface);
     border-top: 1px solid var(--line);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
+  .tabbar::-webkit-scrollbar { display: none; }
 
   .tabbar button {
     position: relative;
-    flex: 1; min-width: 0;
+    flex: 0 0 72px; min-width: 72px;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem;
-    font-size: 0.66rem; font-weight: 600;
+    min-height: 48px;
+    font-size: 0.72rem; font-weight: 600;
     color: var(--ink-4);
   }
 
   .tabbar-avatar {
-    width: 22px; height: 22px;
+    width: 26px; height: 26px;
     display: grid; place-items: center;
     border-radius: 50%;
     background: var(--brand-50); color: var(--brand-800);
-    font-size: 0.58rem; font-weight: 700;
+    font-size: 0.64rem; font-weight: 700;
   }
 
   .tabbar button[aria-current="page"] { color: var(--brand); }
@@ -1168,6 +1304,25 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .viz-tip.on { opacity: 1; transform: none; }
 .viz-tip b { display: block; font-weight: 700; margin-bottom: 0.1rem; }
 
+@media (max-width: 760px) {
+  /* Đồ thị trên dashboard phòng phải đọc được bằng mắt thường ở khổ 390px. */
+  .viz { padding: 1rem 0.9rem; }
+  .viz-head { gap: 0.45rem; margin-bottom: 1rem; }
+  .viz-title { font-size: 1rem; }
+  .viz-sub, .viz-legend { font-size: 0.82rem; }
+  .viz-sw { width: 12px; height: 12px; }
+  .viz-cols { height: 224px; padding-left: 2.45rem; }
+  .viz-plot, .viz-groups { left: 2.45rem; }
+  .viz-grid span { font-size: 0.74rem; }
+  .viz-cap { font-size: 0.74rem; }
+  .viz-xl { height: 24px; font-size: 0.72rem; }
+  .viz-row { grid-template-columns: minmax(112px, 40%) minmax(0, 1fr); gap: 0.65rem; padding: 0.45rem 0.25rem; }
+  .viz-rl { font-size: 0.9rem; }
+  .viz-rl .t2, .viz-val { font-size: 0.78rem; }
+  .viz-fill { height: 16px; }
+  .viz-table { font-size: 0.88rem; }
+}
+
 @media print { .viz-table, .viz-tip { display: none !important; } }
 
 /* ============================ Bàn phím ============================ */
@@ -1202,6 +1357,227 @@ table.t tbody tr.row-next:not(.priority-urgent):not(.priority-vip):not(.priority
 .unit-chip:hover { border-color: var(--brand-300); color: var(--brand-800); }
 .unit-chip.is-active { border-color: var(--brand); background: var(--brand-50); color: var(--brand-800); }
 .unit-chip.is-active span { color: var(--brand-800); }
+
+/* Nhãn ưu tiên viết tắt và dòng phòng gửi chỉ dành cho thẻ mobile. */
+.tag-short, .cust-unit { display: none; }
+
+/* ============================ Mobile: căn lề & nhịp ============================ */
+
+/* Một lề ngang duy nhất (--gutter) cho appbar, khối, thanh lọc và dòng danh sách
+   để mọi mép trái/phải thẳng hàng. Danh sách trong khối là list phẳng có vạch
+   ngăn (kiểu grouped list), không còn thẻ lồng trong thẻ ăn mất hai lớp lề. */
+@media (max-width: 760px) {
+  :root { --gutter: 0.75rem; }
+
+  /* Appbar: nhãn kỳ/môi trường sát trái, chuông sát phải; dải số liệu chia đều
+     bề ngang thay vì cuộn và bị cắt ở mép. Phím tắt vô nghĩa trên điện thoại. */
+  .appbar { padding: 0.35rem var(--gutter) 0.4rem; gap: 0.35rem; }
+  .appbar-actions { flex: 1 1 100%; min-width: 0; margin-left: 0; gap: 0.35rem; }
+  .appbar-actions .tag { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .appbar-actions [data-act="shortcuts"] { display: none; }
+  .appbar-actions [data-act="inbox"] { margin-left: auto; margin-right: -0.5rem; }
+  .appbar-summary .strip {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+    grid-template-columns: none; overflow: visible;
+    border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--surface-2);
+  }
+  .appbar-summary .strip > * { min-width: 0; padding: 0.4rem 0.5rem; border-bottom: 0; }
+  .appbar-summary .strip > *:nth-child(even) { border-right: 1px solid var(--line-2); }
+  .appbar-summary .strip > *:last-child { border-right: 0; }
+  .appbar-summary .metric-k { display: block; font-size: 0.7rem; line-height: 1.2; letter-spacing: 0; text-transform: none; white-space: normal; overflow: visible; }
+  .appbar-summary .strip > * { display: flex; flex-direction: column; justify-content: space-between; }
+  .appbar-summary .strip:has(> :nth-child(5)) > * { padding: 0.4rem 0.35rem; }
+  .appbar-summary .strip:has(> :nth-child(5)) .metric-k { font-size: 0.64rem; }
+
+  /* Dải số liệu trong trang: lưới 2 cột (3 cột khi có 6 chỉ số), vạch ngăn bằng
+     khe 1px nên không còn viền thừa/thiếu khi số ô lẻ. */
+  .view .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line-2); }
+  .view .strip:has(> :nth-child(6):last-child) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .view .strip > *, .view .strip > *:nth-child(odd), .view .strip > *:nth-child(even) { border: 0; background: var(--surface); padding: 0.65rem var(--gutter); }
+  .view .strip:not(:has(> :nth-child(6):last-child)) > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .view .strip .metric-k { font-size: 0.68rem; letter-spacing: 0.03em; }
+  .view .strip .metric-v { font-size: 1.3rem; }
+  .appbar-summary .metric-v { font-size: 1.1rem; }
+
+  .view { padding: var(--gutter) var(--gutter) calc(5.25rem + env(safe-area-inset-bottom)); gap: var(--gutter); }
+  .view > .btn { align-self: flex-start; }
+
+  /* Khối */
+  .block-bar { padding: 0.7rem var(--gutter); }
+  .block-bar h2 { min-width: 0; flex-wrap: wrap; row-gap: 0.1rem; }
+  .block-note { padding: 0.55rem var(--gutter); font-size: 0.82rem; }
+  /* Nút chính duy nhất (vd. "Tạo việc mới") trải hết bề ngang: dễ bấm, hết chỗ trống lệch trái. */
+  .block-bar-compact:has(.btn-row) { padding: var(--gutter) var(--gutter) 0; }
+  .block-bar-compact .btn-row { flex: 1 1 100%; margin: 0; }
+  .block-bar-compact .btn-row .btn { flex: 1 1 auto; min-height: 48px; font-size: 0.95rem; }
+  .section-title { padding: 0 var(--gutter); margin: 1rem 0 0.5rem; }
+
+  /* Thanh tìm/lọc/sắp xếp: một hàng vừa khít, ô tìm giãn hết phần còn lại —
+     không cuộn ngang, không cắt mất ô sắp xếp ở mép phải. */
+  .filters { padding: var(--gutter); gap: 0.5rem; }
+  .filters > .search { flex: 1 1 150px; }
+  .list-toolbar { flex-wrap: nowrap; overflow: visible; gap: 0.5rem; }
+  .list-toolbar .list-search, .queue-tools .list-search { flex: 1 1 0; min-width: 0; }
+  .sort-label { display: none; }
+  .sort-control .select { width: 7.5rem; min-width: 0; text-overflow: ellipsis; }
+  .filter-trigger { width: 48px; height: 48px; border: 1px solid var(--line); background: var(--surface); }
+  /* Hàng chờ nằm trong .filters (đã có lề) — tab và công cụ không thêm lề nữa. */
+  .queue-toolbar { gap: 0.6rem; }
+  .queue-tabs { margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); scrollbar-width: none; }
+  .queue-tabs::-webkit-scrollbar, .dashboard-tabs::-webkit-scrollbar { display: none; }
+  .dashboard-tabs { padding: 0.6rem var(--gutter); scrollbar-width: none; }
+  .queue-tools { flex-wrap: wrap; overflow: visible; gap: 0.5rem; padding: 0; }
+  .queue-tools .unit-chips {
+    order: 9; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+    margin: 0; padding: 0; border-left: 0;
+  }
+  .queue-tools .unit-chips::-webkit-scrollbar { display: none; }
+  .unit-chip { flex: none; min-height: 36px; }
+  /* Bộ chọn kỳ báo cáo: lưới 2 cột, nhãn nằm trên ô — không còn nhãn chen
+     ngang làm ô ngày tràn khỏi khối. */
+  .report-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem 0.5rem; padding: var(--gutter); }
+  .filters > .report-filters { flex: 1 1 100%; padding: 0; border: 0; background: transparent; }
+  .report-filters .f { flex-direction: column; align-items: stretch; gap: 0.25rem; min-width: 0; }
+  .report-filters .f > label { font-size: 0.78rem; }
+  .report-filters .select, .report-filters .input, .report-filters .input[type="date"] { min-width: 0; width: 100%; }
+  .report-filters .report-range-note, .report-filters .report-actions { grid-column: 1 / -1; }
+  .report-filters .report-actions { display: flex; margin: 0; gap: 0.5rem; }
+  .report-filters .report-actions .btn { flex: 1 1 0; }
+  .report-range-note { white-space: normal; font-size: 0.8rem; }
+
+  /* Danh sách: mỗi dòng là một mục phẳng trong khối, ngăn bằng vạch mảnh;
+     màu ưu tiên phủ cả dòng và vạch trái nằm ở mép khối. */
+  .tw { padding: 0; }
+  table.t tbody { gap: 0; }
+  table.t tbody tr, table.t tbody tr:hover {
+    border: 0; border-radius: 0; border-bottom: 1px solid var(--line-2);
+    padding: 0.8rem var(--gutter) 0.8rem calc(var(--gutter) + 4px);
+    background: var(--surface); box-shadow: inset 4px 0 0 transparent;
+  }
+  table.t tbody tr:last-child { border-bottom: 0; }
+  /* Nền/vạch của ô desktop phải nhường cho dòng; các lớp :not() ở trên có độ
+     đặc hiệu rất cao nên buộc dùng !important trong phạm vi mobile. */
+  table.t tbody tr > td { background: transparent !important; box-shadow: none !important; }
+  table.t tbody tr.row-today { background: #e6f5f2; box-shadow: inset 4px 0 0 var(--brand); }
+  table.t tbody tr.row-next { background: #f3f8fc; }
+  table.t tbody tr.priority-important { background: #eef5fb; box-shadow: inset 4px 0 0 var(--info); }
+  table.t tbody tr.priority-vip { background: #fff8dc; box-shadow: inset 4px 0 0 var(--gold-700); }
+  table.t tbody tr.priority-urgent { background: #fff2f1; box-shadow: inset 4px 0 0 var(--danger); }
+  table.t tbody tr.flag-warn { box-shadow: inset 4px 0 0 var(--warn); }
+  table.t tbody tr.flag { box-shadow: inset 4px 0 0 var(--danger); }
+  table.t tbody tr[data-row]:focus { background: var(--brand-50); }
+  table.t td, table.t td.fit, table.t td.num { padding: 0.3rem 0; border-bottom: 0; }
+  table.t td:first-child, table.t td.cell-hide-mobile:first-child + td { padding-top: 0; padding-bottom: 0.3rem; margin: 0; border-bottom: 0; }
+
+  /* Hồ sơ: dòng đầu là tên khách + cờ ưu tiên viết tắt, trạng thái nằm cùng
+     hàng bên phải; dưới là phòng gửi (thay CIF) và cán bộ, nút thao tác góc phải. */
+  table.t.mobile-record-table tbody { gap: 0; }
+  table.t.mobile-record-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.6rem;
+    padding: 0.75rem var(--gutter) 0.75rem calc(var(--gutter) + 4px);
+  }
+  table.t.mobile-record-table td { grid-column: 1; padding: 0.15rem 0; }
+  table.t.mobile-record-table td[data-label="Khách hàng"] { grid-column: 1; grid-row: 1; padding: 0; margin: 0; border: 0; }
+  table.t.mobile-record-table td[data-label="Trạng thái"] { grid-column: 2; grid-row: 1; justify-self: end; align-self: start; padding: 0.05rem 0 0; }
+  table.t.mobile-record-table td[data-label="Trạng thái"]::before { display: none; }
+  table.t.mobile-record-table td[data-label="Cán bộ"] { min-height: 0; padding-top: 0.1rem; }
+  table.t.mobile-record-table td:last-child { grid-column: 2; grid-row: 2; align-self: center; padding: 0.25rem 0 0; margin: 0; }
+  table.t.mobile-record-table td[data-label="Cán bộ"] { align-self: center; }
+  table.t.mobile-record-table .customer-main { flex-wrap: wrap; column-gap: 0.35rem; }
+  table.t.mobile-record-table .customer-main .t1 { overflow-wrap: anywhere; }
+  table.t.mobile-record-table .priority-tags .tag { padding: 0.05rem 0.35rem; font-size: 0.72rem; }
+  /* Có nhiều nút (vd. "Đổi người" + xem) thì xuống một hàng riêng, căn phải,
+     để dòng cán bộ không bị ép ngắn; chỉ có nút xem thì nằm bên phải như cũ. */
+  table.t.mobile-record-table td:last-child:has(.act-row > :nth-child(2)) { grid-column: 1 / -1; grid-row: auto; justify-self: end; }
+  table.t .tag-full, table.t .cust-cif { display: none; }
+  table.t .tag-short { display: inline; }
+  table.t .cust-unit { display: block; margin-top: 0.1rem; }
+  table.t.mobile-record-table .act-row { min-height: 0; justify-content: flex-end; flex-wrap: wrap; gap: 0.35rem; }
+  table.t.mobile-record-table .act-row .btn-icon { border: 1px solid var(--line); background: var(--surface); }
+  table.t.mobile-record-table .customer-main { row-gap: 0.25rem; }
+
+  /* Nhật ký: giờ + mã việc thành dòng đầu, sự kiện + người thực hiện dòng hai,
+     nội dung dòng ba — không nhãn, không hộp con. */
+  table.t.audit-table tbody { gap: 0; }
+  table.t.audit-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+    column-gap: 0.75rem; row-gap: 0.3rem; overflow: visible;
+    padding: 0.75rem var(--gutter) 0.8rem calc(var(--gutter) + 4px);
+  }
+  table.t.audit-table td,
+  table.t.audit-table td[data-label="Thời gian"],
+  table.t.audit-table td[data-label="Mã việc"],
+  table.t.audit-table td[data-label="Sự kiện"],
+  table.t.audit-table td[data-label="Người thực hiện"],
+  table.t.audit-table td[data-label="Nội dung"] { padding: 0; margin: 0; border: 0; min-width: 0; }
+  table.t.audit-table td[data-label="Thời gian"] .tid { font-size: 0.8rem; }
+  table.t.audit-table td[data-label="Mã việc"] { text-align: right; }
+  table.t.audit-table td[data-label="Mã việc"] .btn { min-height: 32px; padding: 0.1rem 0.4rem; margin-right: -0.4rem; font-size: 0.76rem; color: var(--brand-800); }
+  table.t.audit-table td[data-label="Người thực hiện"] { text-align: right; }
+  table.t.audit-table td[data-label="Người thực hiện"] .t2 { font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.t.audit-table td[data-label="Nội dung"] .t2 { font-size: 0.92rem; line-height: 1.45; color: var(--ink-2); }
+
+  /* Số liệu dashboard: tên bên trái, các con số thành cột nhỏ bên phải trên
+     cùng một dòng — thay cho thẻ cao xếp dọc "Tổng / 2 / Đang mở / 2". */
+  table.t.dashboard-metric-table tbody { gap: 0; }
+  table.t.dashboard-metric-table tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-flow: column; grid-auto-columns: 4.5rem;
+    align-items: center; column-gap: 0.25rem; padding: 0.65rem var(--gutter);
+  }
+  table.t.dashboard-metric-table td,
+  table.t.dashboard-metric-table td:first-child { grid-column: auto; padding: 0; margin: 0; border: 0; }
+  table.t.dashboard-metric-table td.num { display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 0.05rem; text-align: right; }
+  table.t.dashboard-metric-table td.num::before { font-size: 0.6rem; letter-spacing: 0.03em; margin: 0; white-space: nowrap; }
+  table.t.dashboard-metric-table .t1 { font-size: 0.95rem; overflow-wrap: anywhere; }
+  table.t.dashboard-metric-table .tid { font-size: 1.05rem; }
+  /* Các bảng còn lại (báo cáo, cấu hình): ô số/ô ngắn xếp thành lưới 3 cột
+     nhãn-trên-giá-trị; ô chữ dài vẫn trọn dòng. Tránh thẻ cao một cột. */
+  table.t:where(:not(.mobile-record-table, .audit-table, .dashboard-metric-table)) tbody tr {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 0.75rem; row-gap: 0.15rem;
+  }
+  table.t:where(:not(.mobile-record-table, .audit-table, .dashboard-metric-table)) td { grid-column: 1 / -1; min-width: 0; }
+  table.t:where(:not(.mobile-record-table, .audit-table, .dashboard-metric-table)) td:is(.num, .fit):not(:first-child) { grid-column: auto; }
+  table.t:where(:not(.mobile-record-table, .audit-table, .dashboard-metric-table)) td.num .tid { font-size: 1rem; color: var(--ink); }
+  .section-title + .tw { border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+  .block .empty { padding: 1.5rem var(--gutter); }
+
+  /* Bảng số liệu dưới đồ thị giữ dạng bảng thật: vài cột ngắn, vừa màn hình. */
+  .viz-table table.t { display: table; }
+  .viz-table table.t thead { display: table-header-group; }
+  .viz-table table.t tbody { display: table-row-group; }
+  .viz-table table.t tr, .viz-table table.t tbody tr { display: table-row; padding: 0; box-shadow: none; }
+  .viz-table table.t th, .viz-table table.t td { display: table-cell; width: auto; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--line-2); }
+  .viz-table table.t td[data-label]::before { content: none; }
+  .viz { padding: 1rem var(--gutter); }
+
+  .banner { padding: 0.7rem var(--gutter); }
+
+  /* Bottom sheet: lề giống trang, nút cuối chia đều bề ngang, chừa vùng vuốt home. */
+  .dialog-top { padding: 1rem 1rem 0.75rem; }
+  .dialog-top h2 { font-size: 1.1rem; }
+  .dialog-body { padding: 1rem 1rem max(1rem, env(safe-area-inset-bottom)); }
+  .form-end { flex-wrap: wrap; }
+  .form-end > .btn { flex: 1 1 8rem; }
+
+  /* Thanh dưới: chia đều các ô trên cả bề ngang, không dư khoảng trống bên phải. */
+  .tabbar { height: calc(64px + env(safe-area-inset-bottom)); overflow-x: hidden; }
+  .tabbar button { flex: 1 1 0; min-width: 0; padding: 0 2px; font-size: 0.7rem; line-height: 1.15; text-align: center; }
+
+  /* Nền xanh lục bảo, chữ/biểu tượng trắng; mục đang mở là ô trắng chữ xanh. */
+  .tabbar { gap: 0.25rem; padding: 0.4rem 0.35rem calc(0.4rem + env(safe-area-inset-bottom)); background: var(--brand-800); border-top: 0; box-shadow: 0 -4px 16px rgba(0, 64, 62, 0.18); }
+  .tabbar button { min-height: 0; border-radius: 12px; color: rgba(255, 255, 255, 0.86); transition: background var(--fast) var(--ease), color var(--fast) var(--ease); }
+  .tabbar button:active { background: rgba(255, 255, 255, 0.12); }
+  .tabbar button[aria-current="page"] { background: #fff; color: var(--brand-800); box-shadow: 0 2px 8px rgba(0, 40, 38, 0.25); }
+  .tabbar button[aria-current="page"]::before { content: none; }
+  .tabbar button:focus-visible { box-shadow: 0 0 0 2px var(--gold); }
+  .tabbar-avatar { background: rgba(255, 255, 255, 0.18); color: #fff; }
+  .tabbar .rail-badge { top: 0.15rem; box-shadow: 0 0 0 2px var(--brand-800); }
+  .tabbar button > span:not(.rail-badge):not(.tabbar-avatar) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+  /* Vai trò có 6-7 mục: thu chữ và khe để nhãn không vỡ quá 2 dòng. */
+  .tabbar:has(> :nth-child(6)) { gap: 2px; padding-left: 0.25rem; padding-right: 0.25rem; }
+  .tabbar:has(> :nth-child(6)) button { font-size: 0.64rem; letter-spacing: -0.01em; border-radius: 10px; }
+  .toasts { left: var(--gutter); right: var(--gutter); bottom: calc(4.75rem + env(safe-area-inset-bottom)); }
+}
 
   </style>
 </head>
@@ -1643,7 +2019,7 @@ LS.domain = (function () {
       { to: 'HUY', label: 'Hủy việc', short: 'Hủy', roles: ['KS_LS', 'QUAN_LY_LS', 'PHONG_PGD'], reason: 'HUY', rank: 9 }
     ],
     CAN_BO_SUNG: [
-      { to: 'CHO_TIEP_NHAN', label: 'Gửi lại LS', short: 'Gửi lại', roles: ['PHONG_PGD', 'KS_LS'], reason: 'free', primary: true, rank: 1 },
+      { to: 'CHO_TIEP_NHAN', label: 'Gửi lại LS', short: 'Gửi lại', roles: ['PHONG_PGD', 'KS_LS', 'QUAN_LY_LS'], reason: 'free', primary: true, rank: 1 },
       { to: 'HUY', label: 'Hủy việc', short: 'Hủy', roles: ['KS_LS', 'QUAN_LY_LS', 'PHONG_PGD'], reason: 'HUY', rank: 9 }
     ],
     CHO_PHAN_CONG: [
@@ -1974,7 +2350,11 @@ LS.domain = (function () {
     DE_NGHI_SUA: 'Có đề nghị sửa chờ duyệt',
     QUA_HAN: 'Việc quá hạn xử lý',
     DANG_HEN_KH: 'Hẹn khách ký hồ sơ',
-    HOAN_THANH_LS: 'Hoàn thành phần việc LS'
+    HOAN_THANH_LS: 'Hoàn thành phần việc LS',
+    // Tin trong app gửi thẳng người liên quan khi sửa hồ sơ (không qua quy tắc).
+    DUYET_SUA: 'Đề nghị sửa đã được duyệt',
+    TU_CHOI_SUA: 'Đề nghị sửa bị từ chối',
+    SUA_THONG_TIN: 'Kiểm soát đã sửa thông tin hồ sơ'
   };
 
   /** Tin trong app không có mẫu; dựng một dòng đủ hiểu từ chính sự kiện. */
@@ -2279,10 +2659,39 @@ LS.domain = (function () {
 
   /* ============================ Hạn xử lý ============================ */
 
+  /**
+   * Chờ bên ngoài (tạm dừng, đang hẹn khách): hạn đứng yên, không tính quá hạn;
+   * quay lại xử lý thì hạn lùi đúng số giờ làm đã chờ. Khớp SLA_PAUSED_STATUS trong Code.gs.
+   */
+  var SLA_PAUSED = ['TAM_DUNG', 'DANG_HEN_KH'];
+
   function sla(item, st) {
-    if (!item.due_at || !STATUS[item.status].open) return null;
+    if (!item.due_at || !STATUS[item.status] || !STATUS[item.status].open) return null;
     var left = new Date(item.due_at).getTime() - Date.now();
+    if (SLA_PAUSED.indexOf(item.status) !== -1) return { due: item.due_at, left: left, late: false, soon: false, paused: true };
     return { due: item.due_at, left: left, late: left < 0, soon: left >= 0 && left < 2 * 3600000 };
+  }
+
+  /** Việc đang mở, không chờ bên ngoài, đã qua hạn tại thời điểm nowMs. */
+  function lateOpen(item, nowMs) {
+    return !!(item.due_at && STATUS[item.status] && STATUS[item.status].open && SLA_PAUSED.indexOf(item.status) === -1 &&
+      nowMs > new Date(item.due_at).getTime());
+  }
+
+  /**
+   * Bản trình duyệt của phần lùi hạn trong transitionItem (Code.gs): vào trạng thái
+   * chờ thì ghi mốc, ra khỏi thì cộng số giờ làm đã chờ vào hạn.
+   */
+  function applySlaPause(item, to, ts, st) {
+    var wasPaused = SLA_PAUSED.indexOf(item.status) !== -1, nowPaused = SLA_PAUSED.indexOf(to) !== -1;
+    if (!wasPaused && nowPaused && item.due_at) item.sla_paused_at = ts;
+    if (wasPaused && !nowPaused) {
+      if (to !== 'DA_PHAN_CONG' && item.due_at && item.sla_paused_at) {
+        var waited = U.workingMilliseconds(item.sla_paused_at, ts, st.calendar) || 0;
+        if (waited > 0) item.due_at = U.addWorkingHours(item.due_at, waited / 3600000, st.calendar);
+      }
+      item.sla_paused_at = '';
+    }
   }
 
   /** Số giờ làm thực tế kể từ lúc cán bộ bấm bắt đầu xử lý hồ sơ. */
@@ -2471,7 +2880,7 @@ LS.domain = (function () {
       }
       if (STATUS[item.status] && STATUS[item.status].open) {
         row.open += 1;
-        if (item.due_at && at.getTime() > new Date(item.due_at).getTime()) row.lateOpen += 1;
+        if (lateOpen(item, at.getTime())) row.lateOpen += 1;
       }
     });
 
@@ -2538,7 +2947,7 @@ LS.domain = (function () {
       // Việc đã chuyển sang kỳ sau được chấm trễ ở dòng cuối của nó, không
       // phải ở mỗi kỳ nó đi qua — nếu không một việc trễ đếm thành ba lần trễ.
       var late = i.due_at && !i.carried_to_item_id
-        ? (done ? String(i.completed_at || '') > String(i.due_at) : now > String(i.due_at)) : false;
+        ? (done ? String(i.completed_at || '') > String(i.due_at) : lateOpen(i, new Date(now).getTime())) : false;
       var open = STATUS[i.status] && STATUS[i.status].open && !i.carried_to_item_id;
 
       var dimKey, dimLabel;
@@ -2932,7 +3341,7 @@ LS.domain = (function () {
     addressFor: addressFor, templateFor: templateFor, emailUsedToday: emailUsedToday,
     REPORT_PRESETS: REPORT_PRESETS, presetRange: presetRange, monthsInRange: monthsInRange,
     reportFromItems: reportFromItems, monthKey: monthKey,
-    dateOnly: dateOnly, userOff: userOff, userAvailable: userAvailable, staffWorkloadByGroup: staffWorkloadByGroup, operationalScorecard: operationalScorecard,
+    dateOnly: dateOnly, userOff: userOff, SLA_PAUSED: SLA_PAUSED, lateOpen: lateOpen, applySlaPause: applySlaPause, userAvailable: userAvailable, staffWorkloadByGroup: staffWorkloadByGroup, operationalScorecard: operationalScorecard,
     VARS: VARS, FORBIDDEN: FORBIDDEN, TPL_STATUS: TPL_STATUS,
     NOTIFY_EVENTS: NOTIFY_EVENTS, AUDIENCE: AUDIENCE, OUT_STATUS: OUT_STATUS,
     label: label, tone: tone,
@@ -2972,6 +3381,11 @@ LS.api = (function () {
   function json(value, fallback) {
     if (!value) return fallback;
     try { return typeof value === 'string' ? JSON.parse(value) : value; } catch (e) { return fallback; }
+  }
+  function finiteNumberOrNull(value) {
+    if (value === null || value === undefined || value === '') return null;
+    var number = Number(value);
+    return isFinite(number) ? number : null;
   }
 
   /** Chuyển hàng dữ liệu Sheet thành cấu trúc UI duy nhất, không lộ bí mật kênh gửi. */
@@ -3028,7 +3442,7 @@ LS.api = (function () {
       return {
         item_id: i.item_id, period_id: i.period_id || '', parent_item_id: i.parent_item_id || '', collateral_mode: i.collateral_mode || 'NONE', carryover_from_item_id: i.carryover_from_item_id || '', carried_to_item_id: i.carried_to_item_id || '', source_stt: i.source_stt || '', source_tab: i.source_tab || '', request_id: i.request_id, work_type_code: i.work_type_code, product_name: i.product_name,
         occurrence_date: i.occurrence_date, status: i.status, assigned_user_id: i.assigned_user_id || '', assigned_by: i.assigned_by || '',
-        submitted_at: i.submitted_at || '', accepted_at: i.accepted_at || '', assigned_at: i.assigned_at || '', due_at: i.due_at || '',
+        submitted_at: i.submitted_at || '', accepted_at: i.accepted_at || '', assigned_at: i.assigned_at || '', due_at: i.due_at || '', sla_paused_at: i.sla_paused_at || '',
         completed_at: i.completed_at || '', processing_started_at: i.processing_started_at || '', pause_log: json(i.pause_log_json, []), appointment: json(i.appointment_json, null), checklist: json(i.checklist_json, []),
         pending: json(i.pending_json, null), note: i.note || '', version: Number(i.version) || 1
       };
@@ -3042,10 +3456,10 @@ LS.api = (function () {
         user: { user_id: x.user && x.user.user_id || '', full_name: x.user && x.user.full_name || '' },
         eligible: Number(x.eligible) || 0, done: Number(x.done) || 0, timedDone: Number(x.timedDone) || 0,
         onTime: Number(x.onTime) || 0,
-        lateOpen: Number(x.lateOpen) || 0, open: Number(x.open) || 0, score: x.score === null ? null : Number(x.score),
-        onTimeRate: x.onTimeRate === null ? null : Number(x.onTimeRate) || 0,
-        completionRate: x.completionRate === null ? null : Number(x.completionRate) || 0,
-        backlogRate: x.backlogRate === null ? null : Number(x.backlogRate) || 0,
+        lateOpen: Number(x.lateOpen) || 0, open: Number(x.open) || 0, score: finiteNumberOrNull(x.score),
+        onTimeRate: finiteNumberOrNull(x.onTimeRate),
+        completionRate: finiteNumberOrNull(x.completionRate),
+        backlogRate: finiteNumberOrNull(x.backlogRate),
         dataQuality: x.dataQuality || ''
       };
     });
@@ -3116,9 +3530,10 @@ LS.api = (function () {
     createNextMonthlyPlan: function () { return call('createNextMonthlyPlan'); },
     createRequest: function (payload) { return call('createRequest', payload); },
     transitionItem: function (id, to, opts) { return call('transitionItem', id, to, opts || {}); },
+    assignWorkItemsBatch: function (rows) { return call('assignWorkItemsBatch', rows || []); },
     saveChecklist: function (id, checklist, expectedVersion) { return call('saveChecklist', id, checklist, expectedVersion); },
     addLinkedItem: function (parentId, workTypeCode) { return call('addLinkedItem', parentId, workTypeCode); },
-    proposeRevision: function (id, fields, reason) { return call('proposeRevision', id, fields, reason); },
+    proposeRevision: function (id, fields, reason, expectedVersion) { return call('proposeRevision', id, fields, reason, expectedVersion); },
     resolveRevision: function (id, approve, reason) { return call('resolveRevision', id, approve, reason || ''); },
     saveCatalog: function (kind, code, data) { return call('adminSaveCatalog', kind, code, data); },
     importUsers: function (rows) { return call('adminImportUsers', rows); },
@@ -3208,7 +3623,8 @@ LS.ui = (function () {
    */
   function table(cols, rows, emptyOpts) {
     if (!rows.length) return empty(emptyOpts || {});
-    return '<div class="tw"><table class="t"><thead><tr>' +
+    var tableClass = emptyOpts && emptyOpts.tableClass ? ' ' + U.attr(emptyOpts.tableClass) : '';
+    return '<div class="tw"><table class="t' + tableClass + '"><thead><tr>' +
       cols.map(function (c) { return '<th' + (c.cls ? ' class="' + c.cls + '"' : '') + '>' + (c.header !== undefined ? c.header : U.esc(c.label || '')) + '</th>'; }).join('') +
       '</tr></thead><tbody>' +
       rows.map(function (r) {
@@ -3667,8 +4083,14 @@ LS.screens = (function () {
 
   function priorityFlags(customer) { return (customer && customer.priority_flags) || []; }
   function priorityTags(customer) {
-    var labels = { VIP: ['VIP', 'gold'], QUAN_TRONG: ['Quan trọng', 'info'], XU_LY_GAP: ['Xử lý gấp', 'danger'] };
-    return priorityFlags(customer).map(function (x) { return labels[x] ? ui.tag(labels[x][0], labels[x][1]) : ''; }).join(' ');
+    // Nhãn viết tắt (cột 3) chỉ hiện trên thẻ mobile để tên khách và cờ ưu tiên gọn một dòng.
+    var labels = { VIP: ['VIP', 'gold', 'VIP'], QUAN_TRONG: ['Quan trọng', 'info', 'QT'], XU_LY_GAP: ['Xử lý gấp', 'danger', 'Gấp'] };
+    return priorityFlags(customer).map(function (x) {
+      var l = labels[x];
+      if (!l) return '';
+      return '<span class="tag tag-' + l[1] + '" title="' + U.attr(l[0]) + '"><span class="tag-full">' + U.esc(l[0]) +
+        '</span><span class="tag-short" aria-hidden="true">' + U.esc(l[2]) + '</span></span>';
+    }).join(' ');
   }
 
   function priorityRowClass(item) {
@@ -4103,6 +4525,115 @@ LS.screens = (function () {
     return replacement ? { user: replacement.user, rule: replacement.rule, replacementFor: replacement.original } : null;
   }
 
+  function canBatchAssign() {
+    var u = me();
+    return !!u && ['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1;
+  }
+
+  // Tập hồ sơ của lô luôn đi theo chính bộ lọc đang dùng ở tab Chờ phân công.
+  // Nhờ vậy quản lý có thể chọn một phòng, loại việc hay ngày trước khi mở lô,
+  // thay vì phải lọc lại trong một hộp thoại khác.
+  function batchAssignableItems() {
+    var range = queueWindow();
+    var rows = visibleItems().filter(function (i) {
+      return i.status === 'CHO_PHAN_CONG' && withinQueueWindow(i, range);
+    });
+    rows = applyFilters('queue', rows);
+    var unitId = f('queue', 'qunit', '');
+    if (unitId) rows = rows.filter(function (i) { var r = reqOf(i); return r && r.unit_id === unitId; });
+    return queuePriority(sortItems(rows, 'queue'));
+  }
+
+  function openBatchAssign() {
+    if (!canBatchAssign()) { ui.toast('Bạn không có quyền phân công theo lô.', 'err'); return; }
+    var items = batchAssignableItems(), staff = staffList();
+    if (!items.length) { ui.toast('Không có hồ sơ chờ phân công theo bộ lọc hiện tại.', 'warn'); return; }
+    if (!staff.length) { ui.toast('Chưa có cán bộ LS đang hoạt động.', 'err'); return; }
+
+    var rows = items.map(function (item) {
+      var rec = assignmentRecommendation(item), request = reqOf(item), load = rec ? staffLoad(rec.user.user_id) : null;
+      var suggestion = rec
+        ? '<div class="t2">Ưu tiên: ' + U.esc(rec.user.full_name) + ' · đang mở ' + load.open + ' việc' +
+          (rec.replacementFor ? ' · thay ' + U.esc(rec.replacementFor.full_name) : '') + '</div>'
+        : '<div class="t2">Chưa có quy tắc ưu tiên — chọn cán bộ trước khi giao.</div>';
+      return {
+        cells: [
+          '<input type="checkbox" data-batch-include data-item-id="' + U.attr(item.item_id) + '"' + (rec ? ' checked' : '') +
+            ' aria-label="Chọn ' + U.attr(itemRef(item)) + '">',
+          '<div class="tid">' + U.esc(itemRef(item)) + '</div><div class="t1">' + U.esc((request && request.customer.name) || '') + '</div>' +
+            '<div class="t2">' + U.esc(unitName(request && request.unit_id)) + ' · ' + U.esc(productLabel(item)) + '</div>',
+          ui.select('batch_assignee_' + item.item_id, staff.map(function (user) {
+            var userLoad = staffLoad(user.user_id);
+            return [user.user_id, user.full_name + ' — đang mở ' + userLoad.open + ' việc'];
+          }), rec ? rec.user.user_id : '', { blank: 'Chọn cán bộ', attrs: ' data-batch-assignee data-item-id="' + U.attr(item.item_id) + '" data-version="' + U.attr(item.version) + '"' }) + suggestion
+        ]
+      };
+    });
+
+    var selected = rows.filter(function (_, index) { return !!assignmentRecommendation(items[index]); }).length;
+    ui.openDialog('Phân công theo lô',
+      '<div class="batch-assign-summary">Đang xem ' + items.length + ' hồ sơ theo bộ lọc hàng chờ. ' +
+        selected + ' hồ sơ có gợi ý từ quy tắc ưu tiên và đã được chọn sẵn; có thể bỏ chọn hoặc đổi cán bộ ở từng dòng.</div>' +
+      ui.table([{ label: 'Giao', cls: 'fit' }, { label: 'Hồ sơ' }, { label: 'Cán bộ xử lý' }], rows) +
+      '<div class="form-end"><span class="t2">Chỉ các dòng được tích mới được giao.</span>' +
+        ui.btn('Giao các hồ sơ đã chọn', { kind: 'primary', act: 'batch-assign-submit', icon: 'check' }) + '</div>',
+      { sub: items.length + ' hồ sơ chờ phân công' });
+  }
+
+  function submitBatchAssign() {
+    var dialog = document.getElementById('dialog');
+    if (!dialog) return;
+    var entries = Array.prototype.slice.call(dialog.querySelectorAll('[data-batch-include]:checked')).map(function (box) {
+      var itemId = box.getAttribute('data-item-id');
+      var select = dialog.querySelector('[data-batch-assignee][data-item-id="' + itemId + '"]');
+      return { item_id: itemId, assignee_id: select ? select.value : '', expected_version: select ? Number(select.getAttribute('data-version')) : NaN };
+    });
+    if (!entries.length) { ui.toast('Chọn ít nhất một hồ sơ để giao.', 'warn'); return; }
+    var missing = entries.filter(function (entry) { return !entry.assignee_id || isNaN(entry.expected_version); });
+    if (missing.length) { ui.toast('Mỗi hồ sơ được chọn phải có cán bộ nhận việc.', 'err'); return; }
+
+    var before = entries.map(function (entry) {
+      var item = U.byId(st().items, 'item_id', entry.item_id);
+      return item ? { item_id: item.item_id, data: JSON.parse(JSON.stringify(item)) } : null;
+    }).filter(Boolean);
+    var ts = U.now();
+    entries.forEach(function (entry) {
+      var item = U.byId(st().items, 'item_id', entry.item_id);
+      if (!item) return;
+      item.status = 'DA_PHAN_CONG'; item.assigned_user_id = entry.assignee_id; item.assigned_by = st().session;
+      item.assigned_at = ts; item.accepted_at = item.accepted_at || ts; item.due_at = D.dueFrom(ts, item.work_type_code, st());
+      item.version = Number(item.version || 0) + 1; item.syncing = true; D.applyClock(item, 'DA_PHAN_CONG', ts);
+    });
+    ui.closeDialog();
+
+    if (!U.isGas()) {
+      entries.forEach(function (entry) { logEvent(entry.item_id, 'DA_PHAN_CONG', 'Giao theo lô'); });
+      st().items.forEach(function (item) { if (item.syncing) item.syncing = false; });
+      U.save(); LS.app.render(); ui.toast('Đã phân công ' + entries.length + ' hồ sơ.', 'ok'); return;
+    }
+
+    LS.app.render();
+    LS.app.background(LS.api.assignWorkItemsBatch(entries), {
+      label: 'Phân công theo lô',
+      onOk: function (result) {
+        (result.items || []).forEach(function (remote) {
+          var item = U.byId(st().items, 'item_id', remote.item_id);
+          if (!item) return;
+          Object.keys(remote).forEach(function (key) { item[key] = remote[key]; });
+          item.syncing = false;
+        });
+        if (!ui.dialogOpen()) LS.app.render();
+        ui.toast('Đã phân công ' + Number(result.count || entries.length) + ' hồ sơ.', 'ok');
+      },
+      rollback: function () {
+        before.forEach(function (snapshot) {
+          var item = U.byId(st().items, 'item_id', snapshot.item_id);
+          if (item) Object.keys(snapshot.data).forEach(function (key) { item[key] = snapshot.data[key]; });
+        });
+      }
+    });
+  }
+
   /* ============================ Quyền thao tác ============================ */
 
   function actionsFor(item) {
@@ -4387,6 +4918,7 @@ LS.screens = (function () {
   function slaCell(item) {
     var s = D.sla(item, st());
     if (!s) return '<span class="t2">—</span>';
+    if (s.paused) return ui.tag('Dừng tính hạn', 'neutral');
     if (s.late) return ui.tag('Quá ' + U.fmtGap(s.left), 'danger');
     if (s.soon) return ui.tag('Còn ' + U.fmtGap(s.left), 'warn');
     return '<span class="t2">' + U.fmtDT(s.due) + '</span>';
@@ -4446,7 +4978,9 @@ LS.screens = (function () {
         if (me().role === 'ADMIN') return '<span class="t2">Ẩn theo quyền</span>';
         return '<div class="customer-main"><span class="t1">' + U.esc(r ? r.customer.name : '—') + '</span>' +
           (r && priorityTags(r.customer) ? '<span class="priority-tags">' + priorityTags(r.customer) + '</span>' : '') + '</div>' +
-          '<div class="t2">' + U.esc(r && r.customer.cif ? r.customer.cif : 'Chưa có CIF') + '</div>';
+          '<div class="t2 cust-cif">' + U.esc(r && r.customer.cif ? r.customer.cif : 'Chưa có CIF') + '</div>' +
+          // Thẻ mobile thay dòng CIF bằng phòng gửi hồ sơ — thông tin cần để lướt hàng chờ.
+          '<div class="t2 cust-unit">' + U.esc(r ? unitName(r.unit_id) : '—') + '</div>';
       case 'contact':
         if (me().role === 'ADMIN') return '<span class="t2">Ẩn theo quyền</span>';
         return contactCell(r);
@@ -4483,6 +5017,7 @@ LS.screens = (function () {
       if (screen && k !== 'act') out.header = sortHeader(screen, k, c.label);
       return out;
     });
+    var mobileTableOpts = Object.assign({}, emptyOpts || {}, { tableClass: 'mobile-record-table' });
     return ui.table(
       cols,
       list.map(function (i) {
@@ -4495,7 +5030,7 @@ LS.screens = (function () {
           cells: keys.map(function (k) { return cell(k, i); })
         };
       }),
-      emptyOpts
+      mobileTableOpts
     );
   }
 
@@ -4605,11 +5140,11 @@ LS.screens = (function () {
       body: roomCharts(current, range, byStaff) + ui.sectionTitle('Theo nhóm cấp độ / loại việc') + ui.table(
         [{ label: 'Loại việc' }, { label: 'Tổng', cls: 'num' }, { label: 'Đang mở', cls: 'num' }],
         byType.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.name) + '</div>', '<span class="tid">' + x.n + '</span>', '<span class="tid">' + x.open + '</span>'] }; }),
-        { icon: 'chart', title: 'Chưa có nhóm việc trong kỳ', text: '' }
+        { icon: 'chart', title: 'Chưa có nhóm việc trong kỳ', text: '', tableClass: 'dashboard-metric-table' }
       ) + '<div style="margin-top:1.25rem">' + ui.sectionTitle('LS đang xử lý cho phòng') + ui.table(
         [{ label: 'Cán bộ LS' }, { label: 'Tổng việc', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }],
         byStaff.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.s.full_name) + '</div>', '<span class="tid">' + x.n + '</span>', '<span class="tid">' + x.open + '</span>', '<span class="tid">' + x.done + '</span>'] }; }),
-        { icon: 'users', title: 'Chưa có LS xử lý cho phòng', text: '' }
+        { icon: 'users', title: 'Chưa có LS xử lý cho phòng', text: '', tableClass: 'dashboard-metric-table' }
       ) + '</div>'
     });
   }
@@ -4788,6 +5323,10 @@ LS.screens = (function () {
 
     out += ui.block({
       title: 'Hàng chờ & đang xử lý', count: filtered.length + '/' + source.length, icon: 'activity',
+      actions: (tab === 'assign' && canBatchAssign() && filtered.length
+        ? ui.btn('Phân công theo lô', { kind: 'primary', sm: true, act: 'batch-assign-open', icon: 'zap' }) : '') +
+        // Kiểm soát nhận hồ sơ qua điện thoại/giấy thì đăng ký hộ phòng ngay tại hàng chờ.
+        (me().role === 'KS_LS' ? ui.btn('Đăng ký hộ phòng', { kind: 'line', sm: true, act: 'new-request', icon: 'plus' }) : ''),
       note: '', compact: true,
       // unitChips gộp chung hàng cuộn ngang với ô tìm + lọc + sắp xếp trên mobile,
       // khỏi choán thêm một dòng riêng (xem .queue-tools ở styles.css).
@@ -5341,7 +5880,7 @@ LS.screens = (function () {
             ]
           };
         }),
-        { icon: 'history', title: 'Không có sự kiện trong kỳ đã chọn', text: '' }
+        { icon: 'history', title: 'Không có sự kiện trong kỳ đã chọn', text: '', tableClass: 'audit-table' }
       )
     });
   }
@@ -5882,8 +6421,13 @@ LS.screens = (function () {
     if ((to === 'CHO_PHAN_CONG' || to === 'DA_PHAN_CONG') && !i.accepted_at) i.accepted_at = ts;
     if (to === 'DANG_THUC_HIEN' && !i.processing_started_at) i.processing_started_at = ts;
     D.applyClock(i, to, ts);
+    D.applySlaPause(i, to, ts, st());
     if (to === 'HOAN_THANH_LS') i.completed_at = ts;
-    if (to === 'DANG_THUC_HIEN' && i.status === 'HOAN_THANH_LS') i.completed_at = '';
+    if (to === 'DANG_THUC_HIEN' && i.status === 'HOAN_THANH_LS') {
+      // Mở lại là vòng xử lý mới: hạn tính lại từ lúc mở (khớp transitionItem).
+      i.completed_at = '';
+      i.due_at = D.dueFrom(ts, i.work_type_code, st());
+    }
     if (tr.note && reason) i.note = reason;
 
     i.status = to;
@@ -5909,6 +6453,10 @@ LS.screens = (function () {
             var live = U.byId(st().items, 'item_id', i.item_id) || i;
             live.syncing = false;
             if (result && result.version) live.version = result.version;
+            // Hạn do máy chủ tính (lùi hạn sau khi chờ, mở lại) là số chuẩn.
+            ['due_at', 'completed_at', 'sla_paused_at'].forEach(function (k) {
+              if (result && result[k] !== undefined) live[k] = result[k];
+            });
             if (!ui.dialogOpen()) LS.app.render();
             else if (detailShowing(live.item_id)) detail(live.item_id);
           },
@@ -5988,7 +6536,7 @@ LS.screens = (function () {
     if (!Object.keys(changes).length) { ui.toast('Không có thay đổi nào.', 'warn'); return; }
 
     if (U.isGas()) {
-      LS.api.proposeRevision(i.item_id, changes, reason).then(function (result) {
+      LS.api.proposeRevision(i.item_id, changes, reason, i.version).then(function (result) {
         ui.closeDialog();
         return LS.app.refreshServer(result.applied ? 'Đã lưu thay đổi.' : 'Đã gửi đề nghị sửa cho kiểm soát.');
       }).catch(function (error) { ui.toast(error.message || 'Không thể lưu thay đổi.', 'err'); });
@@ -5996,6 +6544,7 @@ LS.screens = (function () {
     }
 
     if (editNeedsApproval(i)) {
+      if (i.pending) { ui.toast('Việc đang có một đề nghị sửa chờ kiểm soát duyệt.', 'err'); return; }
       i.pending = { fields: changes, by: st().session, at: U.now(), reason: reason };
       logEvent(i.item_id, 'DE_NGHI_SUA', reason);
       D.queueNotifications(i, 'DE_NGHI_SUA', st(), st().session);
@@ -6018,10 +6567,11 @@ LS.screens = (function () {
       if (k.indexOf('customer.') === 0) r.customer[k.slice(9)] = changes[k];
       else item[k] = changes[k];
     });
-    if (changes.work_type_code && item.assigned_at) {
-      item.due_at = D.dueFrom(item.assigned_at, item.work_type_code, st());
+    if (changes.work_type_code) {
+      // Checklist thuộc loại việc: đổi loại thì làm lại checklist của loại mới (khớp applyRevision_).
       var wt = wtOf(item);
       item.checklist = (wt ? wt.checklist : []).map(function () { return false; });
+      if (item.assigned_at) item.due_at = D.dueFrom(item.assigned_at, item.work_type_code, st());
     }
     if (r.customer.cif) r.customer.kind = 'DA_CO_CIF';
   }
@@ -6038,6 +6588,9 @@ LS.screens = (function () {
       return;
     }
 
+    if (approve && !(D.STATUS[i.status] && D.STATUS[i.status].open)) {
+      ui.toast('Việc đã đóng từ lúc gửi đề nghị; chỉ có thể từ chối.', 'err'); return;
+    }
     if (approve) {
       applyChanges(i, i.pending.fields);
       i.version += 1;
@@ -6160,8 +6713,16 @@ LS.screens = (function () {
 
   function newRequest() {
     var u = me() || { full_name: '', unit_id: '' };
+    // Kiểm soát LS đăng ký hộ phải chọn phòng gửi; phòng/PGD luôn là đơn vị của mình.
+    var senderUnits = st().units.filter(function (x) { return x.active && x.kind === 'PGD'; })
+      .sort(function (a, b) { return (a.sort_order || 9999) - (b.sort_order || 9999); })
+      .map(function (x) { return [x.unit_id, x.name]; });
+    var unitPicker = u.role === 'PHONG_PGD' ? '' :
+      '<div class="f-row" style="margin-bottom:1rem">' +
+      ui.field('Phòng / PGD gửi hồ sơ', ui.select('unit_id', senderUnits, '', { blank: 'Chọn phòng / PGD', attrs: ' required' })) +
+      '</div>';
     ui.openDialog('Đăng ký việc mới',
-      '<form data-form="new-request">' +
+      '<form data-form="new-request">' + unitPicker +
       ui.sectionTitle('Khách hàng') +
       '<div class="f-row customer-fields">' +
       ui.field('Tên khách hàng', ui.input('name', '', { required: true })) +
@@ -6197,9 +6758,12 @@ LS.screens = (function () {
     var rows = form.querySelectorAll('.row-item');
     if (!rows.length) { ui.toast('Cần ít nhất một dòng việc.', 'err'); return; }
 
+    var unitId = u.role === 'PHONG_PGD' ? u.unit_id : String(d.get('unit_id') || '');
+    if (!unitId) { ui.toast('Chọn phòng / PGD gửi hồ sơ.', 'err'); return; }
     var cif = String(d.get('cif') || '').trim();
     var kind = cif ? 'DA_CO_CIF' : 'KH_MOI';
     var payload = {
+      unit_id: unitId,
       customer: {
         name: String(d.get('name')).trim(), kind: kind,
         cif: cif,
@@ -6235,7 +6799,7 @@ LS.screens = (function () {
       var tmpIds = [];
 
       st().requests.unshift({
-        request_id: tmpReq, unit_id: u.unit_id, created_by: u.user_id, created_at: U.now(),
+        request_id: tmpReq, unit_id: unitId, created_by: u.user_id, created_at: U.now(),
         note: payload.note, customer: payload.customer, requestor: payload.requestor
       });
 
@@ -6296,7 +6860,7 @@ LS.screens = (function () {
     var reqId = U.uid('REQ');
 
     st().requests.unshift({
-      request_id: reqId, unit_id: u.unit_id, created_by: u.user_id, created_at: U.now(),
+      request_id: reqId, unit_id: unitId, created_by: u.user_id, created_at: U.now(),
       note: String(d.get('note') || '').trim(),
       customer: {
         name: String(d.get('name')).trim(), kind: kind,
@@ -6322,7 +6886,7 @@ LS.screens = (function () {
         appointment: null, checklist: (wt ? wt.checklist : []).map(function () { return false; }),
         note: '', pending: null, version: 1, collateral_mode: rowCollateralMode(row, wt), parent_item_id: ''
       });
-      logEvent(id, 'TAO_VIEC', unitName(u.unit_id) + ' đăng ký yêu cầu.');
+      logEvent(id, 'TAO_VIEC', unitName(unitId) + ' đăng ký yêu cầu.');
       if (rowCollateralMode(row, wt) === 'MOI') {
         var collateralType = U.byId(st().workTypes, 'code', 'LEGACY_26');
         if (collateralType) {
@@ -6386,6 +6950,7 @@ LS.screens = (function () {
     report: report, exportReport: exportReport, refreshReport: refreshReport, setReportFilter: setReportFilter,
     headerSummary: headerSummary,
     detail: detail, saveChecklistToggle: saveChecklistToggle, addLinked: addLinked, toggleLinkedBox: toggleLinkedBox, flow: flow, quickAssign: quickAssign, submitFlow: submitFlow,
+    openBatchAssign: openBatchAssign, submitBatchAssign: submitBatchAssign,
     editItem: editItem, submitEdit: submitEdit, revision: revision,
     newRequest: newRequest, submitNewRequest: submitNewRequest, rowForm: rowForm, syncProductOptions: syncProductOptions, syncCollateralMode: syncCollateralMode,
     exportCsv: exportCsv, downloadDailyImage: downloadDailyImage, exportBoard: exportBoard, sweepOverdue: sweepOverdue,
@@ -6406,6 +6971,18 @@ LS.admin = (function () {
   var U = LS, D = LS.domain, ui = LS.ui;
   var section = 'overview';
   var oFilter = { status: '', channel: '' };
+
+  /* Điểm vận hành có thể tạm ẩn khỏi Tổng quan (vd. khi chiếu màn hình). Chỉ là
+     tuỳ chọn hiển thị của trình duyệt này — không đổi dữ liệu hay quyền. */
+  var SCORE_HIDE_KEY = 'ls_admin_hide_scorecard';
+  var scoreHidden = (function () {
+    try { return window.localStorage.getItem(SCORE_HIDE_KEY) === '1'; } catch (e) { return false; }
+  })();
+
+  function setScoreHidden(hidden) {
+    scoreHidden = !!hidden;
+    try { window.localStorage.setItem(SCORE_HIDE_KEY, scoreHidden ? '1' : '0'); } catch (e) { /* chỉ mất ghi nhớ, vẫn ẩn/hiện được */ }
+  }
 
   function st() { return U.db(); }
   function me() { return U.byId(st().users, 'user_id', st().session); }
@@ -6513,7 +7090,11 @@ LS.admin = (function () {
     var scores = s.operationalScorecard && s.operationalScorecard.length
       ? s.operationalScorecard
       : D.operationalScorecard(plan.start_date || (month + '-01'), plan.end_date || (month + '-31'), s);
-    var scored = scores.filter(function (x) { return x.score !== null; });
+    function finiteScore(value) {
+      var score = Number(value);
+      return isFinite(score) ? score : null;
+    }
+    var scored = scores.filter(function (x) { return finiteScore(x.score) !== null; });
 
     var out = '';
 
@@ -6530,18 +7111,36 @@ LS.admin = (function () {
       ui.metric('Việc quá hạn', late.length, late.length ? 'danger' : '')
     ]);
 
+    out += scoreHidden ? scoreHiddenBlock(scores.length, (s.operationalScoreSnapshots || []).length) : scoreBlocks(s, scores, finiteScore);
+    return out + overviewRest(s, h, notReady, emailQuota, quotaLeft, pendingTpl);
+  }
+
+  function scoreHiddenBlock(liveCount, snapshotCount) {
+    return ui.block({
+      title: 'Điểm vận hành đang ẩn', icon: 'eye-off',
+      actions: ui.btn('Hiện điểm vận hành', { act: 'admin-score-toggle', data: ' data-hide="0"', sm: true, kind: 'primary', icon: 'eye' }),
+      body: ui.pad('<p class="t2">Bảng điểm ' + liveCount + ' cán bộ và ' + snapshotCount +
+        ' dòng lịch sử điểm đã chốt đang được ẩn trên trình duyệt này. Điểm vẫn được tính và chốt theo kỳ như bình thường.</p>')
+    });
+  }
+
+  function scoreBlocks(s, scores, finiteScore) {
+    var out = '';
     out += ui.block({
       title: 'Điểm vận hành', count: scores.length, icon: 'chart',
+      actions: ui.btn('Tạm ẩn điểm', { act: 'admin-score-toggle', data: ' data-hide="1"', sm: true, icon: 'eye-off',
+        title: 'Ẩn bảng điểm và lịch sử điểm khỏi Tổng quan' }),
       body: ui.table(
         [{ label: 'Cán bộ' }, { label: 'Đúng hạn', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Tồn quá hạn', cls: 'num' }, { label: 'Điểm', cls: 'num' }],
         scores.map(function (x) {
-          var tone = x.score === null ? '' : (x.score >= 80 ? 'ok' : (x.score >= 60 ? 'warn' : 'danger'));
+          var score = finiteScore(x.score);
+          var tone = score === null ? '' : (score >= 80 ? 'ok' : (score >= 60 ? 'warn' : 'danger'));
           return { cls: x.lateOpen ? 'flag-warn' : '', cells: [
             '<div class="t1">' + U.esc(x.user.full_name) + '</div>',
-            x.score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '/' + x.done + '</span>',
-            x.score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.done + '/' + x.eligible + '</span>',
-            x.score === null ? '<span class="t2">—</span>' : (x.lateOpen ? ui.tag(String(x.lateOpen), 'danger') : '<span class="tid">0</span>'),
-            x.score === null ? '<span class="t2">Chưa có dữ liệu</span>' : ui.tag(String(x.score), tone)
+            score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '/' + x.done + '</span>',
+            score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.done + '/' + x.eligible + '</span>',
+            score === null ? '<span class="t2">—</span>' : (x.lateOpen ? ui.tag(String(x.lateOpen), 'danger') : '<span class="tid">0</span>'),
+            score === null ? '<span class="t2">Chưa có dữ liệu</span>' : ui.tag(String(score), tone)
           ] };
         }),
         { icon: 'users', title: 'Chưa có cán bộ LS', text: '' }
@@ -6573,7 +7172,11 @@ LS.admin = (function () {
         { icon: 'chart', title: 'Chưa có snapshot', text: 'Điểm sẽ xuất hiện sau khi một kỳ được chốt.' }
       )
     });
+    return out;
+  }
 
+  function overviewRest(s, h, notReady, emailQuota, quotaLeft, pendingTpl) {
+    var out = '';
     var workerAt = String(s.settings.worker_last_run_at || '').trim();
     var workerStatus = String(s.settings.worker_last_run_status || '').trim();
     var workerTone = workerStatus === 'OK' ? 'ok' : (workerStatus ? 'warn' : '');
@@ -8078,7 +8681,7 @@ LS.admin = (function () {
   /* ============================ Xuất ra ngoài ============================ */
 
   return {
-    view: view, setSection: setSection,
+    view: view, setSection: setSection, setScoreHidden: setScoreHidden,
     channelDialog: channelDialog, saveChannel: saveChannel, toggleChannel: toggleChannel, testChannel: testChannel,
     templateDialog: templateDialog, saveTemplate: saveTemplate, approveTemplate: approveTemplate, insertVar: insertVar,
     ruleDialog: ruleDialog, saveRule: saveRule, toggleRule: toggleRule,
@@ -8255,6 +8858,7 @@ LS.app = (function () {
       '</div>' +
 
       '<div class="auth-main"><div class="auth-form">' +
+      '<div class="auth-mobile-brand" aria-hidden="true"><div class="rail-mark">LS</div><span>LS-Routing</span></div>' +
       '<div class="auth-form-kicker">' + U.icon('lock', 16) + '<span>Không gian nội bộ</span></div>' +
       '<h1>Đăng nhập</h1><p>Nhập thông tin tài khoản được cấp để tiếp tục.</p>' +
       '<form data-form="login">' +
@@ -8555,6 +9159,8 @@ LS.app = (function () {
     flow: function (el) { S.flow(el.getAttribute('data-id'), el.getAttribute('data-to')); },
     'add-linked': function (el) { S.addLinked(el.getAttribute('data-id')); },
     'quick-assign': function (el) { S.quickAssign(el.getAttribute('data-id')); },
+    'batch-assign-open': S.openBatchAssign,
+    'batch-assign-submit': S.submitBatchAssign,
     'open-filter': function (el) { S.openFilter(el.getAttribute('data-screen') || current); },
     'reset-filter': function (el) { S.resetFilter(el.getAttribute('data-screen') || current); },
     'apply-filter': function (el) { S.applyFilter(el.getAttribute('data-screen') || current); },
@@ -8584,6 +9190,12 @@ LS.app = (function () {
     },
 
     'admin-go': function (el) { A.setSection(el.getAttribute('data-section')); render(); window.scrollTo(0, 0); },
+    'admin-score-toggle': function (el) {
+      var hide = el.getAttribute('data-hide') === '1';
+      A.setScoreHidden(hide);
+      render();
+      ui.toast(hide ? 'Đã tạm ẩn điểm vận hành.' : 'Đã hiện lại điểm vận hành.');
+    },
     'chan-edit': function (el) { A.channelDialog(el.getAttribute('data-code')); },
     'chan-test': function (el) { A.testChannel(el.getAttribute('data-code')); },
     'tpl-edit': function (el) { A.templateDialog(el.getAttribute('data-code')); },

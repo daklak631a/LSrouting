@@ -155,6 +155,7 @@ LS.app = (function () {
       '</div>' +
 
       '<div class="auth-main"><div class="auth-form">' +
+      '<div class="auth-mobile-brand" aria-hidden="true"><div class="rail-mark">LS</div><span>LS-Routing</span></div>' +
       '<div class="auth-form-kicker">' + U.icon('lock', 16) + '<span>Không gian nội bộ</span></div>' +
       '<h1>Đăng nhập</h1><p>Nhập thông tin tài khoản được cấp để tiếp tục.</p>' +
       '<form data-form="login">' +
@@ -455,6 +456,8 @@ LS.app = (function () {
     flow: function (el) { S.flow(el.getAttribute('data-id'), el.getAttribute('data-to')); },
     'add-linked': function (el) { S.addLinked(el.getAttribute('data-id')); },
     'quick-assign': function (el) { S.quickAssign(el.getAttribute('data-id')); },
+    'batch-assign-open': S.openBatchAssign,
+    'batch-assign-submit': S.submitBatchAssign,
     'open-filter': function (el) { S.openFilter(el.getAttribute('data-screen') || current); },
     'reset-filter': function (el) { S.resetFilter(el.getAttribute('data-screen') || current); },
     'apply-filter': function (el) { S.applyFilter(el.getAttribute('data-screen') || current); },
@@ -484,6 +487,12 @@ LS.app = (function () {
     },
 
     'admin-go': function (el) { A.setSection(el.getAttribute('data-section')); render(); window.scrollTo(0, 0); },
+    'admin-score-toggle': function (el) {
+      var hide = el.getAttribute('data-hide') === '1';
+      A.setScoreHidden(hide);
+      render();
+      ui.toast(hide ? 'Đã tạm ẩn điểm vận hành.' : 'Đã hiện lại điểm vận hành.');
+    },
     'chan-edit': function (el) { A.channelDialog(el.getAttribute('data-code')); },
     'chan-test': function (el) { A.testChannel(el.getAttribute('data-code')); },
     'tpl-edit': function (el) { A.templateDialog(el.getAttribute('data-code')); },

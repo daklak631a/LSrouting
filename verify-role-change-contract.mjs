@@ -23,7 +23,10 @@ const queued = [];
 const item = { item_id: 'ITEM_1', status: 'DANG_THUC_HIEN', assigned_user_id: 'OLD', version: 4 };
 const found = { object: item };
 const tx = {
-  find: () => found,
+  // Người nhận bàn giao được tra trong Users; mọi tra cứu khác trả về việc đang mở.
+  find: (table, key, value) => table === 'Users'
+    ? (value === 'NEW' ? { object: { user_id: 'NEW', role: 'CAN_BO_LS', is_active: true } } : { object: { user_id: value, role: 'CAN_BO_LS', is_active: false } })
+    : found,
   write: (row, fields) => { Object.assign(row.object, fields); writes.push(fields); },
   append: (table, row) => { if (table === 'Events') events.push(row); }
 };
@@ -39,5 +42,9 @@ if (moved !== 1 || item.assigned_user_id !== 'NEW' || item.version !== 5) {
 if (events.length !== 1 || events[0].type !== 'DOI_NGUOI' || queued.length !== 1) {
   fail('Bàn giao phải ghi nhật ký và xếp thông báo cho người nhận mới.');
 }
+
+let lockedRejected = false;
+try { context.handoverOpenWork_(tx, 'NEW', 'LOCKED', 'ADMIN', [item], 'Bàn giao kiểm thử.'); } catch (e) { lockedRejected = true; }
+if (!lockedRejected) fail('Không được bàn giao việc cho tài khoản đã khóa hoặc không phải cán bộ LS đang làm.');
 
 console.log('Role-change contract passed.');

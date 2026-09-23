@@ -72,7 +72,7 @@ LS.domain = (function () {
       { to: 'HUY', label: 'Hủy việc', short: 'Hủy', roles: ['KS_LS', 'QUAN_LY_LS', 'PHONG_PGD'], reason: 'HUY', rank: 9 }
     ],
     CAN_BO_SUNG: [
-      { to: 'CHO_TIEP_NHAN', label: 'Gửi lại LS', short: 'Gửi lại', roles: ['PHONG_PGD', 'KS_LS'], reason: 'free', primary: true, rank: 1 },
+      { to: 'CHO_TIEP_NHAN', label: 'Gửi lại LS', short: 'Gửi lại', roles: ['PHONG_PGD', 'KS_LS', 'QUAN_LY_LS'], reason: 'free', primary: true, rank: 1 },
       { to: 'HUY', label: 'Hủy việc', short: 'Hủy', roles: ['KS_LS', 'QUAN_LY_LS', 'PHONG_PGD'], reason: 'HUY', rank: 9 }
     ],
     CHO_PHAN_CONG: [
@@ -403,7 +403,11 @@ LS.domain = (function () {
     DE_NGHI_SUA: 'Có đề nghị sửa chờ duyệt',
     QUA_HAN: 'Việc quá hạn xử lý',
     DANG_HEN_KH: 'Hẹn khách ký hồ sơ',
-    HOAN_THANH_LS: 'Hoàn thành phần việc LS'
+    HOAN_THANH_LS: 'Hoàn thành phần việc LS',
+    // Tin trong app gửi thẳng người liên quan khi sửa hồ sơ (không qua quy tắc).
+    DUYET_SUA: 'Đề nghị sửa đã được duyệt',
+    TU_CHOI_SUA: 'Đề nghị sửa bị từ chối',
+    SUA_THONG_TIN: 'Kiểm soát đã sửa thông tin hồ sơ'
   };
 
   /** Tin trong app không có mẫu; dựng một dòng đủ hiểu từ chính sự kiện. */
@@ -708,10 +712,39 @@ LS.domain = (function () {
 
   /* ============================ Hạn xử lý ============================ */
 
+  /**
+   * Chờ bên ngoài (tạm dừng, đang hẹn khách): hạn đứng yên, không tính quá hạn;
+   * quay lại xử lý thì hạn lùi đúng số giờ làm đã chờ. Khớp SLA_PAUSED_STATUS trong Code.gs.
+   */
+  var SLA_PAUSED = ['TAM_DUNG', 'DANG_HEN_KH'];
+
   function sla(item, st) {
-    if (!item.due_at || !STATUS[item.status].open) return null;
+    if (!item.due_at || !STATUS[item.status] || !STATUS[item.status].open) return null;
     var left = new Date(item.due_at).getTime() - Date.now();
+    if (SLA_PAUSED.indexOf(item.status) !== -1) return { due: item.due_at, left: left, late: false, soon: false, paused: true };
     return { due: item.due_at, left: left, late: left < 0, soon: left >= 0 && left < 2 * 3600000 };
+  }
+
+  /** Việc đang mở, không chờ bên ngoài, đã qua hạn tại thời điểm nowMs. */
+  function lateOpen(item, nowMs) {
+    return !!(item.due_at && STATUS[item.status] && STATUS[item.status].open && SLA_PAUSED.indexOf(item.status) === -1 &&
+      nowMs > new Date(item.due_at).getTime());
+  }
+
+  /**
+   * Bản trình duyệt của phần lùi hạn trong transitionItem (Code.gs): vào trạng thái
+   * chờ thì ghi mốc, ra khỏi thì cộng số giờ làm đã chờ vào hạn.
+   */
+  function applySlaPause(item, to, ts, st) {
+    var wasPaused = SLA_PAUSED.indexOf(item.status) !== -1, nowPaused = SLA_PAUSED.indexOf(to) !== -1;
+    if (!wasPaused && nowPaused && item.due_at) item.sla_paused_at = ts;
+    if (wasPaused && !nowPaused) {
+      if (to !== 'DA_PHAN_CONG' && item.due_at && item.sla_paused_at) {
+        var waited = U.workingMilliseconds(item.sla_paused_at, ts, st.calendar) || 0;
+        if (waited > 0) item.due_at = U.addWorkingHours(item.due_at, waited / 3600000, st.calendar);
+      }
+      item.sla_paused_at = '';
+    }
   }
 
   /** Số giờ làm thực tế kể từ lúc cán bộ bấm bắt đầu xử lý hồ sơ. */
@@ -900,7 +933,7 @@ LS.domain = (function () {
       }
       if (STATUS[item.status] && STATUS[item.status].open) {
         row.open += 1;
-        if (item.due_at && at.getTime() > new Date(item.due_at).getTime()) row.lateOpen += 1;
+        if (lateOpen(item, at.getTime())) row.lateOpen += 1;
       }
     });
 
@@ -967,7 +1000,7 @@ LS.domain = (function () {
       // Việc đã chuyển sang kỳ sau được chấm trễ ở dòng cuối của nó, không
       // phải ở mỗi kỳ nó đi qua — nếu không một việc trễ đếm thành ba lần trễ.
       var late = i.due_at && !i.carried_to_item_id
-        ? (done ? String(i.completed_at || '') > String(i.due_at) : now > String(i.due_at)) : false;
+        ? (done ? String(i.completed_at || '') > String(i.due_at) : lateOpen(i, new Date(now).getTime())) : false;
       var open = STATUS[i.status] && STATUS[i.status].open && !i.carried_to_item_id;
 
       var dimKey, dimLabel;
@@ -1361,7 +1394,7 @@ LS.domain = (function () {
     addressFor: addressFor, templateFor: templateFor, emailUsedToday: emailUsedToday,
     REPORT_PRESETS: REPORT_PRESETS, presetRange: presetRange, monthsInRange: monthsInRange,
     reportFromItems: reportFromItems, monthKey: monthKey,
-    dateOnly: dateOnly, userOff: userOff, userAvailable: userAvailable, staffWorkloadByGroup: staffWorkloadByGroup, operationalScorecard: operationalScorecard,
+    dateOnly: dateOnly, userOff: userOff, SLA_PAUSED: SLA_PAUSED, lateOpen: lateOpen, applySlaPause: applySlaPause, userAvailable: userAvailable, staffWorkloadByGroup: staffWorkloadByGroup, operationalScorecard: operationalScorecard,
     VARS: VARS, FORBIDDEN: FORBIDDEN, TPL_STATUS: TPL_STATUS,
     NOTIFY_EVENTS: NOTIFY_EVENTS, AUDIENCE: AUDIENCE, OUT_STATUS: OUT_STATUS,
     label: label, tone: tone,

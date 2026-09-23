@@ -132,7 +132,7 @@ const must = [
   // Khách không có kênh liên hệ vẫn phải hẹn được, nếu không hồ sơ đó không bao
   // giờ hoàn thành được vì mọi loại việc đều bắt buộc hẹn.
   [server, '!opts.appointment.via_group', 'Phải cho hẹn qua nhóm nội bộ khi khách chưa có điện thoại và email.'],
-  [server, "String(doneType.object.requires_appointment) === 'true'", 'Máy chủ phải chặn hoàn thành khi loại việc cần hẹn mà chưa hẹn.'],
+  [server, 'truthy_(doneType.object.requires_appointment)', 'Máy chủ phải chặn hoàn thành khi loại việc cần hẹn mà chưa hẹn.'],
   [setup, 'function upgradeWorkTypeAppointment_', 'Kho tạo từ bản cũ phải được bật bắt buộc hẹn khách ký.']
 ];
 for (const [source, needle, message] of must) if (!source.includes(needle)) fail(message);

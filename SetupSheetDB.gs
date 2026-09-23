@@ -48,6 +48,9 @@ var SCHEMA = {
     // Các khoảng dừng đồng hồ xử lý [[từ, đến], ...]: tạm dừng, chờ khách ký, chờ
     // người mới nhận, đã hủy/hoàn thành. Đến rỗng nghĩa là đang dừng.
     'pause_log_json',
+    // Mốc bắt đầu chờ bên ngoài (tạm dừng / đang hẹn khách): hạn xử lý được lùi
+    // đúng số giờ làm đã chờ khi việc quay lại xử lý. Rỗng nghĩa là hạn đang chạy.
+    'sla_paused_at',
     'version', 'created_at', 'updated_at'],
 
   Events: ['event_id', 'item_id', 'type', 'by', 'at', 'reason', 'before_json', 'after_json'],

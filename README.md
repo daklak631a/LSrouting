@@ -19,7 +19,7 @@ Bản trình duyệt không gửi ra ngoài; chỉ GAS gọi provider thật.
 
 ### URL web app đang dùng
 
-Deployment chuẩn đã được cập nhật lên **Version 29**, chạy dưới tài khoản
+Deployment chuẩn đã được cập nhật lên **Version 35**, chạy dưới tài khoản
 `daklak631a@gmail.com`, quyền truy cập `Anyone`:
 
 `https://script.google.com/macros/s/AKfycbylljXwRUkxUCL_wnxztLAzotSNi9iiOvgpGtXPCwzIQHjCgpPz6d_zvG_XC1urUlCH/exec`

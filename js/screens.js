@@ -34,8 +34,14 @@ LS.screens = (function () {
 
   function priorityFlags(customer) { return (customer && customer.priority_flags) || []; }
   function priorityTags(customer) {
-    var labels = { VIP: ['VIP', 'gold'], QUAN_TRONG: ['Quan trọng', 'info'], XU_LY_GAP: ['Xử lý gấp', 'danger'] };
-    return priorityFlags(customer).map(function (x) { return labels[x] ? ui.tag(labels[x][0], labels[x][1]) : ''; }).join(' ');
+    // Nhãn viết tắt (cột 3) chỉ hiện trên thẻ mobile để tên khách và cờ ưu tiên gọn một dòng.
+    var labels = { VIP: ['VIP', 'gold', 'VIP'], QUAN_TRONG: ['Quan trọng', 'info', 'QT'], XU_LY_GAP: ['Xử lý gấp', 'danger', 'Gấp'] };
+    return priorityFlags(customer).map(function (x) {
+      var l = labels[x];
+      if (!l) return '';
+      return '<span class="tag tag-' + l[1] + '" title="' + U.attr(l[0]) + '"><span class="tag-full">' + U.esc(l[0]) +
+        '</span><span class="tag-short" aria-hidden="true">' + U.esc(l[2]) + '</span></span>';
+    }).join(' ');
   }
 
   function priorityRowClass(item) {
@@ -470,6 +476,115 @@ LS.screens = (function () {
     return replacement ? { user: replacement.user, rule: replacement.rule, replacementFor: replacement.original } : null;
   }
 
+  function canBatchAssign() {
+    var u = me();
+    return !!u && ['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) !== -1;
+  }
+
+  // Tập hồ sơ của lô luôn đi theo chính bộ lọc đang dùng ở tab Chờ phân công.
+  // Nhờ vậy quản lý có thể chọn một phòng, loại việc hay ngày trước khi mở lô,
+  // thay vì phải lọc lại trong một hộp thoại khác.
+  function batchAssignableItems() {
+    var range = queueWindow();
+    var rows = visibleItems().filter(function (i) {
+      return i.status === 'CHO_PHAN_CONG' && withinQueueWindow(i, range);
+    });
+    rows = applyFilters('queue', rows);
+    var unitId = f('queue', 'qunit', '');
+    if (unitId) rows = rows.filter(function (i) { var r = reqOf(i); return r && r.unit_id === unitId; });
+    return queuePriority(sortItems(rows, 'queue'));
+  }
+
+  function openBatchAssign() {
+    if (!canBatchAssign()) { ui.toast('Bạn không có quyền phân công theo lô.', 'err'); return; }
+    var items = batchAssignableItems(), staff = staffList();
+    if (!items.length) { ui.toast('Không có hồ sơ chờ phân công theo bộ lọc hiện tại.', 'warn'); return; }
+    if (!staff.length) { ui.toast('Chưa có cán bộ LS đang hoạt động.', 'err'); return; }
+
+    var rows = items.map(function (item) {
+      var rec = assignmentRecommendation(item), request = reqOf(item), load = rec ? staffLoad(rec.user.user_id) : null;
+      var suggestion = rec
+        ? '<div class="t2">Ưu tiên: ' + U.esc(rec.user.full_name) + ' · đang mở ' + load.open + ' việc' +
+          (rec.replacementFor ? ' · thay ' + U.esc(rec.replacementFor.full_name) : '') + '</div>'
+        : '<div class="t2">Chưa có quy tắc ưu tiên — chọn cán bộ trước khi giao.</div>';
+      return {
+        cells: [
+          '<input type="checkbox" data-batch-include data-item-id="' + U.attr(item.item_id) + '"' + (rec ? ' checked' : '') +
+            ' aria-label="Chọn ' + U.attr(itemRef(item)) + '">',
+          '<div class="tid">' + U.esc(itemRef(item)) + '</div><div class="t1">' + U.esc((request && request.customer.name) || '') + '</div>' +
+            '<div class="t2">' + U.esc(unitName(request && request.unit_id)) + ' · ' + U.esc(productLabel(item)) + '</div>',
+          ui.select('batch_assignee_' + item.item_id, staff.map(function (user) {
+            var userLoad = staffLoad(user.user_id);
+            return [user.user_id, user.full_name + ' — đang mở ' + userLoad.open + ' việc'];
+          }), rec ? rec.user.user_id : '', { blank: 'Chọn cán bộ', attrs: ' data-batch-assignee data-item-id="' + U.attr(item.item_id) + '" data-version="' + U.attr(item.version) + '"' }) + suggestion
+        ]
+      };
+    });
+
+    var selected = rows.filter(function (_, index) { return !!assignmentRecommendation(items[index]); }).length;
+    ui.openDialog('Phân công theo lô',
+      '<div class="batch-assign-summary">Đang xem ' + items.length + ' hồ sơ theo bộ lọc hàng chờ. ' +
+        selected + ' hồ sơ có gợi ý từ quy tắc ưu tiên và đã được chọn sẵn; có thể bỏ chọn hoặc đổi cán bộ ở từng dòng.</div>' +
+      ui.table([{ label: 'Giao', cls: 'fit' }, { label: 'Hồ sơ' }, { label: 'Cán bộ xử lý' }], rows) +
+      '<div class="form-end"><span class="t2">Chỉ các dòng được tích mới được giao.</span>' +
+        ui.btn('Giao các hồ sơ đã chọn', { kind: 'primary', act: 'batch-assign-submit', icon: 'check' }) + '</div>',
+      { sub: items.length + ' hồ sơ chờ phân công' });
+  }
+
+  function submitBatchAssign() {
+    var dialog = document.getElementById('dialog');
+    if (!dialog) return;
+    var entries = Array.prototype.slice.call(dialog.querySelectorAll('[data-batch-include]:checked')).map(function (box) {
+      var itemId = box.getAttribute('data-item-id');
+      var select = dialog.querySelector('[data-batch-assignee][data-item-id="' + itemId + '"]');
+      return { item_id: itemId, assignee_id: select ? select.value : '', expected_version: select ? Number(select.getAttribute('data-version')) : NaN };
+    });
+    if (!entries.length) { ui.toast('Chọn ít nhất một hồ sơ để giao.', 'warn'); return; }
+    var missing = entries.filter(function (entry) { return !entry.assignee_id || isNaN(entry.expected_version); });
+    if (missing.length) { ui.toast('Mỗi hồ sơ được chọn phải có cán bộ nhận việc.', 'err'); return; }
+
+    var before = entries.map(function (entry) {
+      var item = U.byId(st().items, 'item_id', entry.item_id);
+      return item ? { item_id: item.item_id, data: JSON.parse(JSON.stringify(item)) } : null;
+    }).filter(Boolean);
+    var ts = U.now();
+    entries.forEach(function (entry) {
+      var item = U.byId(st().items, 'item_id', entry.item_id);
+      if (!item) return;
+      item.status = 'DA_PHAN_CONG'; item.assigned_user_id = entry.assignee_id; item.assigned_by = st().session;
+      item.assigned_at = ts; item.accepted_at = item.accepted_at || ts; item.due_at = D.dueFrom(ts, item.work_type_code, st());
+      item.version = Number(item.version || 0) + 1; item.syncing = true; D.applyClock(item, 'DA_PHAN_CONG', ts);
+    });
+    ui.closeDialog();
+
+    if (!U.isGas()) {
+      entries.forEach(function (entry) { logEvent(entry.item_id, 'DA_PHAN_CONG', 'Giao theo lô'); });
+      st().items.forEach(function (item) { if (item.syncing) item.syncing = false; });
+      U.save(); LS.app.render(); ui.toast('Đã phân công ' + entries.length + ' hồ sơ.', 'ok'); return;
+    }
+
+    LS.app.render();
+    LS.app.background(LS.api.assignWorkItemsBatch(entries), {
+      label: 'Phân công theo lô',
+      onOk: function (result) {
+        (result.items || []).forEach(function (remote) {
+          var item = U.byId(st().items, 'item_id', remote.item_id);
+          if (!item) return;
+          Object.keys(remote).forEach(function (key) { item[key] = remote[key]; });
+          item.syncing = false;
+        });
+        if (!ui.dialogOpen()) LS.app.render();
+        ui.toast('Đã phân công ' + Number(result.count || entries.length) + ' hồ sơ.', 'ok');
+      },
+      rollback: function () {
+        before.forEach(function (snapshot) {
+          var item = U.byId(st().items, 'item_id', snapshot.item_id);
+          if (item) Object.keys(snapshot.data).forEach(function (key) { item[key] = snapshot.data[key]; });
+        });
+      }
+    });
+  }
+
   /* ============================ Quyền thao tác ============================ */
 
   function actionsFor(item) {
@@ -754,6 +869,7 @@ LS.screens = (function () {
   function slaCell(item) {
     var s = D.sla(item, st());
     if (!s) return '<span class="t2">—</span>';
+    if (s.paused) return ui.tag('Dừng tính hạn', 'neutral');
     if (s.late) return ui.tag('Quá ' + U.fmtGap(s.left), 'danger');
     if (s.soon) return ui.tag('Còn ' + U.fmtGap(s.left), 'warn');
     return '<span class="t2">' + U.fmtDT(s.due) + '</span>';
@@ -813,7 +929,9 @@ LS.screens = (function () {
         if (me().role === 'ADMIN') return '<span class="t2">Ẩn theo quyền</span>';
         return '<div class="customer-main"><span class="t1">' + U.esc(r ? r.customer.name : '—') + '</span>' +
           (r && priorityTags(r.customer) ? '<span class="priority-tags">' + priorityTags(r.customer) + '</span>' : '') + '</div>' +
-          '<div class="t2">' + U.esc(r && r.customer.cif ? r.customer.cif : 'Chưa có CIF') + '</div>';
+          '<div class="t2 cust-cif">' + U.esc(r && r.customer.cif ? r.customer.cif : 'Chưa có CIF') + '</div>' +
+          // Thẻ mobile thay dòng CIF bằng phòng gửi hồ sơ — thông tin cần để lướt hàng chờ.
+          '<div class="t2 cust-unit">' + U.esc(r ? unitName(r.unit_id) : '—') + '</div>';
       case 'contact':
         if (me().role === 'ADMIN') return '<span class="t2">Ẩn theo quyền</span>';
         return contactCell(r);
@@ -850,6 +968,7 @@ LS.screens = (function () {
       if (screen && k !== 'act') out.header = sortHeader(screen, k, c.label);
       return out;
     });
+    var mobileTableOpts = Object.assign({}, emptyOpts || {}, { tableClass: 'mobile-record-table' });
     return ui.table(
       cols,
       list.map(function (i) {
@@ -862,7 +981,7 @@ LS.screens = (function () {
           cells: keys.map(function (k) { return cell(k, i); })
         };
       }),
-      emptyOpts
+      mobileTableOpts
     );
   }
 
@@ -972,11 +1091,11 @@ LS.screens = (function () {
       body: roomCharts(current, range, byStaff) + ui.sectionTitle('Theo nhóm cấp độ / loại việc') + ui.table(
         [{ label: 'Loại việc' }, { label: 'Tổng', cls: 'num' }, { label: 'Đang mở', cls: 'num' }],
         byType.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.name) + '</div>', '<span class="tid">' + x.n + '</span>', '<span class="tid">' + x.open + '</span>'] }; }),
-        { icon: 'chart', title: 'Chưa có nhóm việc trong kỳ', text: '' }
+        { icon: 'chart', title: 'Chưa có nhóm việc trong kỳ', text: '', tableClass: 'dashboard-metric-table' }
       ) + '<div style="margin-top:1.25rem">' + ui.sectionTitle('LS đang xử lý cho phòng') + ui.table(
         [{ label: 'Cán bộ LS' }, { label: 'Tổng việc', cls: 'num' }, { label: 'Đang mở', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }],
         byStaff.map(function (x) { return { cells: ['<div class="t1">' + U.esc(x.s.full_name) + '</div>', '<span class="tid">' + x.n + '</span>', '<span class="tid">' + x.open + '</span>', '<span class="tid">' + x.done + '</span>'] }; }),
-        { icon: 'users', title: 'Chưa có LS xử lý cho phòng', text: '' }
+        { icon: 'users', title: 'Chưa có LS xử lý cho phòng', text: '', tableClass: 'dashboard-metric-table' }
       ) + '</div>'
     });
   }
@@ -1155,6 +1274,10 @@ LS.screens = (function () {
 
     out += ui.block({
       title: 'Hàng chờ & đang xử lý', count: filtered.length + '/' + source.length, icon: 'activity',
+      actions: (tab === 'assign' && canBatchAssign() && filtered.length
+        ? ui.btn('Phân công theo lô', { kind: 'primary', sm: true, act: 'batch-assign-open', icon: 'zap' }) : '') +
+        // Kiểm soát nhận hồ sơ qua điện thoại/giấy thì đăng ký hộ phòng ngay tại hàng chờ.
+        (me().role === 'KS_LS' ? ui.btn('Đăng ký hộ phòng', { kind: 'line', sm: true, act: 'new-request', icon: 'plus' }) : ''),
       note: '', compact: true,
       // unitChips gộp chung hàng cuộn ngang với ô tìm + lọc + sắp xếp trên mobile,
       // khỏi choán thêm một dòng riêng (xem .queue-tools ở styles.css).
@@ -1708,7 +1831,7 @@ LS.screens = (function () {
             ]
           };
         }),
-        { icon: 'history', title: 'Không có sự kiện trong kỳ đã chọn', text: '' }
+        { icon: 'history', title: 'Không có sự kiện trong kỳ đã chọn', text: '', tableClass: 'audit-table' }
       )
     });
   }
@@ -2249,8 +2372,13 @@ LS.screens = (function () {
     if ((to === 'CHO_PHAN_CONG' || to === 'DA_PHAN_CONG') && !i.accepted_at) i.accepted_at = ts;
     if (to === 'DANG_THUC_HIEN' && !i.processing_started_at) i.processing_started_at = ts;
     D.applyClock(i, to, ts);
+    D.applySlaPause(i, to, ts, st());
     if (to === 'HOAN_THANH_LS') i.completed_at = ts;
-    if (to === 'DANG_THUC_HIEN' && i.status === 'HOAN_THANH_LS') i.completed_at = '';
+    if (to === 'DANG_THUC_HIEN' && i.status === 'HOAN_THANH_LS') {
+      // Mở lại là vòng xử lý mới: hạn tính lại từ lúc mở (khớp transitionItem).
+      i.completed_at = '';
+      i.due_at = D.dueFrom(ts, i.work_type_code, st());
+    }
     if (tr.note && reason) i.note = reason;
 
     i.status = to;
@@ -2276,6 +2404,10 @@ LS.screens = (function () {
             var live = U.byId(st().items, 'item_id', i.item_id) || i;
             live.syncing = false;
             if (result && result.version) live.version = result.version;
+            // Hạn do máy chủ tính (lùi hạn sau khi chờ, mở lại) là số chuẩn.
+            ['due_at', 'completed_at', 'sla_paused_at'].forEach(function (k) {
+              if (result && result[k] !== undefined) live[k] = result[k];
+            });
             if (!ui.dialogOpen()) LS.app.render();
             else if (detailShowing(live.item_id)) detail(live.item_id);
           },
@@ -2355,7 +2487,7 @@ LS.screens = (function () {
     if (!Object.keys(changes).length) { ui.toast('Không có thay đổi nào.', 'warn'); return; }
 
     if (U.isGas()) {
-      LS.api.proposeRevision(i.item_id, changes, reason).then(function (result) {
+      LS.api.proposeRevision(i.item_id, changes, reason, i.version).then(function (result) {
         ui.closeDialog();
         return LS.app.refreshServer(result.applied ? 'Đã lưu thay đổi.' : 'Đã gửi đề nghị sửa cho kiểm soát.');
       }).catch(function (error) { ui.toast(error.message || 'Không thể lưu thay đổi.', 'err'); });
@@ -2363,6 +2495,7 @@ LS.screens = (function () {
     }
 
     if (editNeedsApproval(i)) {
+      if (i.pending) { ui.toast('Việc đang có một đề nghị sửa chờ kiểm soát duyệt.', 'err'); return; }
       i.pending = { fields: changes, by: st().session, at: U.now(), reason: reason };
       logEvent(i.item_id, 'DE_NGHI_SUA', reason);
       D.queueNotifications(i, 'DE_NGHI_SUA', st(), st().session);
@@ -2385,10 +2518,11 @@ LS.screens = (function () {
       if (k.indexOf('customer.') === 0) r.customer[k.slice(9)] = changes[k];
       else item[k] = changes[k];
     });
-    if (changes.work_type_code && item.assigned_at) {
-      item.due_at = D.dueFrom(item.assigned_at, item.work_type_code, st());
+    if (changes.work_type_code) {
+      // Checklist thuộc loại việc: đổi loại thì làm lại checklist của loại mới (khớp applyRevision_).
       var wt = wtOf(item);
       item.checklist = (wt ? wt.checklist : []).map(function () { return false; });
+      if (item.assigned_at) item.due_at = D.dueFrom(item.assigned_at, item.work_type_code, st());
     }
     if (r.customer.cif) r.customer.kind = 'DA_CO_CIF';
   }
@@ -2405,6 +2539,9 @@ LS.screens = (function () {
       return;
     }
 
+    if (approve && !(D.STATUS[i.status] && D.STATUS[i.status].open)) {
+      ui.toast('Việc đã đóng từ lúc gửi đề nghị; chỉ có thể từ chối.', 'err'); return;
+    }
     if (approve) {
       applyChanges(i, i.pending.fields);
       i.version += 1;
@@ -2527,8 +2664,16 @@ LS.screens = (function () {
 
   function newRequest() {
     var u = me() || { full_name: '', unit_id: '' };
+    // Kiểm soát LS đăng ký hộ phải chọn phòng gửi; phòng/PGD luôn là đơn vị của mình.
+    var senderUnits = st().units.filter(function (x) { return x.active && x.kind === 'PGD'; })
+      .sort(function (a, b) { return (a.sort_order || 9999) - (b.sort_order || 9999); })
+      .map(function (x) { return [x.unit_id, x.name]; });
+    var unitPicker = u.role === 'PHONG_PGD' ? '' :
+      '<div class="f-row" style="margin-bottom:1rem">' +
+      ui.field('Phòng / PGD gửi hồ sơ', ui.select('unit_id', senderUnits, '', { blank: 'Chọn phòng / PGD', attrs: ' required' })) +
+      '</div>';
     ui.openDialog('Đăng ký việc mới',
-      '<form data-form="new-request">' +
+      '<form data-form="new-request">' + unitPicker +
       ui.sectionTitle('Khách hàng') +
       '<div class="f-row customer-fields">' +
       ui.field('Tên khách hàng', ui.input('name', '', { required: true })) +
@@ -2564,9 +2709,12 @@ LS.screens = (function () {
     var rows = form.querySelectorAll('.row-item');
     if (!rows.length) { ui.toast('Cần ít nhất một dòng việc.', 'err'); return; }
 
+    var unitId = u.role === 'PHONG_PGD' ? u.unit_id : String(d.get('unit_id') || '');
+    if (!unitId) { ui.toast('Chọn phòng / PGD gửi hồ sơ.', 'err'); return; }
     var cif = String(d.get('cif') || '').trim();
     var kind = cif ? 'DA_CO_CIF' : 'KH_MOI';
     var payload = {
+      unit_id: unitId,
       customer: {
         name: String(d.get('name')).trim(), kind: kind,
         cif: cif,
@@ -2602,7 +2750,7 @@ LS.screens = (function () {
       var tmpIds = [];
 
       st().requests.unshift({
-        request_id: tmpReq, unit_id: u.unit_id, created_by: u.user_id, created_at: U.now(),
+        request_id: tmpReq, unit_id: unitId, created_by: u.user_id, created_at: U.now(),
         note: payload.note, customer: payload.customer, requestor: payload.requestor
       });
 
@@ -2663,7 +2811,7 @@ LS.screens = (function () {
     var reqId = U.uid('REQ');
 
     st().requests.unshift({
-      request_id: reqId, unit_id: u.unit_id, created_by: u.user_id, created_at: U.now(),
+      request_id: reqId, unit_id: unitId, created_by: u.user_id, created_at: U.now(),
       note: String(d.get('note') || '').trim(),
       customer: {
         name: String(d.get('name')).trim(), kind: kind,
@@ -2689,7 +2837,7 @@ LS.screens = (function () {
         appointment: null, checklist: (wt ? wt.checklist : []).map(function () { return false; }),
         note: '', pending: null, version: 1, collateral_mode: rowCollateralMode(row, wt), parent_item_id: ''
       });
-      logEvent(id, 'TAO_VIEC', unitName(u.unit_id) + ' đăng ký yêu cầu.');
+      logEvent(id, 'TAO_VIEC', unitName(unitId) + ' đăng ký yêu cầu.');
       if (rowCollateralMode(row, wt) === 'MOI') {
         var collateralType = U.byId(st().workTypes, 'code', 'LEGACY_26');
         if (collateralType) {
@@ -2753,6 +2901,7 @@ LS.screens = (function () {
     report: report, exportReport: exportReport, refreshReport: refreshReport, setReportFilter: setReportFilter,
     headerSummary: headerSummary,
     detail: detail, saveChecklistToggle: saveChecklistToggle, addLinked: addLinked, toggleLinkedBox: toggleLinkedBox, flow: flow, quickAssign: quickAssign, submitFlow: submitFlow,
+    openBatchAssign: openBatchAssign, submitBatchAssign: submitBatchAssign,
     editItem: editItem, submitEdit: submitEdit, revision: revision,
     newRequest: newRequest, submitNewRequest: submitNewRequest, rowForm: rowForm, syncProductOptions: syncProductOptions, syncCollateralMode: syncCollateralMode,
     exportCsv: exportCsv, downloadDailyImage: downloadDailyImage, exportBoard: exportBoard, sweepOverdue: sweepOverdue,

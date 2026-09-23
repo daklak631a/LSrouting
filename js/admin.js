@@ -9,6 +9,18 @@ LS.admin = (function () {
   var section = 'overview';
   var oFilter = { status: '', channel: '' };
 
+  /* Điểm vận hành có thể tạm ẩn khỏi Tổng quan (vd. khi chiếu màn hình). Chỉ là
+     tuỳ chọn hiển thị của trình duyệt này — không đổi dữ liệu hay quyền. */
+  var SCORE_HIDE_KEY = 'ls_admin_hide_scorecard';
+  var scoreHidden = (function () {
+    try { return window.localStorage.getItem(SCORE_HIDE_KEY) === '1'; } catch (e) { return false; }
+  })();
+
+  function setScoreHidden(hidden) {
+    scoreHidden = !!hidden;
+    try { window.localStorage.setItem(SCORE_HIDE_KEY, scoreHidden ? '1' : '0'); } catch (e) { /* chỉ mất ghi nhớ, vẫn ẩn/hiện được */ }
+  }
+
   function st() { return U.db(); }
   function me() { return U.byId(st().users, 'user_id', st().session); }
   function userName(id) { var u = U.byId(st().users, 'user_id', id); return u ? u.full_name : id; }
@@ -115,7 +127,11 @@ LS.admin = (function () {
     var scores = s.operationalScorecard && s.operationalScorecard.length
       ? s.operationalScorecard
       : D.operationalScorecard(plan.start_date || (month + '-01'), plan.end_date || (month + '-31'), s);
-    var scored = scores.filter(function (x) { return x.score !== null; });
+    function finiteScore(value) {
+      var score = Number(value);
+      return isFinite(score) ? score : null;
+    }
+    var scored = scores.filter(function (x) { return finiteScore(x.score) !== null; });
 
     var out = '';
 
@@ -132,18 +148,36 @@ LS.admin = (function () {
       ui.metric('Việc quá hạn', late.length, late.length ? 'danger' : '')
     ]);
 
+    out += scoreHidden ? scoreHiddenBlock(scores.length, (s.operationalScoreSnapshots || []).length) : scoreBlocks(s, scores, finiteScore);
+    return out + overviewRest(s, h, notReady, emailQuota, quotaLeft, pendingTpl);
+  }
+
+  function scoreHiddenBlock(liveCount, snapshotCount) {
+    return ui.block({
+      title: 'Điểm vận hành đang ẩn', icon: 'eye-off',
+      actions: ui.btn('Hiện điểm vận hành', { act: 'admin-score-toggle', data: ' data-hide="0"', sm: true, kind: 'primary', icon: 'eye' }),
+      body: ui.pad('<p class="t2">Bảng điểm ' + liveCount + ' cán bộ và ' + snapshotCount +
+        ' dòng lịch sử điểm đã chốt đang được ẩn trên trình duyệt này. Điểm vẫn được tính và chốt theo kỳ như bình thường.</p>')
+    });
+  }
+
+  function scoreBlocks(s, scores, finiteScore) {
+    var out = '';
     out += ui.block({
       title: 'Điểm vận hành', count: scores.length, icon: 'chart',
+      actions: ui.btn('Tạm ẩn điểm', { act: 'admin-score-toggle', data: ' data-hide="1"', sm: true, icon: 'eye-off',
+        title: 'Ẩn bảng điểm và lịch sử điểm khỏi Tổng quan' }),
       body: ui.table(
         [{ label: 'Cán bộ' }, { label: 'Đúng hạn', cls: 'num' }, { label: 'Hoàn thành', cls: 'num' }, { label: 'Tồn quá hạn', cls: 'num' }, { label: 'Điểm', cls: 'num' }],
         scores.map(function (x) {
-          var tone = x.score === null ? '' : (x.score >= 80 ? 'ok' : (x.score >= 60 ? 'warn' : 'danger'));
+          var score = finiteScore(x.score);
+          var tone = score === null ? '' : (score >= 80 ? 'ok' : (score >= 60 ? 'warn' : 'danger'));
           return { cls: x.lateOpen ? 'flag-warn' : '', cells: [
             '<div class="t1">' + U.esc(x.user.full_name) + '</div>',
-            x.score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '/' + x.done + '</span>',
-            x.score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.done + '/' + x.eligible + '</span>',
-            x.score === null ? '<span class="t2">—</span>' : (x.lateOpen ? ui.tag(String(x.lateOpen), 'danger') : '<span class="tid">0</span>'),
-            x.score === null ? '<span class="t2">Chưa có dữ liệu</span>' : ui.tag(String(x.score), tone)
+            score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '/' + x.done + '</span>',
+            score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.done + '/' + x.eligible + '</span>',
+            score === null ? '<span class="t2">—</span>' : (x.lateOpen ? ui.tag(String(x.lateOpen), 'danger') : '<span class="tid">0</span>'),
+            score === null ? '<span class="t2">Chưa có dữ liệu</span>' : ui.tag(String(score), tone)
           ] };
         }),
         { icon: 'users', title: 'Chưa có cán bộ LS', text: '' }
@@ -175,7 +209,11 @@ LS.admin = (function () {
         { icon: 'chart', title: 'Chưa có snapshot', text: 'Điểm sẽ xuất hiện sau khi một kỳ được chốt.' }
       )
     });
+    return out;
+  }
 
+  function overviewRest(s, h, notReady, emailQuota, quotaLeft, pendingTpl) {
+    var out = '';
     var workerAt = String(s.settings.worker_last_run_at || '').trim();
     var workerStatus = String(s.settings.worker_last_run_status || '').trim();
     var workerTone = workerStatus === 'OK' ? 'ok' : (workerStatus ? 'warn' : '');
@@ -1680,7 +1718,7 @@ LS.admin = (function () {
   /* ============================ Xuất ra ngoài ============================ */
 
   return {
-    view: view, setSection: setSection,
+    view: view, setSection: setSection, setScoreHidden: setScoreHidden,
     channelDialog: channelDialog, saveChannel: saveChannel, toggleChannel: toggleChannel, testChannel: testChannel,
     templateDialog: templateDialog, saveTemplate: saveTemplate, approveTemplate: approveTemplate, insertVar: insertVar,
     ruleDialog: ruleDialog, saveRule: saveRule, toggleRule: toggleRule,
