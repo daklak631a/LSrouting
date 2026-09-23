@@ -45,7 +45,7 @@ LS.ui = (function () {
 
   function block(opts) {
     return '<section class="block">' +
-      (opts.title ? '<div class="block-bar">' +
+      (opts.title ? '<div class="block-bar' + (opts.compact ? ' block-bar-compact' : '') + '">' +
         '<h2>' + (opts.icon ? U.icon(opts.icon, 16) : '') + U.esc(opts.title) +
         (opts.count !== undefined ? ' <span class="count">' + U.esc(opts.count) + '</span>' : '') + '</h2>' +
         (opts.actions ? '<div class="btn-row spacer">' + opts.actions + '</div>' : '') +
@@ -77,7 +77,8 @@ LS.ui = (function () {
             var c = cols[i] || {};
             // data-label cấp nhãn cột cho bảng thẻ trên mobile (::before lấy attr này khi thead ẩn đi).
             var label = c.label ? ' data-label="' + U.attr(c.label) + '"' : '';
-            return '<td' + (c.cls ? ' class="' + c.cls + '"' : '') + label + '>' + cell + '</td>';
+            var cls = (c.cls || '') + (c.mobile === false ? ' cell-hide-mobile' : '');
+            return '<td' + (cls ? ' class="' + cls.trim() + '"' : '') + label + '>' + cell + '</td>';
           }).join('') + '</tr>';
       }).join('') +
       '</tbody></table></div>';

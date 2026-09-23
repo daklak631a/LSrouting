@@ -733,18 +733,21 @@ LS.screens = (function () {
 
   /* ============================ Bảng việc ============================ */
 
+  // mobile:false — cột vẫn đủ trên bảng desktop, nhưng ẩn khỏi thẻ trên mobile:
+  // màn hẹp chỉ cần khách hàng/CIF, trạng thái, cán bộ xử lý là đủ để lướt danh sách,
+  // các chi tiết khác xem trong "Xem chi tiết".
   var COLS = {
-    code: { label: 'Mã việc', cls: 'fit' },
+    code: { label: 'Mã việc', cls: 'fit', mobile: false },
     customer: { label: 'Khách hàng' },
-    contact: { label: 'Liên hệ' },
-    unit: { label: 'Đơn vị' },
-    work: { label: 'Loại việc / sản phẩm' },
-    date: { label: 'Ngày phát sinh', cls: 'fit' },
+    contact: { label: 'Liên hệ', mobile: false },
+    unit: { label: 'Đơn vị', mobile: false },
+    work: { label: 'Loại việc / sản phẩm', mobile: false },
+    date: { label: 'Ngày phát sinh', cls: 'fit', mobile: false },
     status: { label: 'Trạng thái', cls: 'fit' },
     staff: { label: 'Cán bộ' },
-    progress: { label: 'Tiến độ', cls: 'fit' },
-    sla: { label: 'Hạn xử lý', cls: 'fit' },
-    time: { label: 'Giờ xử lý KH', cls: 'fit' },
+    progress: { label: 'Tiến độ', cls: 'fit', mobile: false },
+    sla: { label: 'Hạn xử lý', cls: 'fit', mobile: false },
+    time: { label: 'Giờ xử lý KH', cls: 'fit', mobile: false },
     act: { label: '', cls: 'fit' }
   };
 
@@ -875,7 +878,7 @@ LS.screens = (function () {
 
     return (fix.length ? ui.banner('warn', fix.length + ' việc đang chờ đơn vị bổ sung', 'Kiểm soát đã trả lại.') : '') +
       ui.block({
-        title: 'Danh sách đã phân bổ', count: list.length + '/' + all.length, icon: 'clipboard',
+        title: 'Danh sách đã phân bổ', count: list.length + '/' + all.length, icon: 'clipboard', compact: true,
         actions: u.role === 'PHONG_PGD' ? ui.btn('Tạo việc mới', { kind: 'primary', act: 'new-request', icon: 'plus', sm: true }) : '',
       filters: listToolbar('work', { status: true, type: true, unit: u.role !== 'PHONG_PGD', staff: u.role !== 'PHONG_PGD' }, true),
         body: itemTable(list, ['code', 'customer', 'contact', 'work', 'date', 'status', 'staff', 'act'], {
@@ -932,7 +935,7 @@ LS.screens = (function () {
 
     return warn + ui.block({
       title: 'Toàn bộ hồ sơ ' + unitName(u.unit_id), count: list.length + '/' + inWindow.length, icon: 'building',
-      note: '',
+      note: '', compact: true,
       filters: listToolbar('room', { status: true, type: true, staff: true, dates: true }, true),
       body: itemTable(list, ['code', 'customer', 'work', 'staff', 'sla', 'status', 'act'], {
         icon: 'building', title: 'Phòng chưa có hồ sơ trong kỳ', text: ''
@@ -1152,8 +1155,10 @@ LS.screens = (function () {
 
     out += ui.block({
       title: 'Hàng chờ & đang xử lý', count: filtered.length + '/' + source.length, icon: 'activity',
-      note: '',
-      filters: '<div class="queue-toolbar">' + queueTabs(tab, counts) + '<div class="queue-tools">' + listSearch('queue') + filterBar('queue', { status: true, type: true, staff: true, dates: true }) + sortControl('queue') + '</div></div>' + unitChips,
+      note: '', compact: true,
+      // unitChips gộp chung hàng cuộn ngang với ô tìm + lọc + sắp xếp trên mobile,
+      // khỏi choán thêm một dòng riêng (xem .queue-tools ở styles.css).
+      filters: '<div class="queue-toolbar">' + queueTabs(tab, counts) + '<div class="queue-tools">' + listSearch('queue') + filterBar('queue', { status: true, type: true, staff: true, dates: true }) + sortControl('queue') + unitChips + '</div></div>',
       body: itemTable(page.rows, tab === 'intake' || tab === 'assign' ? ['code', 'customer', 'unit', 'work', 'date', 'status', 'act'] : ['code', 'customer', 'unit', 'work', 'date', 'staff', 'sla', 'status', 'act'], {
         icon: 'activity', title: 'Không có hồ sơ trong trang này', text: ''
       }, 'queue') + pageControls(page)
@@ -1188,7 +1193,7 @@ LS.screens = (function () {
 
     return (late.length ? ui.banner('danger', late.length + ' việc đã quá hạn xử lý', '') : '') +
       ui.block({
-        title: 'Việc được giao', count: list.length + '/' + all.length, icon: 'briefcase',
+        title: 'Việc được giao', count: list.length + '/' + all.length, icon: 'briefcase', compact: true,
         filters: listToolbar('mine', { status: true, type: true }, true),
         // Bỏ cột cán bộ: mọi dòng ở đây đều là việc của chính người đang xem.
         body: itemTable(list, ['code', 'customer', 'contact', 'work', 'progress', 'time', 'status', 'act'], {

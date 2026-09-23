@@ -943,18 +943,40 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
   .strip > *:nth-child(even) { border-right: none; }
   .metric-v { font-size: 1.3rem; }
 
-  .filters { padding: 0.6rem 0.875rem; }
+  /* Tiêu đề khối chỉ lặp lại đúng tên tab đang chọn ở thanh điều hướng dưới —
+     ẩn đi trên mobile để dồn chỗ cho nội dung; nút hành động (vd. "Tạo việc
+     mới") vẫn giữ, và cả thanh chỉ còn nút đó thì không cần khung/viền nữa. */
+  .block-bar-compact h2 { display: none; }
+  .block-bar-compact:not(:has(.btn-row)) { display: none; }
+  .block-bar-compact:has(.btn-row) { padding: 0.5rem 0.875rem; border-bottom: none; }
+  /* Thanh tìm/lọc/sắp xếp trên mobile: một hàng cuộn ngang duy nhất thay vì bọc
+     xuống 2-3 dòng — ô tìm co lại còn đủ gõ, lọc/sắp xếp/chip phòng nằm cạnh,
+     vuốt sang phải nếu cần. select() bên trong vẫn width:100% mặc định nên phải
+     ép flex-basis riêng, không thì nó đòi chiếm trọn hàng của .sort-control. */
+  .filters { padding: 0.5rem 0.875rem; }
   .list-toolbar, .queue-toolbar { align-items: stretch; }
-  .list-toolbar { flex-wrap: wrap; }
-  .list-toolbar .list-search { flex-basis: 100%; }
-  .queue-toolbar { flex-direction: column; gap: 0; }
+  .list-toolbar {
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; align-items: center;
+  }
+  .list-toolbar .list-search { flex: 0 0 156px; min-width: 130px; }
+  .list-toolbar .filter-tools, .list-toolbar .sort-control { flex: 0 0 auto; }
+  .queue-toolbar { flex-direction: column; gap: 0.35rem; }
   .queue-tabs { padding-left: 0.875rem; }
-  /* .queue-tools mang flex-basis:460px cho hàng ngang trên desktop; khi cha đổi
-     sang cột ở mobile, trục chính hóa dọc nên 460px kia biến thành CHIỀU CAO
-     chứ không còn là chiều rộng — bung ra một khoảng trắng khổng lồ. Trả về auto. */
-  .queue-tools { flex: 0 1 auto; margin-left: 0; padding: 0.45rem 0.875rem; justify-content: flex-end; align-items: stretch; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
-  .queue-tools .list-search { flex-basis: 100%; }
+  .queue-tools {
+    flex: 0 1 auto; margin-left: 0; padding: 0 0.875rem;
+    justify-content: flex-start; align-items: center;
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .queue-tools .list-search { flex: 0 0 156px; min-width: 130px; }
   .queue-tools .filter-tools, .queue-tools .sort-control { flex: 0 0 auto; }
+  /* Chip lọc theo phòng gửi trước đó là hàng riêng bên dưới toàn bộ khối lọc —
+     giờ ghép vào cuối cùng hàng cuộn này, có vạch phân cách nhẹ để biết là mục
+     khác nhóm. */
+  .queue-tools .unit-chips {
+    flex: 0 0 auto; flex-wrap: nowrap; padding: 0 0 0 0.5rem; margin-left: 0.1rem;
+    border-left: 1px solid var(--line-2);
+  }
+  .sort-control .select { width: auto; }
   .report-filters { flex-wrap: wrap; }
   .report-filters .f { flex: 1 1 145px; }
   .report-filters .report-actions { margin-left: 0; }
@@ -986,13 +1008,26 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
     width: auto; white-space: normal; text-align: left;
   }
   table.t td:last-child { border-bottom: none; padding-bottom: 0; }
+  /* Danh sách hồ sơ trên mobile chỉ cần khách hàng/CIF, trạng thái, cán bộ xử lý
+     để lướt nhanh — cột nào đánh dấu mobile:false trong COLS (screens.js) thì ẩn,
+     xem đủ chi tiết thì bấm "Xem chi tiết". */
+  table.t td.cell-hide-mobile { display: none; }
   table.t td[data-label]::before {
     content: attr(data-label); display: block;
     font-size: 0.64rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
     color: var(--ink-4); margin-bottom: 0.2rem;
   }
-  /* Cột đầu (mã việc/tên) là tiêu đề thẻ: không cần nhãn lặp lại, tách hẳn bằng viền dưới. */
-  table.t td:first-child {
+  /* Trạng thái và Cán bộ xử lý đủ ngắn để nhãn và giá trị nằm chung một dòng
+     (dạng "CÁN BỘ: Tên"), khỏi phải tách dòng như các trường nhiều chữ khác. */
+  table.t td[data-label="Trạng thái"], table.t td[data-label="Cán bộ"] {
+    display: flex; align-items: center; column-gap: 0.4rem; row-gap: 0.15rem; flex-wrap: wrap;
+  }
+  table.t td[data-label="Trạng thái"]::before, table.t td[data-label="Cán bộ"]::before {
+    content: attr(data-label) ":"; margin-bottom: 0;
+  }
+  /* Cột đầu (mã việc) là mã nội bộ, không cần hiện trên thẻ mobile — nhưng vẫn
+     giữ trong DOM cho data-id/thao tác. Ô kế tiếp (khách hàng) thành đầu thẻ. */
+  table.t td:first-child, table.t td.cell-hide-mobile:first-child + td {
     padding-top: 0; padding-bottom: 0.6rem; margin-bottom: 0.15rem;
     border-bottom: 1px solid var(--line-2);
   }
