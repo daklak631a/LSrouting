@@ -19,7 +19,7 @@ Bản trình duyệt không gửi ra ngoài; chỉ GAS gọi provider thật.
 
 ### URL web app đang dùng
 
-Deployment chuẩn đã được cập nhật lên **Version 35**, chạy dưới tài khoản
+Deployment chuẩn đã được cập nhật lên **Version 36**, chạy dưới tài khoản
 `daklak631a@gmail.com`, quyền truy cập `Anyone`:
 
 `https://script.google.com/macros/s/AKfycbylljXwRUkxUCL_wnxztLAzotSNi9iiOvgpGtXPCwzIQHjCgpPz6d_zvG_XC1urUlCH/exec`
@@ -28,7 +28,16 @@ Deployment chuẩn đã được cập nhật lên **Version 35**, chạy dướ
 Version 9; deployment cũ `newdeploy` là bản legacy hiện không dùng và không nên
 gửi liên kết đó.
 Khi sửa mã, cập nhật đúng deployment này để giữ nguyên URL; không tạo deployment
-mới nếu không muốn phải đổi liên kết người dùng.
+mới nếu không muốn phải đổi liên kết người dùng:
+
+```
+clasp push --force
+clasp deploy --deploymentId AKfycbylljXwRUkxUCL_wnxztLAzotSNi9iiOvgpGtXPCwzIQHjCgpPz6d_zvG_XC1urUlCH --description "<mô tả>"
+```
+
+Quay lại phiên bản cũ khi cần: chạy đúng lệnh `clasp deploy` trên nhưng thêm
+`--versionNumber <số>`. Phiên bản cũ vẫn nằm nguyên trên Apps Script, nên hạ cấp
+là một lệnh chứ không phải đẩy lại mã.
 
 Bản hiện tại giữ nguyên bàn giao tự động các việc đang mở sang cán bộ thay thế khi
 quản trị đổi vai trò khỏi `CAN_BO_LS` hoặc khóa tài khoản. Nếu chưa chọn người
