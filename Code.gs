@@ -1165,6 +1165,9 @@ function ensureRuntimeSchema_() {
     hasColumns_('WorkItems', ['sla_paused_at']);
   if (ready) {
     installMaintenanceTrigger();
+    // Kho đã migration xong thì không chạy lại setup, nên trigger nền thêm về
+    // sau phải được bổ sung ở đây, nếu không bản đang chạy sẽ không bao giờ có.
+    Notifications.ensureWorkerTriggers();
     return { upgraded: false, reason: 'ready' };
   }
 
@@ -1229,19 +1232,22 @@ function getBootstrap() {
       return u.role === 'ADMIN' ? sanitizeAdminRequest_(r) : r;
     }),
     items: u.role === 'ADMIN' ? items.map(sanitizeAdminItem_) : items,
-    // Events và Inbox chỉ thêm, không xóa. Lấy phần đuôi gần nhất thay vì đọc
-    // trọn bảng, nếu không thời gian mở màn hình sẽ dài dần theo từng tháng.
-    events: DataRepository.tail('Events', 800).filter(function (e) {
+    // Events, Inbox và NotificationOutbox chỉ thêm, không xóa nên không đọc trọn
+    // bảng. Nhưng cũng không được cắt đuôi rồi mới lọc: phần đuôi là của cả chi
+    // nhánh, nên với hai mươi cán bộ thì mỗi người chỉ còn vài dòng của mình, và
+    // người ít việc thấy rỗng. `tailWhere` lọc ngay trong lúc quét ngược.
+    events: DataRepository.tailWhere('Events', 800, function (e) {
       if (u.role === 'CAN_BO_LS') return e.by === u.user_id;
-      return visible[e.item_id];
-    }).map(function (e) {
+      return !!visible[e.item_id];
+    }).rows.map(function (e) {
       return u.role === 'ADMIN' ? sanitizeAdminEvent_(e) : e;
     }),
-    inbox: DataRepository.tail('Inbox', 200).filter(function (n) { return n.user_id === u.user_id; }),
+    inbox: DataRepository.tailWhere('Inbox', 200, function (n) { return n.user_id === u.user_id; }).rows,
     // Cán bộ phải xem trước và xác nhận tin gửi khách ngay ở chi tiết việc, nên
-    // hàng đợi phải tới được tay họ — giới hạn đúng những việc họ đã nhìn thấy.
-    outbox: u.role === 'ADMIN' ? [] : DataRepository.tail('NotificationOutbox', 800)
-      .filter(function (o) { return visible[o.item_id]; }),
+    // hàng đợi phải tới được tay họ. Tin chờ xác nhận mà không hiện ra thì không
+    // ai gửi được: quản trị bị chặn xác nhận thay, nên tin sẽ kẹt vĩnh viễn.
+    outbox: u.role === 'ADMIN' ? [] : DataRepository.tailWhere('NotificationOutbox', 800,
+      function (o) { return !!visible[o.item_id]; }).rows,
     settings: DataRepository.getAll('Settings').filter(function (s) {
       return ['timezone', 'week_start', 'work_days', 'work_open', 'work_close', 'work_break', 'holidays',
         'backlog_alert', 'export_row_limit', 'retention_months', 'env', 'bank_name', 'hotline', 'app_url', 'sign_place'].indexOf(s.key) !== -1;
@@ -1470,9 +1476,12 @@ function transitionIdempotent_(t, item, to, actor, opts) {
   // đúng là đích; không bỏ qua quyền hay biến một chuyển người thành no-op.
   if (item.status !== to || (FLOW_SERVER[item.status] || {})[to]) return false;
   if (opts.expected_version !== undefined && Number(item.version) !== Number(opts.expected_version) + 1) return false;
-  return t.rows('Events').some(function (e) {
+  // Đọc trọn bảng Events ở đây là quét toàn bộ lịch sử chi nhánh cho MỖI lần
+  // bấm nút chuyển trạng thái, trong lúc đang giữ khóa ghi toàn cục. Lần bấm
+  // lặp luôn nằm sát cuối bảng nên chỉ cần quét ngược một đoạn.
+  return t.tailWhere('Events', 1, function (e) {
     return e.item_id === item.item_id && e.type === to && e.by === actor.user_id;
-  });
+  }, { maxScan: 5000 }).rows.length > 0;
 }
 
 function transitionItem(itemId, to, opts) {
@@ -2541,8 +2550,11 @@ function markInboxRead(ids) {
     if (id) wanted[String(id)] = true;
   });
   return DataRepository.tx(function (t) {
+    // Dùng chung một bộ đọc cờ với phần còn lại của hệ thống. So sánh chuỗi
+    // 'true' phân biệt hoa thường, nên một cột nhập từ CSV thành "TRUE" sẽ mãi
+    // được coi là chưa đọc và không bao giờ đánh dấu được.
     var rows = t.rows('Inbox').filter(function (n) {
-      return n.user_id === u.user_id && String(n.is_read) !== 'true' && n.is_read !== true &&
+      return n.user_id === u.user_id && !truthy_(n.is_read) &&
         (markAll || wanted[String(n.id)]);
     });
     rows.forEach(function (n) {

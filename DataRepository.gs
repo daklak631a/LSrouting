@@ -117,6 +117,53 @@ var DataRepository = (function () {
     return out;
   }
 
+  /**
+   * Quét ngược từ dòng cuối theo từng khối, chỉ giữ dòng thỏa `match`.
+   *
+   * `tail_` cắt trước rồi mới lọc, nên khi nhiều người dùng chung một bảng
+   * chỉ-thêm (Inbox, Events), phần đuôi có thể toàn dòng của người khác và
+   * người đang đăng nhập thấy rỗng. Hàm này lọc trong lúc quét nên luôn lấy đủ
+   * `limit` dòng của đúng người, miễn là còn trong tầm `maxScan`.
+   *
+   * Trả về { rows, scanned, exhausted }. `exhausted` là false khi chạm trần
+   * quét — dấu hiệu bảng đã quá dài và cần lưu trữ bớt.
+   */
+  function tailWhere_(name, limit, match, options) {
+    var opts = options || {};
+    var want = limit || 500;
+    var maxScan = opts.maxScan || 20000;
+    var chunk = opts.chunk || 500;
+
+    var s = sheet_(name);
+    var last = s.getLastRow();
+    var cols = s.getLastColumn();
+    if (last <= 1 || cols === 0) return { rows: [], scanned: 0, exhausted: true };
+
+    var headers = s.getRange(1, 1, 1, cols).getValues()[0];
+    var out = [];
+    var scanned = 0;
+    var cursor = last;
+
+    while (cursor > 1 && out.length < want && scanned < maxScan) {
+      var take = Math.min(chunk, cursor - 1, maxScan - scanned);
+      // Khối rỗng hoặc âm sẽ đẩy con trỏ đi lùi và treo vòng lặp. Điều kiện
+      // while ở trên đã bảo đảm take >= 1; chốt thêm ở đây để một lần sửa sau
+      // này không biến hàm đọc dữ liệu thành vòng lặp vô hạn.
+      if (take < 1) break;
+      var start = cursor - take + 1;
+      var values = s.getRange(start, 1, take, cols).getValues();
+      reads += 1;
+      scanned += take;
+      for (var i = values.length - 1; i >= 0 && out.length < want; i--) {
+        var obj = toObject_(headers, values[i]);
+        if (!match || match(obj)) out.push(obj);
+      }
+      cursor = start - 1;
+    }
+
+    return { rows: out, scanned: scanned, exhausted: cursor <= 1 };
+  }
+
   function append_(name, obj) {
     var c = load_(name);
     var row = [];
@@ -169,7 +216,7 @@ var DataRepository = (function () {
     try {
       return fn({
         append: append_, find: findRow_, write: write_,
-        rows: rowsToObjects_, tail: tail_, invalidate: invalidate_
+        rows: rowsToObjects_, tail: tail_, tailWhere: tailWhere_, invalidate: invalidate_
       });
     } finally {
       lock.releaseLock();
@@ -179,6 +226,7 @@ var DataRepository = (function () {
   return {
     getAll: rowsToObjects_,
     tail: tail_,
+    tailWhere: tailWhere_,
     find: function (name, keyCol, keyVal) {
       var f = findRow_(name, keyCol, keyVal);
       return f ? f.object : null;

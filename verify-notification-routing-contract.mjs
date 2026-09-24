@@ -140,7 +140,10 @@ for (const [source, needle, message] of must) if (!source.includes(needle)) fail
 if (server.includes("if (u.role === 'ADMIN') {\n    result.outbox") ) {
   fail('Hàng đợi gửi tin không được chỉ dành cho quản trị.');
 }
-if (!/outbox: u\.role === 'ADMIN' \? \[\] : DataRepository\.tail\('NotificationOutbox'/.test(server)) {
+// `tailWhere` lọc ngay trong lúc quét ngược. Bản cũ dùng `tail` rồi mới lọc,
+// nên phần đuôi có thể toàn việc của người khác và cán bộ không thấy tin nào
+// của mình — kể cả tin đang chờ chính họ xác nhận.
+if (!/outbox: u\.role === 'ADMIN' \? \[\] : DataRepository\.tailWhere\('NotificationOutbox'/.test(server)) {
   fail('Bootstrap phải trả hàng đợi cho cán bộ theo phạm vi việc họ nhìn thấy.');
 }
 if (!/out\.templates = \[\];/.test(gasApi) || !/out\.notifyRules = \[\];/.test(gasApi)) {

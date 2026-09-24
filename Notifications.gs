@@ -480,8 +480,13 @@ var Notifications = (function () {
       var now = new Date();
       var nowIso = now.toISOString();
       var claimUntil = new Date(now.getTime() + CLAIM_MINUTES * 60000).toISOString();
+      // Hạn mức mỗi giờ chỉ cần biết số tin đã gửi trong 60 phút gần nhất. Đọc
+      // trọn bảng metrics là quét toàn bộ lịch sử gửi tin, cứ 5 phút một lần,
+      // trong lúc đang giữ khóa ghi toàn cục — mọi thao tác của người dùng đều
+      // phải chờ. Worker gửi tối đa 20 tin mỗi 5 phút, tức 240 tin mỗi giờ, nên
+      // 2.000 dòng cuối đã phủ khoảng tám giờ ở công suất cao nhất.
       var sentCount = {};
-      t.rows('NotificationMetrics').forEach(function (metric) {
+      t.tail('NotificationMetrics', 2000).forEach(function (metric) {
         if (metric.status !== 'SENT' || !metric.sent_at) return;
         var sentAt = new Date(metric.sent_at).getTime();
         if (isFinite(sentAt) && sentAt <= now.getTime() && now.getTime() - sentAt < 60 * 60 * 1000) {
@@ -740,20 +745,53 @@ var Notifications = (function () {
     return outbox.outbox_id;
   }
 
-  /** Gọi một lần để cài trigger worker. Trigger chạy dưới tài khoản người tạo. */
+  /**
+   * Ba trigger nền của bộ máy gửi tin.
+   *
+   * `reconcileTick` có mặt ở đây vì `reconcile()` từng được viết xong nhưng
+   * không trigger nào gọi: tin ghi DA_GUI mà thiếu mã nhà cung cấp, và tin kẹt
+   * ở DANG_GUI quá hạn giữ chỗ, sẽ nằm im vĩnh viễn và vẫn được tính là đã gửi
+   * ở màn chi phí.
+   */
+  var WORKER_TRIGGERS = {
+    outboxTick: function () { return ScriptApp.newTrigger('outboxTick').timeBased().everyMinutes(5); },
+    overdueTick: function () { return ScriptApp.newTrigger('overdueTick').timeBased().everyHours(1); },
+    reconcileTick: function () { return ScriptApp.newTrigger('reconcileTick').timeBased().everyHours(6); }
+  };
+
+  /**
+   * Bổ sung trigger còn thiếu mà không đụng tới trigger đang chạy.
+   *
+   * `installWorker()` xóa rồi tạo lại nên không gọi được ở mỗi lần mở màn hình.
+   * Kho đã migration xong thì không chạy lại setup, nên nếu chỉ dựa vào
+   * `installWorker()` thì mọi trigger thêm về sau sẽ không bao giờ tới được các
+   * bản đã triển khai.
+   */
+  function ensureWorkerTriggers() {
+    var have = {};
+    ScriptApp.getProjectTriggers().forEach(function (tr) { have[tr.getHandlerFunction()] = true; });
+    var added = [];
+    Object.keys(WORKER_TRIGGERS).forEach(function (fn) {
+      if (have[fn]) return;
+      WORKER_TRIGGERS[fn]().create();
+      added.push(fn);
+    });
+    return added;
+  }
+
+  /** Gọi một lần để cài lại toàn bộ trigger worker. Trigger chạy dưới tài khoản người tạo. */
   function installWorker() {
     ScriptApp.getProjectTriggers().forEach(function (tr) {
-      var fn = tr.getHandlerFunction();
-      if (fn === 'outboxTick' || fn === 'overdueTick') ScriptApp.deleteTrigger(tr);
+      if (WORKER_TRIGGERS[tr.getHandlerFunction()]) ScriptApp.deleteTrigger(tr);
     });
-    ScriptApp.newTrigger('outboxTick').timeBased().everyMinutes(5).create();
-    ScriptApp.newTrigger('overdueTick').timeBased().everyHours(1).create();
+    return ensureWorkerTriggers();
   }
 
   return {
     queue: queue, queueTest: queueTest, runOutbox: runOutbox, reconcile: reconcile,
     sweepOverdue: sweepOverdue, addressFor: addressFor_,
-    installWorker: installWorker, blocker: blocker_, recordMetricStatus: function (t, outbox, status) {
+    installWorker: installWorker, ensureWorkerTriggers: ensureWorkerTriggers,
+    blocker: blocker_, recordMetricStatus: function (t, outbox, status) {
       recordMetric_(t, outbox, status, outbox.provider_msg_id || '');
     }
   };
@@ -767,6 +805,11 @@ function outboxTick() {
 function overdueTick() {
   var r = Notifications.sweepOverdue();
   Logger.log('Quá hạn: ' + r.late + ' việc, xếp ' + r.queued + ' tin.');
+}
+
+function reconcileTick() {
+  var r = Notifications.reconcile();
+  Logger.log('Đối soát: đánh dấu lại ' + r.flagged + ' tin nghi ngờ.');
 }
 
 function installOutboxWorker() { Notifications.installWorker(); }
