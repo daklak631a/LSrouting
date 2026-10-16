@@ -1,0 +1,701 @@
+{
+ "mobile-01-viec-cua-toi": {
+  "caption": "Việc của tôi trên điện thoại",
+  "legend": [],
+  "alt": "Việc của tôi trên điện thoại"
+ },
+ "mobile-02-dashboard": {
+  "caption": "Dashboard cá nhân trên điện thoại",
+  "legend": [],
+  "alt": "Dashboard cá nhân trên điện thoại"
+ },
+ "mobile-03-chi-tiet": {
+  "caption": "Chi tiết hồ sơ trên điện thoại",
+  "legend": [],
+  "alt": "Chi tiết hồ sơ trên điện thoại"
+ },
+ "00-man-hinh-dang-nhap": {
+  "caption": "Màn hình đăng nhập",
+  "legend": [
+   "Ô Mã cán bộ / user",
+   "Danh sách tài khoản thử nghiệm (chỉ có ở bản thử nghiệm)"
+  ],
+  "alt": "Màn hình đăng nhập"
+ },
+ "pgd-01-man-hinh-chinh": {
+  "caption": "Màn hình chính của Phòng/PGD",
+  "legend": [
+   "Nút Tạo việc mới",
+   "Danh sách hồ sơ đã gửi LS",
+   "Bút chì: sửa nhanh ngay trên dòng"
+  ],
+  "alt": "Màn hình chính của Phòng/PGD"
+ },
+ "pgd-04a-tsbd-moi": {
+  "caption": "Việc có TSBĐ mới: số HĐ thế chấp cần soạn",
+  "legend": [
+   "Tình trạng TSBĐ: TSBĐ mới",
+   "Số HĐ thế chấp cần soạn",
+   "Chọn nhanh theo thứ"
+  ],
+  "alt": "Việc có TSBĐ mới: số HĐ thế chấp cần soạn"
+ },
+ "pgd-03-thong-tin-khach": {
+  "caption": "Nhập thông tin khách hàng",
+  "legend": [
+   "Tên khách hàng (bắt buộc)",
+   "Điện thoại (và Email, CIF ở các ô bên cạnh)",
+   "Mức ưu tiên"
+  ],
+  "alt": "Nhập thông tin khách hàng"
+ },
+ "pgd-04-chon-viec": {
+  "caption": "Chọn việc và gửi sang LS",
+  "legend": [
+   "Loại việc",
+   "Sản phẩm",
+   "Tình trạng TSBĐ",
+   "Ngày phát sinh",
+   "Chọn nhanh theo thứ",
+   "Gửi sang LS"
+  ],
+  "alt": "Chọn việc và gửi sang LS"
+ },
+ "pgd-05-sau-khi-gui": {
+  "caption": "Hồ sơ vừa gửi ở trạng thái Chờ phân công",
+  "legend": [
+   "Hồ sơ mới gửi"
+  ],
+  "alt": "Hồ sơ vừa gửi ở trạng thái Chờ phân công"
+ },
+ "pgd-06-chi-tiet-ho-so": {
+  "caption": "Chi tiết hồ sơ",
+  "legend": [
+   "Giờ Phòng/PGD gửi hồ sơ (do hệ thống ghi)"
+  ],
+  "alt": "Chi tiết hồ sơ"
+ },
+ "pgd-08-huy-viec": {
+  "caption": "Hủy việc",
+  "legend": [
+   "Lý do",
+   "Diễn giải thêm",
+   "Hủy việc"
+  ],
+  "alt": "Hủy việc"
+ },
+ "ks-01-hang-cho": {
+  "caption": "Hàng chờ của Kiểm soát LS",
+  "legend": [
+   "Nút Phân công nhanh",
+   "Hồ sơ Phòng/PGD vừa gửi",
+   "Nút Phân công"
+  ],
+  "alt": "Hàng chờ của Kiểm soát LS"
+ },
+ "ks-08-dang-ky-ho-phong": {
+  "caption": "Đăng ký hộ phòng",
+  "legend": [
+   "Chọn Phòng / PGD gửi hồ sơ"
+  ],
+  "alt": "Đăng ký hộ phòng"
+ },
+ "ks-09-quy-tac-phan-cong": {
+  "caption": "Cấu hình Phân công nhanh trong Hàng chờ",
+  "legend": [
+   "Thêm quy tắc"
+  ],
+  "alt": "Cấu hình Phân công nhanh trong Hàng chờ"
+ },
+ "ks-09a-them-quy-tac": {
+  "caption": "Thêm quy tắc phân công",
+  "legend": [
+   "Phòng / PGD",
+   "Cán bộ LS phụ trách",
+   "Hồ sơ cầm cố tick sẵn",
+   "Tick thêm sản phẩm hoặc cả nhóm",
+   "Lưu quy tắc"
+  ],
+  "alt": "Thêm quy tắc phân công"
+ },
+ "ks-09b-quy-tac-da-luu": {
+  "caption": "Quy tắc đã lưu",
+  "legend": [
+   "Bảng quy tắc"
+  ],
+  "alt": "Quy tắc đã lưu"
+ },
+ "ks-02-hop-thoai-phan-cong": {
+  "caption": "Hộp thoại phân công",
+  "legend": [
+   "Bảng cán bộ: tích chọn người phụ trách",
+   "Ưu tiên xử lý",
+   "Phân công cán bộ LS"
+  ],
+  "alt": "Hộp thoại phân công"
+ },
+ "ks-03-phan-cong-hang-loat": {
+  "caption": "Phân công nhiều hồ sơ cùng lúc",
+  "legend": [
+   "Tích chọn các hồ sơ",
+   "Thanh phân công hàng loạt"
+  ],
+  "alt": "Phân công nhiều hồ sơ cùng lúc"
+ },
+ "ks-04-chi-tiet-tra-bo-sung": {
+  "caption": "Nút Trả Phòng/PGD bổ sung trong chi tiết hồ sơ",
+  "legend": [
+   "Trả Phòng/PGD bổ sung"
+  ],
+  "alt": "Nút Trả Phòng/PGD bổ sung trong chi tiết hồ sơ"
+ },
+ "ks-05-ly-do-bo-sung": {
+  "caption": "Chọn lý do trả bổ sung",
+  "legend": [
+   "Lý do",
+   "Xác nhận trả về"
+  ],
+  "alt": "Chọn lý do trả bổ sung"
+ },
+ "ks-06-hang-cho-con-lai": {
+  "caption": "Hồ sơ Chưa giao hồ sơ trong Hàng chờ",
+  "legend": [
+   "Các nút lọc theo phòng",
+   "Hồ sơ còn lại trong Hàng chờ"
+  ],
+  "alt": "Hồ sơ Chưa giao hồ sơ trong Hàng chờ"
+ },
+ "ks-03b-phan-cong-nhanh": {
+  "caption": "Phân công nhanh theo quy tắc",
+  "legend": [
+   "Số hồ sơ khớp quy tắc",
+   "Hồ sơ được tick sẵn",
+   "Giao các hồ sơ đã chọn"
+  ],
+  "alt": "Phân công nhanh theo quy tắc"
+ },
+ "pgd-07-can-bo-sung": {
+  "caption": "Hồ sơ Chưa giao hồ sơ",
+  "legend": [
+   "Hồ sơ Chưa giao hồ sơ",
+   "Nút Gửi lại"
+  ],
+  "alt": "Hồ sơ Chưa giao hồ sơ"
+ },
+ "pgd-07a-chi-tiet-can-bo-sung": {
+  "caption": "Chi tiết hồ sơ Chưa giao hồ sơ",
+  "legend": [
+   "Sửa thông tin",
+   "Gửi lại LS"
+  ],
+  "alt": "Chi tiết hồ sơ Chưa giao hồ sơ"
+ },
+ "pgd-07b-gui-lai-ls": {
+  "caption": "Chọn ngày và gửi lại",
+  "legend": [
+   "Ngày KH đề nghị gửi lại",
+   "Gửi lại LS"
+  ],
+  "alt": "Chọn ngày và gửi lại"
+ },
+ "pgd-12-hen-bo-sung-nut": {
+  "caption": "Nút Hẹn bổ sung trong chi tiết hồ sơ",
+  "legend": [
+   "Hẹn bổ sung (không bắt buộc)"
+  ],
+  "alt": "Nút Hẹn bổ sung trong chi tiết hồ sơ"
+ },
+ "pgd-12a-hen-bo-sung": {
+  "caption": "Hẹn bổ sung",
+  "legend": [
+   "Ngày giờ hẹn",
+   "Ghi chú (không bắt buộc)",
+   "Lưu hẹn bổ sung"
+  ],
+  "alt": "Hẹn bổ sung"
+ },
+ "pgd-08a-de-nghi-sua": {
+  "caption": "Gửi đề nghị sửa việc đã giao LS",
+  "legend": [
+   "Thay đổi cần Kiểm soát duyệt",
+   "Lý do sửa",
+   "Gửi đề nghị sửa"
+  ],
+  "alt": "Gửi đề nghị sửa việc đã giao LS"
+ },
+ "pgd-08b-doi-ngay-phat-sinh": {
+  "caption": "Đổi ngày phát sinh khi khách dời lịch",
+  "legend": [
+   "Ngày phát sinh mới",
+   "Lý do sửa",
+   "Gửi đề nghị sửa"
+  ],
+  "alt": "Đổi ngày phát sinh khi khách dời lịch"
+ },
+ "pgd-09-toan-bo-phong": {
+  "caption": "Toàn bộ hồ sơ của phòng",
+  "legend": [],
+  "alt": "Toàn bộ hồ sơ của phòng"
+ },
+ "pgd-10-dashboard-phong": {
+  "caption": "Dashboard phòng",
+  "legend": [],
+  "alt": "Dashboard phòng"
+ },
+ "pgd-11a-nhat-ky-chua-xem": {
+  "caption": "Nhật ký: bấm Xem nhật ký mới tải",
+  "legend": [
+   "Xem nhật ký"
+  ],
+  "alt": "Nhật ký: bấm Xem nhật ký mới tải"
+ },
+ "pgd-11-nhat-ky": {
+  "caption": "Nhật ký của phòng",
+  "legend": [],
+  "alt": "Nhật ký của phòng"
+ },
+ "ks-13-de-nghi-sua-cho-duyet": {
+  "caption": "Đề nghị sửa chờ duyệt ở đầu Hàng chờ",
+  "legend": [
+   "Duyệt",
+   "Từ chối"
+  ],
+  "alt": "Đề nghị sửa chờ duyệt ở đầu Hàng chờ"
+ },
+ "ls-01-dashboard-ca-nhan": {
+  "caption": "Dashboard cá nhân đầu ngày",
+  "legend": [
+   "Ghi việc khác",
+   "Tạm dừng toàn bộ",
+   "Việc tồn: hôm nay và các ngày trước",
+   "Tiếp nhận tất cả"
+  ],
+  "alt": "Dashboard cá nhân đầu ngày"
+ },
+ "ls-01a-viec-ton-chi-tiet": {
+  "caption": "Việc tồn theo nhóm công việc",
+  "legend": [
+   "Số hồ sơ còn lại theo phần việc",
+   "Chi tiết việc (bấm để mở)"
+  ],
+  "alt": "Việc tồn theo nhóm công việc"
+ },
+ "ls-02-tiep-nhan-tat-ca": {
+  "caption": "Xác nhận Tiếp nhận tất cả",
+  "legend": [
+   "Tiếp nhận các hồ sơ đã giao"
+  ],
+  "alt": "Xác nhận Tiếp nhận tất cả"
+ },
+ "ls-03-viec-cua-toi": {
+  "caption": "Việc của tôi",
+  "legend": [
+   "Các tab theo tiến độ làm việc",
+   "Hồ sơ đang làm (hồ sơ đầu tiên được làm ngay)"
+  ],
+  "alt": "Việc của tôi"
+ },
+ "ls-04-lam-ngay": {
+  "caption": "Làm ngay một hồ sơ khác: hồ sơ cũ sang Chờ làm tiếp",
+  "legend": [
+   "Hồ sơ vừa bấm Làm ngay (Đang làm)",
+   "Hồ sơ trước đó chuyển sang Chờ làm tiếp"
+  ],
+  "alt": "Làm ngay một hồ sơ khác: hồ sơ cũ sang Chờ làm tiếp"
+ },
+ "ls-05-chi-tiet-da-tiep-nhan": {
+  "caption": "Chi tiết hồ sơ sau khi tiếp nhận",
+  "legend": [
+   "Giờ LS tiếp nhận hồ sơ",
+   "Xong HĐTD: ghi nhận đã soạn xong hợp đồng tín dụng",
+   "Lịch hẹn bổ sung của Phòng/PGD (nếu có)"
+  ],
+  "alt": "Chi tiết hồ sơ sau khi tiếp nhận"
+ },
+ "ls-06-hen-khach-ky": {
+  "caption": "Hẹn khách ký hồ sơ",
+  "legend": [
+   "Ngày ký",
+   "Giờ ký",
+   "Kênh báo khách",
+   "Hẹn khách ký hồ sơ"
+  ],
+  "alt": "Hẹn khách ký hồ sơ"
+ },
+ "ls-07-dang-hen-khach": {
+  "caption": "Hồ sơ Đang hẹn khách ký",
+  "legend": [
+   "Trạng thái Đang hẹn khách ký",
+   "Nút Hoàn thành"
+  ],
+  "alt": "Hồ sơ Đang hẹn khách ký"
+ },
+ "ls-08-hoan-thanh": {
+  "caption": "Hoàn thành hồ sơ",
+  "legend": [
+   "Ghi chú kết quả",
+   "Kết quả ghi nhận vào bảng ngày",
+   "Cách thông báo",
+   "Hoàn thành"
+  ],
+  "alt": "Hoàn thành hồ sơ"
+ },
+ "ls-05a-phan-viec-tsdb": {
+  "caption": "Phần việc phải tick của việc TSĐB",
+  "legend": [
+   "Phần việc phải tick: soạn HĐ thế chấp, nhập kho"
+  ],
+  "alt": "Phần việc phải tick của việc TSĐB"
+ },
+ "ls-08a-hoan-thanh-tsdb": {
+  "caption": "Hoàn thành việc TSĐB",
+  "legend": [
+   "Hoàn thành"
+  ],
+  "alt": "Hoàn thành việc TSĐB"
+ },
+ "ls-11-xac-nhan-tam-dung": {
+  "caption": "Xác nhận Tạm dừng",
+  "legend": [
+   "Tạm dừng"
+  ],
+  "alt": "Xác nhận Tạm dừng"
+ },
+ "ls-12c-ghi-viec-khac": {
+  "caption": "Ghi việc khác",
+  "legend": [
+   "Bảng việc khác: mỗi dòng một ô số lượng",
+   "Ghi nhận"
+  ],
+  "alt": "Ghi việc khác"
+ },
+ "ls-12-tam-dung-toan-bo": {
+  "caption": "Tạm dừng toàn bộ",
+  "legend": [
+   "Tạm dừng để làm (chọn công việc)",
+   "Bắt đầu tạm dừng"
+  ],
+  "alt": "Tạm dừng toàn bộ"
+ },
+ "ls-12a-dang-tam-dung": {
+  "caption": "Đang tạm dừng toàn bộ",
+  "legend": [
+   "Kết thúc tạm dừng"
+  ],
+  "alt": "Đang tạm dừng toàn bộ"
+ },
+ "ls-12b-ket-thuc-tam-dung": {
+  "caption": "Kết thúc tạm dừng: ghi việc đã làm trong lượt",
+  "legend": [
+   "Bảng việc khác của lượt tạm dừng",
+   "Kết thúc tạm dừng"
+  ],
+  "alt": "Kết thúc tạm dừng: ghi việc đã làm trong lượt"
+ },
+ "ls-01b-dashboard-cuoi-ngay": {
+  "caption": "Dashboard cá nhân cuối ngày",
+  "legend": [
+   "Việc tồn còn lại",
+   "Kết quả thực hiện của riêng bạn"
+  ],
+  "alt": "Dashboard cá nhân cuối ngày"
+ },
+ "ls-01f-viec-ton-cuoi-ngay": {
+  "caption": "Việc tồn cuối ngày: từng hồ sơ còn phần việc nào",
+  "legend": [
+   "Số hồ sơ còn lại theo phần việc",
+   "Phần việc còn tồn của hồ sơ",
+   "Thao tác ngay trên dòng"
+  ],
+  "alt": "Việc tồn cuối ngày: từng hồ sơ còn phần việc nào"
+ },
+ "ls-01c-ket-qua-thuc-hien": {
+  "caption": "Kết quả thực hiện và tồn soạn đang mở của riêng bạn",
+  "legend": [
+   "Chọn ngày xem",
+   "Mũi tên bung các việc khác"
+  ],
+  "alt": "Kết quả thực hiện và tồn soạn đang mở của riêng bạn"
+ },
+ "ls-01d-khac-bung": {
+  "caption": "Dòng Khác bung ra từng loại việc",
+  "legend": [
+   "Chi tiết việc khác theo loại"
+  ],
+  "alt": "Dòng Khác bung ra từng loại việc"
+ },
+ "ls-14-phan-giao-phong": {
+  "caption": "Phân giao toàn phòng",
+  "legend": [],
+  "alt": "Phân giao toàn phòng"
+ },
+ "ls-13-thoi-gian-sla": {
+  "caption": "Thời gian của tôi",
+  "legend": [
+   "Xem báo cáo"
+  ],
+  "alt": "Thời gian của tôi"
+ },
+ "ls-15a-nhat-ky-chua-xem": {
+  "caption": "Nhật ký: bấm Xem nhật ký mới tải",
+  "legend": [
+   "Xem nhật ký"
+  ],
+  "alt": "Nhật ký: bấm Xem nhật ký mới tải"
+ },
+ "ls-15-nhat-ky": {
+  "caption": "Nhật ký của cán bộ",
+  "legend": [],
+  "alt": "Nhật ký của cán bộ"
+ },
+ "ls-17-phim-tat": {
+  "caption": "Phím tắt",
+  "legend": [],
+  "alt": "Phím tắt"
+ },
+ "ls-16-khai-bao-nghi-phep": {
+  "caption": "Khai báo nghỉ phép",
+  "legend": [
+   "Nghỉ từ / Nghỉ đến",
+   "Lưu lịch nghỉ"
+  ],
+  "alt": "Khai báo nghỉ phép"
+ },
+ "ks-07-quan-ly-ho-so": {
+  "caption": "Quản lý hồ sơ",
+  "legend": [
+   "Các tab theo tiến độ",
+   "Các nút lọc theo phòng",
+   "Danh sách hồ sơ đã giao"
+  ],
+  "alt": "Quản lý hồ sơ"
+ },
+ "ks-07a-theo-phong": {
+  "caption": "Xem hồ sơ của một phòng",
+  "legend": [
+   "Phòng đang xem",
+   "Tiêu đề nêu tên phòng"
+  ],
+  "alt": "Xem hồ sơ của một phòng"
+ },
+ "ks-07b-dang-xu-ly": {
+  "caption": "Tab Đang xử lý với nút Đổi người",
+  "legend": [
+   "Tab Đang xử lý",
+   "Danh sách hồ sơ đang xử lý"
+  ],
+  "alt": "Tab Đang xử lý với nút Đổi người"
+ },
+ "ks-14-ket-qua-ke-hoach": {
+  "caption": "Kết quả & kế hoạch",
+  "legend": [
+   "Các tab góc nhìn",
+   "Nút Giao kế hoạch",
+   "Nghỉ phép cán bộ"
+  ],
+  "alt": "Kết quả & kế hoạch"
+ },
+ "ks-14c-viec-cua-can-bo": {
+  "caption": "Việc đang mở của một cán bộ",
+  "legend": [
+   "Hồ sơ, phần việc và tiến độ của cán bộ"
+  ],
+  "alt": "Việc đang mở của một cán bộ"
+ },
+ "ks-14d-nghi-phep-can-bo": {
+  "caption": "Nghỉ phép cán bộ",
+  "legend": [
+   "Danh sách cán bộ và khoảng nghỉ đã cài",
+   "Cài lịch nghỉ"
+  ],
+  "alt": "Nghỉ phép cán bộ"
+ },
+ "ks-14a-giao-ke-hoach": {
+  "caption": "Giao kế hoạch",
+  "legend": [
+   "Kế hoạch ngày của từng dòng",
+   "Chỉ tiêu hoàn thành tháng",
+   "Lưu kế hoạch"
+  ],
+  "alt": "Giao kế hoạch"
+ },
+ "ks-14b-ke-hoach-va-ket-qua": {
+  "caption": "Kế hoạch và % hoàn thành",
+  "legend": [
+   "Cột Kế hoạch ngày và % hoàn thành",
+   "Ẩn / hiện kế hoạch"
+  ],
+  "alt": "Kế hoạch và % hoàn thành"
+ },
+ "ks-11-bao-cao": {
+  "caption": "Báo cáo nhiều kỳ",
+  "legend": [
+   "Các loại báo cáo",
+   "Chạy báo cáo"
+  ],
+  "alt": "Báo cáo nhiều kỳ"
+ },
+ "ks-10-thoi-gian-sla": {
+  "caption": "Thời gian & SLA",
+  "legend": [
+   "Các loại báo cáo",
+   "Xem báo cáo"
+  ],
+  "alt": "Thời gian & SLA"
+ },
+ "ks-12-ky-thang": {
+  "caption": "Kế hoạch tháng",
+  "legend": [
+   "Các loại báo cáo"
+  ],
+  "alt": "Kế hoạch tháng"
+ },
+ "ql-01-tong-hop": {
+  "caption": "Kết quả & kế hoạch",
+  "legend": [
+   "Các tab góc nhìn",
+   "Nút Giao kế hoạch"
+  ],
+  "alt": "Kết quả & kế hoạch"
+ },
+ "ql-02-theo-can-bo": {
+  "caption": "Kết quả theo cán bộ",
+  "legend": [
+   "Tab Theo cán bộ"
+  ],
+  "alt": "Kết quả theo cán bộ"
+ },
+ "ql-03-dang-xu-ly-doi-nguoi": {
+  "caption": "Nút Đổi người",
+  "legend": [
+   "Đổi người"
+  ],
+  "alt": "Nút Đổi người"
+ },
+ "ql-04-doi-nguoi": {
+  "caption": "Chuyển người khác",
+  "legend": [
+   "Bảng cán bộ: tích chọn người mới",
+   "Lý do (bắt buộc)",
+   "Chuyển người khác"
+  ],
+  "alt": "Chuyển người khác"
+ },
+ "ql-07-chi-tiet-hoan-thanh": {
+  "caption": "Chi tiết hồ sơ đã hoàn thành",
+  "legend": [
+   "Kết quả ghi nhận",
+   "Sửa ghi nhận kết quả"
+  ],
+  "alt": "Chi tiết hồ sơ đã hoàn thành"
+ },
+ "adm-01-tong-quan": {
+  "caption": "Tổng quan quản trị",
+  "legend": [
+   "Menu Người dùng"
+  ],
+  "alt": "Tổng quan quản trị"
+ },
+ "adm-02-nguoi-dung": {
+  "caption": "Danh sách người dùng",
+  "legend": [],
+  "alt": "Danh sách người dùng"
+ },
+ "adm-03-sua-nguoi-dung": {
+  "caption": "Sửa người dùng",
+  "legend": [],
+  "alt": "Sửa người dùng"
+ },
+ "adm-04-loai-viec": {
+  "caption": "Danh mục loại việc",
+  "legend": [],
+  "alt": "Danh mục loại việc"
+ },
+ "adm-05-sua-loai-viec": {
+  "caption": "Sửa loại việc",
+  "legend": [
+   "Cần hẹn khách ký hồ sơ",
+   "SLA (giờ làm việc)"
+  ],
+  "alt": "Sửa loại việc"
+ },
+ "adm-06-kenh-gui-tin": {
+  "caption": "Kênh gửi tin",
+  "legend": [],
+  "alt": "Kênh gửi tin"
+ },
+ "adm-07-quy-tac-thong-bao": {
+  "caption": "Quy tắc thông báo",
+  "legend": [],
+  "alt": "Quy tắc thông báo"
+ },
+ "adm-08-lich-lam-viec": {
+  "caption": "Lịch làm việc",
+  "legend": [],
+  "alt": "Lịch làm việc"
+ },
+ "adm-09-cau-hinh-chung": {
+  "caption": "Cấu hình chung",
+  "legend": [],
+  "alt": "Cấu hình chung"
+ },
+ "adm-10-phan-cong-nhanh": {
+  "caption": "Phân công nhanh",
+  "legend": [],
+  "alt": "Phân công nhanh"
+ },
+ "adm-11-thong-bao-phien-ban": {
+  "caption": "Thông báo phiên bản",
+  "legend": [],
+  "alt": "Thông báo phiên bản"
+ },
+ "adm-12-nhat-ky-cau-hinh": {
+  "caption": "Nhật ký cấu hình",
+  "legend": [],
+  "alt": "Nhật ký cấu hình"
+ },
+ "gs-01-tong-hop": {
+  "caption": "Tổng hợp của Giám sát",
+  "legend": [],
+  "alt": "Tổng hợp của Giám sát"
+ },
+ "gs-02-thoi-gian-sla": {
+  "caption": "Thời gian & SLA",
+  "legend": [
+   "Xem báo cáo"
+  ],
+  "alt": "Thời gian & SLA"
+ },
+ "gs-03-bao-cao": {
+  "caption": "Báo cáo",
+  "legend": [
+   "Chạy báo cáo"
+  ],
+  "alt": "Báo cáo"
+ },
+ "luong-xu-ly": {
+  "caption": "Luồng xử lý hồ sơ từ Phòng/PGD đến khi hoàn thành",
+  "legend": [],
+  "alt": "Năm bước: Tạo việc, Phân công, Tiếp nhận hồ sơ, Hẹn khách ký, Hoàn thành"
+ },
+ "hinh-1-lich-ngay": {
+  "caption": "Lịch làm việc chuẩn trong ngày: hai buổi, nghỉ trưa không tính giờ",
+  "legend": [],
+  "alt": "Lịch ngày 07:30–11:30 và 13:30–18:00"
+ },
+ "hinh-2-ngay-mau": {
+  "caption": "Một ngày mẫu: đồng hồ chỉ chạy khi hồ sơ Đang làm",
+  "legend": [],
+  "alt": "Ngày mẫu minh họa các phiên làm việc"
+ },
+ "hinh-3-han-sla": {
+  "caption": "Hạn SLA lùi theo thời gian tạm dừng, hẹn ký và chưa giao hồ sơ",
+  "legend": [],
+  "alt": "Hạn SLA bị đẩy lùi khi dừng"
+ },
+ "hinh-4-vong-doi-ton": {
+  "caption": "Ví dụ: một hồ sơ vay và việc TSĐB mới đi kèm qua các thẻ của Việc tồn",
+  "legend": [],
+  "alt": "Năm bước từ được giao đến hoàn thành; các thẻ HĐTD, HĐTC, Kho TSĐB, RLOS lần lượt hết tồn"
+ }
+}

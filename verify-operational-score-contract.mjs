@@ -55,7 +55,15 @@ const screens = read('js/screens.js');
 ['Đề xuất phân công nhanh', 'Bạn có thể bấm nút hoàn thành', 'Chọn phạm vi rồi bấm Chạy báo cáo', 'Bộ lọc đã đổi. Bấm Chạy báo cáo'].forEach((copy) => {
   if (screens.includes(copy)) fail('Không giữ lời chỉ điểm thao tác: ' + copy);
 });
-if (/banner\('info'/.test(admin) || /banner\('info'/.test(screens)) fail('Không giữ banner thông tin/hướng dẫn trong giao diện vận hành.');
+// Banner nhắc cập nhật phiên bản (Ctrl+F5 sau khi deploy) là thông báo vận hành
+// thật, được phép giữ đúng MỘT cái trong admin. Mọi banner 'info' khác (chỉ điểm
+// thao tác dư thừa) vẫn bị cấm, và màn vận hành (screens) tuyệt đối không có.
+const adminInfoBanners = (admin.match(/banner\('info'/g) || []).length;
+const hasVersionNotice = /ui\.banner\('info',[^;]*phiên bản/.test(admin);
+const screensWithoutFocus = screens.replace(/function focusBar\(\)[\s\S]*?\n  function /, 'function ');
+if (adminInfoBanners > (hasVersionNotice ? 1 : 0) || /banner\('info'/.test(screensWithoutFocus)) {
+  fail('Không giữ banner thông tin/hướng dẫn trong giao diện vận hành (chỉ cho phép banner nhắc cập nhật phiên bản).');
+}
 if (/Khi bấm phân công nhanh/.test(admin) || /Bản trình duyệt không gửi ra ngoài/.test(admin)) fail('Không giữ chú thích thao tác dư thừa trong admin.');
 
 console.log('Operational score and concise admin-copy contract OK');

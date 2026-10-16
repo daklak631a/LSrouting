@@ -1,0 +1,21 @@
+{
+  "name": "ls-routing-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Gateway gửi tin cho LS-Routing: nhận yêu cầu từ Apps Script, gọi Zalo ZNS / SMS / Telegram.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "optionalDependencies": {
+    "@google-cloud/firestore": "^7.10.0"
+  }
+}

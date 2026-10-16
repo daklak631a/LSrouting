@@ -1,0 +1,34 @@
+LS-ROUTING - CẬP NHẬT MỚI NHẤT (đến 07/10/2026, phiên bản 117)
+Đường dẫn ứng dụng giữ nguyên, không cần cài lại.
+
+ĐĂNG KÝ VIỆC MỚI
+- Biểu mẫu được căn chỉnh lại; nút xóa nằm ở đầu mỗi dòng việc.
+- Chọn TSBĐ mới thì số HĐ thế chấp mặc định là 1. TSBĐ có sẵn hoặc Không có TSBĐ thì không yêu cầu số HĐ thế chấp mới.
+- Chọn Không có TSBĐ thì hệ thống chỉ tính HĐ tín dụng, kể cả khi tên sản phẩm có chữ TSBĐ.
+
+CHUNG
+- Mọi thời lượng hiển thị bằng phút (ví dụ 135 phút). Chưa đo được thì hiện "—".
+- Nhật ký chỉ tải khi mở: 100 dòng mỗi trang, bấm "Xem thêm" để xem tiếp.
+- Bỏ các dòng hướng dẫn dài trên màn hình, chỉ giữ nhãn và số liệu.
+
+PHÒNG / PGD
+- Tạo việc: Ngày phát sinh mặc định là hôm nay. Có thể chọn nhanh Thứ 2 đến Thứ 6 của tuần này hoặc tuần sau.
+- Việc tín dụng chọn Tình trạng TSBĐ (có sẵn, không có, mới). TSBĐ mới và việc TSĐB nhập thêm Số HĐ thế chấp cần soạn.
+- "Cần bổ sung" đổi tên thành "Chưa giao hồ sơ". Hồ sơ đã phân công của ngày làm việc liền trước mà LS chưa tiếp nhận được tự trả về Phòng/PGD lúc đầu ngày (khoảng 7h). Người tạo đề nghị chọn ngày rồi bấm Gửi lại.
+- Hủy việc: chọn lý do là hủy ngay, không còn bước chờ duyệt.
+
+KIỂM SOÁT / QUẢN LÝ LS
+- Hộp thoại phân công hiện thêm "Ngày KH đề nghị".
+- Bảng Kết quả thực hiện thêm 2 dòng Nhập kho TSĐB và Xuất kho TSĐB (tính theo ngày cán bộ tick). Giao kế hoạch được cho cả 2 dòng này.
+- Hồ sơ tồn chỉ tính sau khi cán bộ LS đã tiếp nhận hồ sơ.
+- Hồ sơ hệ thống tự trả (Chưa giao hồ sơ) không còn nằm trong Hàng chờ; xem ở Quản lý hồ sơ.
+- Tiện ích Firefox báo hồ sơ chờ phân công (Firefox 140 trở lên): tải ở đường dẫn ứng dụng thêm ?download=firefox
+
+CÁN BỘ LS
+- Việc của tôi có các tab Đang làm, Chờ bắt đầu, Chờ làm tiếp, Chờ khách / Tạm dừng. Khi tiếp nhận, chọn làm ngay hoặc nhận vào danh sách chờ. Mỗi lúc một hồ sơ Đang làm; hồ sơ khác bấm Làm ngay hoặc Làm tiếp.
+- Nút Tạm dừng toàn bộ khi họp, làm báo cáo, hoàn thiện hồ sơ QTTD/TSBĐ.
+- Việc TSĐB phải tick đủ phần việc trước khi Hoàn thành: soạn xong HĐ thế chấp, nhập kho hoặc xuất kho. Đổi người vẫn giữ phần cán bộ cũ đã tick.
+- Menu mới Phân giao phòng: xem ai đang làm hồ sơ nào. Chỉ xem, không hiện điện thoại hay email khách.
+- Sửa lỗi: hồ sơ có khoảng xử lý bị loại vì trùng giờ nay hiện 0 phút.
+
+Hướng dẫn sử dụng bản 07/10/2026 (Word, HTML, PowerPoint) đã cập nhật theo các mục trên.

@@ -47,7 +47,7 @@ if (!/DA_SOAN_XONG:[\s\S]*HOAN_THANH_LS: \['CAN_BO_LS'\]/.test(server) ||
     throw new Error('Server flow does not allow reassignment from ' + status + '.');
   }
 });
-if (!server.includes('function dueAt_') || !server.includes('fields.due_at = dueAt_(t, ts, slaHours)')) {
+if (!server.includes('function dueAt_') || !server.includes('fields.due_at = LSTiming.deadline(timedItem')) {
   throw new Error('Server does not calculate SLA due dates from the working calendar.');
 }
 if (!server.includes('CatalogOptions')) throw new Error('GAS schema/server must expose source-aligned dropdown catalog.');
@@ -67,9 +67,8 @@ if (!screens.includes("var kind = cif ? 'DA_CO_CIF' : 'KH_MOI'")) {
 if (!server.includes("var requestorId = u.user_id") || !server.includes("var kind = cif ? 'DA_CO_CIF' : 'KH_MOI'")) {
   throw new Error('GAS must derive requestor and customer kind from authenticated data.');
 }
-if (!server.includes("DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS']") ||
-    (!domainSource.includes("label: 'Tiếp nhận'") && !domainSource.includes("label: 'Tiếp nhận và phân công'"))) {
-  throw new Error('Initial intake must open the LS assignment flow directly.');
+if (!server.includes("DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS']") || !domainSource.includes("label: 'Phân công cán bộ LS'")) {
+  throw new Error('A new request must go straight to KS/Quản lý LS for assignment.');
 }
 if (!screens.includes('catalogOptions')) throw new Error('Request screen must use source dropdown catalog.');
 if (!fs.existsSync('js/admin.js') || !read('js/admin.js').includes('catalogOption')) {
@@ -78,13 +77,16 @@ if (!fs.existsSync('js/admin.js') || !read('js/admin.js').includes('catalogOptio
 if (!server.includes('priority_flags_json') || !gasApi.includes('priority_flags_json') || !screens.includes('priority_vip')) {
   throw new Error('Customer priority labels must persist through GAS and the request form.');
 }
-if (!screens.includes('function performanceReport') || !screens.includes("['day', 'Ngày']") || !screens.includes("['range', 'Khoảng ngày']")) {
-  throw new Error('Board must expose day/week/month/year/range performance reporting.');
+const dailyRange = screens.slice(screens.indexOf('function reportRange()'), screens.indexOf('function inRange('));
+const dailyFilters = screens.slice(screens.indexOf('function dailyResultBlock('), screens.indexOf('function periodTarget('));
+if (!screens.includes('function performanceReport') || !dailyRange.includes("period: 'day'") ||
+    !dailyFilters.includes("filterValue('board', 'anchor'") || !dailyFilters.includes("type: 'date'")) {
+  throw new Error('Operational board must report one selected business day with a date selector.');
 }
 if (!screens.includes('assignmentRecommendation') || !read('js/admin.js').includes('ASSIGNMENT_RULE')) {
   throw new Error('Quick assignment must use editable Admin responsibility rules.');
 }
-if (!domainSource.includes("ADMIN: { label: 'Quản trị hệ thống', nav: ['admin', 'board', 'report', 'periods', 'audit'] }")) {
+if (!domainSource.includes("ADMIN: { label: 'Quản trị hệ thống', nav: ['admin', 'board', 'time-report', 'report', 'periods', 'audit'] }")) {
   throw new Error('Admin must be able to open the operational board.');
 }
 if (!screens.includes('queueTabs') || !screens.includes('function paginate') || !screens.includes('function roomBoard')) {

@@ -60,6 +60,19 @@ function inboxRows(n, owners) {
   return Array.from({ length: n }, (_, i) => [`N${i + 1}`, owners[i % owners.length], `t${i + 1}`]);
 }
 
+test('phân trang giữa khối không mất hoặc lặp lịch sử', () => {
+  const { sheet } = makeSheet(HEADERS, inboxRows(35, ['U1', 'U2']));
+  const repo = loadRepo({ Inbox: sheet });
+  const result = []; let cursor;
+  do {
+    const page = repo.tailWhere('Inbox', 3, r => r.user_id === 'U1', { chunk: 10, beforeRow: cursor });
+    result.push(...ids(page.rows)); cursor = page.nextBeforeRow;
+    if (page.exhausted) break;
+    assert.ok(cursor > 1 && cursor <= 36);
+  } while (result.length <= 35);
+  assert.deepEqual(result, Array.from({ length: 18 }, (_, i) => 'N' + (35 - i * 2)));
+});
+
 test('lọc theo người nhận trong lúc quét, không cắt đuôi trước', () => {
   // 1000 thông báo của 20 người: cách cũ (tail 200 rồi lọc) chỉ còn ~10 dòng.
   const owners = Array.from({ length: 20 }, (_, i) => `U${i}`);

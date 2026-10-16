@@ -91,10 +91,10 @@ if (!fs.existsSync('.clasp.json')) {
 }
 
 /* 4. Những file sẽ được đẩy lên */
-const expected = ['appsscript.json', 'Code.gs', 'DataRepository.gs', 'Notifications.gs', 'SetupSheetDB.gs', 'Index.gas.html'];
+const expected = ['appsscript.json', 'Code.gs', 'TimeTracking.gs', 'Planning.gs', 'DataRepository.gs', 'Notifications.gs', 'SetupSheetDB.gs', 'Index.gas.html'];
 const missing = expected.filter((f) => !fs.existsSync(f));
 if (missing.length) { warn('thiếu file: ' + missing.join(', ')); blocking += 1; }
-else ok('đủ 6 file sẽ đẩy lên: ' + expected.join(', '));
+else ok('đủ ' + expected.length + ' file sẽ đẩy lên: ' + expected.join(', '));
 
 /* 5. Bản build phải khớp mã nguồn */
 try {

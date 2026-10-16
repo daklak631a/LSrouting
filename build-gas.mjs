@@ -8,11 +8,34 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
+import vm from 'node:vm';
+import { firefoxPackage } from './build-firefox-extension.mjs';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(dir, p), 'utf8');
 
 let html = read('index.html');
+html = html.replace('</head>', '<script>window.LS_FIREFOX_PACKAGE=' + JSON.stringify({ version: firefoxPackage.version,
+  filename: firefoxPackage.filename, signed: firefoxPackage.signed, payload: firefoxPackage.bytes.toString('base64'),
+  sha256: crypto.createHash('sha256').update(firefoxPackage.bytes).digest('hex') }) + ';</script>\n</head>');
+const userTemplateBase64 = fs.readFileSync(path.join(dir, 'templates', 'mau_nhap_users.xlsx')).toString('base64');
+html = html.replace('</head>', '  <script>window.LS_USER_IMPORT_TEMPLATE_B64=' + JSON.stringify(userTemplateBase64) + ';</script>\n</head>');
+const timing = read('js/core.js').match(/\/\* SLA_TIME_SHARED_BEGIN \*\/([\s\S]*?)\/\* SLA_TIME_SHARED_END \*\//);
+if (!timing) throw new Error('Missing shared timing engine');
+fs.writeFileSync(path.join(dir, 'TimeTracking.gs'), '// Generated from js/core.js by build-gas.mjs.\n' + timing[1], 'utf8');
+const domain = read('js/domain.js');
+const resultStart = domain.indexOf('  var DAILY_ROWS = [');
+const resultEnd = domain.indexOf('  /** Kế hoạch ngày lưu');
+if (resultStart < 0 || resultEnd < resultStart) throw new Error('Missing shared result rules');
+const domainContext = { LS: {} };
+vm.runInNewContext(domain, domainContext);
+const resultRules = 'var LSPlanResults = (function () {\n' +
+  'var U={byId:function(rows,key,id){return rows.filter(function(r){return r[key]===id;})[0];},db:function(){return {workTypes:[]};}};\n' +
+  'var STATUS=' + JSON.stringify(domainContext.LS.domain.STATUS) + ';\n' +
+  domain.slice(resultStart,resultEnd) +
+  '\nreturn {STATUS:STATUS,creditedParts:creditedParts,dailyActivityKeys:dailyActivityKeys,collateralStepKeys:collateralStepKeys,dailyIsCredit:dailyIsCredit,draftBacklogAt:draftBacklogAt,handoverPartsFor:handoverPartsFor};\n})();\n';
+fs.writeFileSync(path.join(dir, 'Planning.gs'), '// Generated from js/planning.js and js/domain.js.\n' + read('js/planning.js') + '\n' + resultRules, 'utf8');
 const loginSvg = 'data:image/svg+xml,' + encodeURIComponent(read('assets/login-workflow-hero.svg'));
 const styles = read('css/styles.css').replace(
   /url\((['"]?)\.\.\/assets\/login-workflow-hero\.svg\1\)/g,

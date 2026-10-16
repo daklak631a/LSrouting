@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "filename": "ls-routing-firefox-1.0.0.signed.xpi",
+  "sha256": "0b4f3099148cb29c3697a00ac9437435df45c8b75f651398b6d984a06313e995",
+  "cms_verified": true,
+  "signer": "CN=ls-routing-notify@ls-routing.local, OU=Production, O=Addons, L=Mountain View, S=CA, C=US",
+  "note": "Mozilla-approved package supplied by owner; detached CMS signature checked with SignedCms.CheckSignature(true). Firefox performs trust verification at install."
+}

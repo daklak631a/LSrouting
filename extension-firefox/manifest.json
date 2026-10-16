@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "LS-Routing — Hồ sơ chờ phân công",
+  "version": "1.0.1",
+  "description": "Báo hồ sơ mới cho Quản lý LS và Kiểm soát LS.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ls-routing-notify@ls-routing.local",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": { "required": ["authenticationInfo"] }
+    },
+    "gecko_android": { "strict_min_version": "142.0" }
+  },
+  "permissions": ["alarms", "notifications", "storage"],
+  "host_permissions": ["https://script.google.com/*", "https://*.googleusercontent.com/*"],
+  "background": { "scripts": ["config.js", "queue.js", "background.js"] },
+  "action": { "default_title": "LS-Routing", "default_popup": "popup.html", "default_icon": "icon.png" },
+  "icons": { "96": "icon.png" },
+  "content_scripts": [{
+    "matches": ["https://script.google.com/*", "https://*.googleusercontent.com/*"],
+    "js": ["content.js"], "all_frames": true, "run_at": "document_idle"
+  }]
+}

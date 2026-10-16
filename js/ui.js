@@ -7,6 +7,7 @@ LS.ui = (function () {
 
   var U = LS;
   var el = {};
+  var dateInputSequence = 0;
 
   function bind() {
     el.scrim = document.getElementById('scrim');
@@ -127,12 +128,74 @@ LS.ui = (function () {
 
   function input(name, value, o) {
     o = o || {};
+    if (o.type === 'date' || o.type === 'datetime-local') return dateInput(name, value, o);
     return '<input class="input" name="' + U.attr(name) + '" value="' + U.attr(value || '') + '"' +
       (o.type ? ' type="' + o.type + '"' : '') +
       (o.placeholder ? ' placeholder="' + U.attr(o.placeholder) + '"' : '') +
       (o.required ? ' required' : '') + (o.disabled ? ' disabled' : '') +
       (o.min !== undefined ? ' min="' + o.min + '"' : '') + (o.max !== undefined ? ' max="' + o.max + '"' : '') +
       (o.id ? ' id="' + o.id + '"' : '') + (o.attrs || '') + '>';
+  }
+
+  function dateInput(name, value, o) {
+    var kind = o.type === 'datetime-local' ? 'datetime-local' : 'date';
+    var id = 'ls-date-' + (++dateInputSequence), initial = String(value || ''), displayValue = '';
+    var iso = kind === 'date' ? /^(\d{4}-\d{2}-\d{2})$/.exec(initial) :
+      /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?)$/.exec(initial);
+    if (iso) displayValue = formatDateInput_(iso[1], kind);
+    else if (kind === 'date') displayValue = U.fmtDate(initial) === '—' ? '' : U.fmtDate(initial);
+    var label = kind === 'date' ? 'ngày theo DD/MM/YYYY' : 'ngày giờ theo DD/MM/YYYY HH:mm';
+    var pattern = kind === 'date'
+      ? '[0-9]{2}/[0-9]{2}/[0-9]{4}'
+      : '[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}(:[0-9]{2})?';
+    return '<span class="date-input-wrap">' +
+      '<input class="input date-input-display" type="text" value="' + U.attr(displayValue) + '"' +
+      ' placeholder="' + (kind === 'date' ? 'DD/MM/YYYY' : 'DD/MM/YYYY HH:mm') + '" inputmode="numeric"' +
+      ' pattern="' + pattern + '" aria-label="Nhập ' + label + '" data-date-display-for="' + id + '" data-date-kind="' + kind + '"' +
+      (o.required ? ' required' : '') + (o.disabled ? ' disabled' : '') + (o.id ? ' id="' + o.id + '"' : '') + (o.attrs || '') + '>' +
+      '<input class="date-input-native" type="' + kind + '" name="' + U.attr(name) + '" value="' + U.attr(initial) + '"' +
+      ' id="' + id + '" data-date-native-for="' + id + '" tabindex="-1" aria-hidden="true"' +
+      (o.disabled ? ' disabled' : '') + (o.min !== undefined ? ' min="' + U.attr(o.min) + '"' : '') +
+      (o.max !== undefined ? ' max="' + U.attr(o.max) + '"' : '') +
+      (o.nativeAttrs || '') + (kind === 'datetime-local' ? ' step="1"' : '') + '>' +
+      '<button type="button" class="btn btn-quiet btn-icon date-picker-trigger" data-act="date-picker" data-target="' + id + '"' +
+      (o.disabled ? ' disabled' : '') + ' aria-label="Chọn ngày"><span aria-hidden="true">' + U.icon('calendar', 16) + '</span></button>' +
+      '</span>';
+  }
+
+  function formatDateInput_(value, kind) {
+    var match = kind === 'datetime-local'
+      ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value)
+      : /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return '';
+    var formatted = match[3] + '/' + match[2] + '/' + match[1];
+    return kind === 'datetime-local' ? formatted + ' ' + match[4] + ':' + match[5] + (match[6] ? ':' + match[6] : '') : formatted;
+  }
+
+  function parseDateInput_(value, kind) {
+    var match = kind === 'datetime-local'
+      ? /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value)
+      : /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value);
+    if (!match) return '';
+    var day = Number(match[1]), month = Number(match[2]), year = Number(match[3]);
+    var checked = new Date(year, month - 1, day);
+    if (month < 1 || month > 12 || day < 1 || checked.getFullYear() !== year || checked.getMonth() !== month - 1 || checked.getDate() !== day) return '';
+    var iso = match[3] + '-' + match[2] + '-' + match[1];
+    if (kind !== 'datetime-local') return iso;
+    var hour = Number(match[4]), minute = Number(match[5]), second = Number(match[6] || 0);
+    if (hour > 23 || minute > 59 || second > 59) return '';
+    return iso + 'T' + match[4] + ':' + match[5] + (match[6] ? ':' + match[6] : '');
+  }
+
+  function syncDateInput(display) {
+    var native = document.getElementById(display.getAttribute('data-date-display-for'));
+    if (!native) return '';
+    var value = parseDateInput_(display.value.trim(), display.getAttribute('data-date-kind'));
+    native.value = value;
+    display.setCustomValidity(display.value.trim() && !value
+      ? 'Nhập ngày theo DD/MM/YYYY' + (display.getAttribute('data-date-kind') === 'datetime-local' ? ' HH:mm.' : '.')
+      : '');
+    return value;
   }
 
   function textarea(name, value, o) {
@@ -217,13 +280,16 @@ LS.ui = (function () {
     el.body.innerHTML = body;
     el.dialog.className = 'dialog' + (o.size ? ' ' + o.size : '');
     el.scrim.classList.add('on');
+    document.body.classList.add('has-dialog');
     var first = el.body.querySelector('input:not([type=hidden]):not([disabled]), select, textarea, button');
+    if (!first) first = el.dialog.querySelector('button');
     if (first) first.focus();
   }
 
   function closeDialog() {
     if (!el.scrim.classList.contains('on')) return;
     el.scrim.classList.remove('on');
+    document.body.classList.remove('has-dialog');
     el.body.innerHTML = '';
     el.title.textContent = '';
     el.sub.textContent = '';
@@ -280,7 +346,7 @@ LS.ui = (function () {
     bind: bind, tag: tag, statusTag: statusTag, metric: metric, strip: strip,
     block: block, pad: pad, sectionTitle: sectionTitle, table: table, empty: empty,
     banner: banner, kv: kv, timeline: timeline, bar: bar,
-    field: field, input: input, textarea: textarea, select: select,
+    field: field, input: input, syncDateInput: syncDateInput, textarea: textarea, select: select,
     switchBox: switchBox, checkbox: checkbox, search: search,
     btn: btn, iconBtn: iconBtn, formEnd: formEnd,
     openDialog: openDialog, closeDialog: closeDialog, dialogOpen: dialogOpen, onDialogClose: onDialogClose,

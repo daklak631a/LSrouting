@@ -10,7 +10,7 @@ const admin = read('js/admin.js');
 
 const importFn = code.slice(code.indexOf('function adminImportUsers'), code.indexOf('function adminSaveSettings'));
 if (!importFn.includes('handoverOpenWork_')) fail('Import người dùng phải dùng cùng luật bàn giao việc đang mở như sửa từng tài khoản.');
-if (!/otherAdmins/.test(importFn) || !/tài khoản quản trị đang hoạt động duy nhất/.test(importFn)) fail('Import không được khóa quản trị cuối cùng.');
+if (!/activeAdminsBefore/.test(importFn) || !/activeAdminsAfter/.test(importFn) || !/quản trị đang hoạt động cuối cùng/.test(importFn)) fail('Import không được khóa quản trị cuối cùng.');
 if (!/sameEmail|email.*trùng|Email đã/.test(importFn)) fail('Import phải chặn email trùng.');
 
 if (!notifications.includes('rate_per_hour')) fail('Worker chưa áp dụng giới hạn rate_per_hour.');

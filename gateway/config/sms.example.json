@@ -1,0 +1,34 @@
+{
+  "_huong_dan": [
+    "Chép thành sms.json rồi sửa theo tài liệu nhà cung cấp của bạn.",
+    "Biến dùng được trong headers và fields: ${to} ${text} ${sender} ${secret} ${trackingId} ${env.TEN_BIEN}.",
+    "${secret} lấy từ biến môi trường trùng tên với secret_ref mà LS-Routing gửi sang (mặc định LS_SMS_TOKEN).",
+    "phoneFormat: 84 | 0 | raw.",
+    "successPath/successEquals dùng khi nhà cung cấp trả HTTP 200 kèm mã lỗi trong thân phản hồi.",
+    "messageIdPath là đường dẫn tới mã tin; không lấy được mã tin thì gateway coi như chưa gửi."
+  ],
+
+  "url": "https://api.nha-cung-cap.vn/sms/send",
+  "method": "POST",
+  "contentType": "json",
+  "phoneFormat": "84",
+  "timeoutMs": 15000,
+  "requireSecret": true,
+  "defaultSender": "NGANHANG",
+
+  "headers": {
+    "Authorization": "Bearer ${secret}"
+  },
+
+  "fields": {
+    "to": "${to}",
+    "from": "${sender}",
+    "message": "${text}",
+    "client_ref": "${trackingId}"
+  },
+
+  "successPath": "error",
+  "successEquals": "0",
+  "errorPath": "message",
+  "messageIdPath": "data.msg_id"
+}

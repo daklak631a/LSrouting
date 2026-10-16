@@ -17,10 +17,59 @@ Bản trình duyệt không gửi ra ngoài; chỉ GAS gọi provider thật.
 
 ## Triển khai Apps Script
 
+Quyền **Giám sát** (`GIAM_SAT`) chỉ xem tổng hợp toàn hệ thống, Thời gian & SLA và báo cáo. Admin chọn vai trò khi thêm/sửa user; máy chủ chặn ghi và không gửi dữ liệu khách hàng cho nhóm này. Chi tiết tại [Quyền Giám sát](docs/MONITOR_ROLE.md).
+
 ### URL web app đang dùng
 
-Deployment chuẩn đã được cập nhật lên **Version 36**, chạy dưới tài khoản
-`daklak631a@gmail.com`, quyền truy cập `Anyone`:
+Deployment chuẩn và deployment thứ hai hiện cùng ở **Version 120** (07/10/2026), giữ nguyên URL.
+Đã tải lại và đối chiếu đủ 7 file mã nguồn; GET trên cả hai webapp trả HTTP 200 và chứa các bản sửa mới.
+Chưa xác minh luồng nghiệp vụ bằng đăng nhập thật. Chi tiết tại [Phát hành GAS v120](docs/RELEASE_GAS_V120_RECENT_ADJUSTMENTS_2026-10-07.md).
+Bản 120 ghi việc khác kèm số lượng, hẹn bổ sung, nhật ký sửa trước/sau, điều chỉnh lịch và cách tính giờ làm thêm; [v119](docs/RELEASE_RESULT_COUNTING_2026-10-07.md) sửa bộ đếm kết quả theo hồ sơ và cán bộ.
+Bản 117 căn lại nhãn và ô nhập trong dòng việc, đưa nút xóa lên đầu dòng và ẩn số HĐ thế chấp khi chọn **Không có TSBĐ**.
+Bản 116 hiển thị cờ hồ sơ trả về là **Chưa giao hồ sơ**, sắp lại biểu mẫu đăng ký, điền sẵn ngày hôm nay và số HĐ thế chấp cần soạn là 1;
+số dự kiến chuyển sang việc TSĐB đi kèm để LS đối chiếu và có thể sửa số thực tế khi hoàn thành, trừ phần do cán bộ khác đã ghi nhận.
+Bản 114 xác nhận gửi lại sau khi máy chủ lưu thành công, sửa cờ tự trả cũ chỉ khi nhật ký chứng minh nguồn gốc hệ thống,
+và không hỏi số HĐ thế chấp mới khi khoản vay dùng TSBĐ có sẵn. Chi tiết tại [GAS v114](docs/RELEASE_GAS_V114_REVIEW_2026-10-07.md).
+Job phục hồi vẫn chạy đầu ngày khoảng 7h; deploy không chạy job ngay.
+Bản 113 bổ sung phục hồi hồ sơ phát sinh hôm nay ở `CHUA_GIAO_HO_SO` về `CHO_PHAN_CONG`, giữ `last_assignee_id`;
+hồ sơ hôm trước vẫn chờ đúng người đề nghị Phòng/PGD chọn ngày gửi lại.
+Bản 113 đưa hồ sơ **Chưa giao hồ sơ** ra khỏi Hàng chờ KS/QL, giữ trong Quản lý hồ sơ và phía người đề nghị để gửi lại;
+mở màn Phân giao toàn phòng ở chế độ xem cho cán bộ LS; giữ số 0 khi khoảng xử lý đã được hiệu chỉnh hết; bỏ banner hướng dẫn soạn hợp đồng.
+Deployment chuẩn chạy dưới tài khoản `daklak631a@gmail.com`, quyền truy cập `Anyone`.
+Từ Version 64: luồng rút gọn không còn `dossier-handover`,
+**Giao kế hoạch** cho KS/QL (nút ở Kết quả & kế hoạch, hàm `saveWorkPlan`; Cấu hình chung của Admin không còn ô kế hoạch) và
+ô tick **giao dịch giải ngân trên TP / Rlos** khi hoàn thành hồ sơ vay (cột `result_flags_json`, hàm `saveResultFlags`;
+`RUNTIME_SCHEMA_VERSION_` là `runtime_v55_result_flags`: lần đăng nhập đầu tiên sau deploy tự thêm cột vào WorkItems, trước khi
+có cột tick không lưu được nhưng không gây lỗi). Version 66: menu KS/QL gom còn 5 mục (Hàng chờ chỉ hồ sơ chưa giao, Quản lý hồ sơ
+chia theo phòng, Kết quả & kế hoạch, Báo cáo 3 tab, Nhật ký); giao một hồ sơ bằng ô tick chọn cán bộ; nút **Phân công nhanh**
+giao theo quy tắc; quy tắc phân công nhanh có danh sách sản phẩm (`work_type_codes`), quy tắc mới tick sẵn cầm cố.
+Version 67: bảng kết quả ngày còn 7 dòng (bỏ HĐ cầm cố, tồn HĐ cầm cố, giải ngân TP, Hồ sơ liên quan TSBĐ; "Soạn thảo HĐ thế chấp" là
+làm TSĐB mới hoặc phụ lục TSĐB, cán bộ tick HĐ thế chấp / Rlos khi hoàn thành); Quản lý hồ sơ chỉ theo dõi hồ sơ đã phân công, "Đã hủy"
+là tab riêng cuối hàng; mọi thao tác ghi (gửi hồ sơ, đổi trạng thái, phân công, đề nghị hủy, sửa/duyệt đề nghị, tick kết quả, giao kế hoạch)
+chạy nền: hộp thoại đóng ngay, màn hình đổi ngay, không còn dòng mờ / "Đang gửi…" / vạch tiến độ, hàng chờ ghi chỉ hiện nhãn khi máy chủ
+bận hoặc kéo dài quá 8 giây; chỉ khi máy chủ từ chối mới hoàn tác và báo lỗi.
+Version 68: hộp thoại Giao kế hoạch ghi rõ nhãn "Tồn ·" cho các dòng hồ sơ tồn; bộ hướng dẫn sử dụng (docx, html nhúng iframe, pptx) trong `docs/huong-dan/` cập nhật theo giao diện mới.
+Version 69: bảng Toàn bộ hồ sơ phòng và các danh sách LS có cột Cán bộ đề nghị; hồ sơ cũ dùng tên người tạo làm dự phòng.
+Các cập nhật dưới đây đã có trong bản hiện hành: Tạm dừng / Tiếp tục xử lý chỉ cán bộ LS bấm (KS/QL chỉ còn Đổi người, Hủy với hồ sơ đang dừng).
+Đổi người giữa chừng: KS/QL tick phần cán bộ cũ đã làm xong (HĐ tín dụng / HĐ thế chấp / Rlos), phần đó tính vào bảng ngày cho cán bộ cũ
+theo ngày bàn giao, người nhận chỉ tính phần còn lại (cột mới `result_credit_json`, `RUNTIME_SCHEMA_VERSION_` = `runtime_v56_result_credit`).
+Chuyển tháng: sang tháng mà chưa ai tạo kỳ thì hệ thống tự mở kỳ tháng hiện tại (hồ sơ từ ngày 1 không còn rơi vào tháng trước);
+"Tạo tháng kế tiếp" chỉ tạo trước kỳ, không chuyển tiếp sớm (bản cũ làm việc đang mở biến mất và bị khóa tới đầu tháng sau —
+lần đăng nhập đầu sau deploy tự hoàn tác, hàm `repairEarlyCarryover_`); dòng gốc đã chuyển tháng không còn bị nhắc quá hạn,
+không bị đếm là việc mở, không chặn khóa/xóa cán bộ.
+Việc TSĐB có ô tick phần việc (hàm `recordWorkStep`, không thêm cột): nhập mới/nhập thêm/ĐKTC, nhập tăng, thay đổi TSĐB và việc kèm TSĐB
+mới phải tick "Đã soạn xong HĐ thế chấp" rồi "Đã nhập kho TSĐB"; xuất giảm tick soạn xong rồi "Đã xuất kho TSĐB"; xuất TSĐB / xóa thế chấp chỉ
+tick xuất kho; mượn TSĐB và thủ tục khác không có ô. Phải tick đủ mới Hoàn thành (ô chưa tick tick ngay trong hộp thoại hoàn thành được).
+Mỗi ô lưu người và giờ vào `result_credit_json`, bảng ngày có thêm dòng Nhập kho TSĐB, Xuất kho TSĐB (đơn vị tài sản, mỗi hồ sơ một tài sản)
+và tính theo ngày tick; HĐ thế chấp tính ngay khi tick soạn xong và hết "Hồ sơ tồn". Hồ sơ TSĐB đã hoàn thành trước bản này giữ cách đếm cũ.
+Tạm dừng vì việc khác (họp, đi nhập kho...) vẫn là Tạm dừng: dừng cả SLA và giờ xử lý. Kế hoạch ngày giao được cho hai dòng mới.
+Kiểm tra bằng bộ `verify-*.mjs`, chưa đối chiếu giao diện production bằng đăng nhập thật:
+
+**Luồng hiện hành:** Phòng/PGD tạo việc (`CHO_PHAN_CONG`, ghi giờ gửi `submitted_at`) → KS/Quản lý LS phân công cho cán bộ LS (`DA_PHAN_CONG`) → LS xác nhận nhận đủ hồ sơ (`DANG_THUC_HIEN`, ghi `dossier_received_at`, bắt đầu SLA) → hẹn khách → hoàn thành. Giờ nhận cho phép chỉnh có lý do. Việc kèm do quản lý tạo chờ LS xác nhận. Quy tắc phân công nhanh cấu hình theo phòng, loại việc, sản phẩm, cán bộ và ưu tiên; phân công theo lô cho phép chọn nhiều dòng và sửa người nhận từng dòng. Cột ưu tiên được bổ sung tự động cho Sheet cũ khi bootstrap.
+
+Ghi nhiều bảng trong một giao dịch yêu cầu Advanced Sheets service; với standard Cloud project cần bật thêm Google Sheets API trong Cloud console trước khi phát hành phiên bản này.
+
+Quản trị → Người dùng tải [mẫu Excel thật](templates/mau_nhap_users.xlsx) để nhập XLSX; CSV/TSV cũ vẫn được nhận. Mọi cột nhập liệu là dạng văn bản để giữ số 0 đầu; ô tùy chọn để trống khi nhập đè sẽ giữ dữ liệu user cũ. Chi tiết tại [Mẫu nhập user](docs/USER_IMPORT.md). Bản 48 tách email liên kết Google khỏi email nhận thông báo và bổ sung điện thoại cán bộ. Bản 45 giữ điện thoại/CIF dạng văn bản, khôi phục số 0 đầu và gửi email hoàn thành tới cán bộ Phòng/PGD phụ trách; nội dung thư dùng lịch hẹn đã lưu. Chi tiết tại [Điện thoại và thông báo hoàn thành](docs/CONTACT_NOTIFICATIONS.md).
 
 `https://script.google.com/macros/s/AKfycbylljXwRUkxUCL_wnxztLAzotSNi9iiOvgpGtXPCwzIQHjCgpPz6d_zvG_XC1urUlCH/exec`
 
@@ -44,7 +93,7 @@ quản trị đổi vai trò khỏi `CAN_BO_LS` hoặc khóa tài khoản. Nếu
 thay thế, hệ thống vẫn chặn thao tác và báo rõ số việc cần xử lý.
 
 Bản này cũng có dashboard cá nhân và bộ đếm giờ xử lý khách hàng (tính từ lúc
-LS bấm **Bắt đầu xử lý**, loại trừ 11:30–13:30 và 18:00–07:30), nhật ký chỉ
+LS bấm **Tiếp nhận hồ sơ**, loại trừ 11:30–13:30 và 18:00–07:30), nhật ký chỉ
 hiện sự kiện do chính cán bộ LS thực hiện, cùng checklist nhóm việc. Tích từng
 nhóm sẽ ghi sự kiện `CAP_NHAT_CHECKLIST`; chỉ được báo soạn xong/hoàn thành khi
 đã tích đủ. Nếu hộp thoại bị đồng bộ lại trong lúc đang mở, giao diện báo rõ
@@ -58,8 +107,8 @@ nên báo cáo, file kế hoạch và dashboard đếm thành 2 việc. Kho cũ 
 `setupSheetDB()` một lần để thêm cột `parent_item_id`. Dashboard cá nhân gộp các khoảng
 làm song song, nên hai việc làm cùng lúc không bị cộng giờ hai lần.
 
-**Đồng hồ xử lý dừng khi không làm.** Đồng hồ bắt đầu khi LS bấm *Bắt đầu xử lý* và
-chỉ chạy ở *Đang thực hiện*, *Đã soạn xong*, *Chờ kiểm soát duyệt*. Tạm dừng, đang hẹn
+**Đồng hồ xử lý dừng khi không làm.** Đồng hồ bắt đầu khi LS bấm *Tiếp nhận hồ sơ* và
+chạy ở *Đã tiếp nhận hồ sơ* (`DANG_THUC_HIEN`; hồ sơ cũ ở *Đã soạn xong*, *Chờ kiểm soát duyệt* vẫn được tính). Tạm dừng, đang hẹn
 khách ký, đổi người (chờ người mới bắt đầu), chuyển tiếp sang tháng mới, hủy hay hoàn
 thành đều mở một khoảng dừng, lưu ở cột `pause_log_json`; giao diện hiện "· đang dừng".
 Kho cũ cần chạy lại `setupSheetDB()` để thêm cột. Việc đã dừng trước bản này không có
@@ -123,7 +172,7 @@ Lệnh này gộp `index.html` + `css/styles.css` + toàn bộ `js/*.js` thành 
 Đừng sửa `Index.gas.html` trực tiếp.
 
 Đẩy lên Apps Script: `Code.gs`, `DataRepository.gs`, `Notifications.gs`, `SetupSheetDB.gs`,
-`Index.gas.html`. Chạy `createStorageWorkbook()` một lần để tạo một file Google Sheet
+`Index.gas.html`. Chạy `createStorageWorkbook_()` trong trình soạn thảo một lần để tạo một file Google Sheet
 lưu trữ độc lập, gồm toàn bộ 20 bảng dữ liệu và danh mục đơn vị/loại việc/dropdown theo mẫu kế
 hoạch. Mỗi việc còn giữ `source_stt`/`source_tab` để hiển thị lại số thứ tự theo phòng giống file gốc.
 Hàm trả về URL file và lưu ID vào thuộc tính `LS_SHEET_ID` của dự án GAS.
@@ -154,7 +203,7 @@ chưa phát sinh việc với số 0. Khi quy tắc phân công trỏ tới cán
 Nếu kỳ nào chưa tạo được file, màn Kỳ kế hoạch sẽ báo rõ. Hệ thống tự thử lại mỗi giờ; muốn biết lỗi cụ thể thì chạy
 `setupFirstMonthlyPlan()` trong trình soạn thảo Apps Script.
 
-Sau khi tạo kho, chạy `setupSheetDB()` để bổ sung cột đăng nhập và tài khoản `admin` nếu
+Sau khi tạo kho, chạy `setupSheetDBEditor_()` trong trình soạn thảo để bổ sung cột đăng nhập và tài khoản `admin` nếu
 còn thiếu. Người dùng đăng nhập trong webapp bằng `login_code`: phòng/PGD chỉ cần mã cán
 bộ; LS, kiểm soát và quản trị cần mã kèm mật khẩu. Mật khẩu chỉ được lưu dưới dạng SHA-256
 ở phía GAS. Tài khoản `admin` dùng mật khẩu khởi tạo riêng; cán bộ nội bộ dùng mật khẩu
@@ -164,7 +213,7 @@ Mật khẩu khởi tạo chung và mật khẩu do quản trị cấp đều l�
 nhập kế tiếp hệ thống bắt đổi mật khẩu trước khi vào, và máy chủ chặn mọi thao tác
 ghi cho tới khi đổi xong.
 
-Quản trị → Người dùng cho phép thêm/sửa từng cán bộ hoặc nhập lô file CSV/TSV UTF-8 xuất
+Quản trị → Người dùng cho phép thêm/sửa từng cán bộ hoặc nhập lô file Excel/CSV/TSV
 từ Excel. Cột bắt buộc là `login_code`, `full_name`, `unit_id`; có thể thêm `role`, `email`,
 `password`, `is_active`. Mỗi mã chỉ gắn với một phòng/PGD; đổi `unit_id` là đổi phạm vi
 nhìn thấy ở lần đăng nhập kế tiếp. Không cần sửa workbook kế hoạch gốc.
@@ -322,7 +371,7 @@ thu hồi ở <https://myaccount.google.com/permissions> khi không dùng nữa.
 | `js/app.js` | Đăng nhập, điều hướng, phân phối sự kiện |
 | `Code.gs` | API máy chủ: quyền, luật trạng thái, đề nghị sửa, quản trị, SLA theo lịch làm việc |
 | `Notifications.gs` | Hàng đợi gửi, worker, đối soát |
-| `DataRepository.gs` | Đọc/ghi Sheet, một lần giữ khóa mỗi giao dịch |
+| `DataRepository.gs` | Đọc/ghi Sheet; khóa ghi ngắn theo dòng: bảng đọc trước khóa (`tx(fn, { warm })`), trong khóa chỉ đọc lại dòng cần sửa và phần đuôi mới |
 | `SetupSheetDB.gs` | Tạo và nâng cấp 20 bảng dữ liệu, gồm `CatalogOptions`, `NotificationMetrics`, `NotificationIdempotency`, `OperationalScoreSnapshots` và `PeriodSummary` |
 
 Tên trường và luật trạng thái của `Code.gs` khớp `js/domain.js`. Sửa một bên phải sửa bên kia.
@@ -332,7 +381,7 @@ Tên trường và luật trạng thái của `Code.gs` khớp `js/domain.js`. S
 | Vai trò | Thấy gì |
 | --- | --- |
 | Phòng / PGD | Việc của đơn vị mình. Sửa sau khi LS đã nhận thành đề nghị chờ kiểm soát duyệt |
-| Kiểm soát LS | Hàng chờ, phân công, duyệt đề nghị sửa, duyệt hoàn thành, toàn bộ việc |
+| Kiểm soát LS | Hàng chờ, phân công, duyệt đề nghị sửa/hủy, toàn bộ việc |
 | Cán bộ LS | Chỉ việc được giao cho mình |
 | Quản lý LS | Điều hành, tải việc, quá hạn, xuất báo cáo |
 | Quản trị | Cấu hình và danh mục. **Không** xem được thông tin khách hàng |
@@ -390,7 +439,20 @@ thì chạy `rebuildPeriodSummaries()` để dựng lại toàn bộ bảng ch�
 
 SLA tính theo **giờ làm việc thật** cả trên giao diện và phía GAS. Cấu hình ở Quản trị →
 Lịch làm việc được lưu vào Settings: ngày làm việc, giờ mở/đóng, nghỉ trưa, ngày lễ.
-Giao việc 16h thứ Sáu với SLA 4 giờ ra hạn sáng thứ Hai.
+SLA bắt đầu từ giờ **cán bộ LS bấm Tiếp nhận hồ sơ** (`dossier_received_at`),
+không phải giờ tạo đề nghị hay giờ Phòng/PGD gửi hồ sơ (`submitted_at`). KS/Quản lý
+LS có thể phân công trước; việc phân công không tự khởi động SLA. Chuyển cán bộ hoặc
+chuyển tháng không đặt lại mốc nhận đủ này.
+
+Báo cáo **Thời gian** tổng hợp theo ngày, cán bộ, nghiệp vụ và sản phẩm; phân biệt
+giờ xử lý hồ sơ với giờ cán bộ đã dùng sau khi gộp khoảng trùng. LS được sửa giờ
+nhận/hoàn thành việc của mình, kể cả việc đã hoàn thành, có lý do và nhật ký trước/sau.
+Chi tiết vận hành và nghiệm thu: [SLA_TIME_UPGRADE.md](docs/SLA_TIME_UPGRADE.md).
+
+Sheet kế hoạch tháng có các tab **Thời gian hồ sơ**, **Phiên xử lý**,
+**Thời gian theo ngày**, **Tổng hợp thời gian**. Ứng dụng tự đồng bộ khi hồ sơ
+thay đổi; bootstrap bổ sung lần đầu và trigger kế hoạch hằng giờ cập nhật các
+phiên đang mở. Công thức/bố cục tab phòng của mẫu được giữ nguyên.
 
 ## Giao diện
 

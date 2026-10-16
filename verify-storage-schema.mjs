@@ -11,7 +11,11 @@ const units = ['GBS', 'GDT', 'KHCN1', 'KHCN2', 'PGD_TBM', 'PGD_DBM', 'PGD_BMT', 
 if (workTypes.length !== 29) throw new Error(`Expected 29 legacy work types, got ${workTypes.length}`);
 if (!units.every((unit) => source.includes(`['${unit}'`))) throw new Error('A legacy sending unit is missing');
 if (!source.includes('function createStorageWorkbook()')) throw new Error('Storage workbook creator is missing');
-if (Object.keys(context.SCHEMA).length !== 20) throw new Error('Expected 20 storage sheets');
+if (Object.keys(context.SCHEMA).length !== 24) throw new Error("Expected 24 storage sheets");
+if (!context.SCHEMA.StaffPlans.includes('snapshot_json') || !context.SCHEMA.StaffPlanHistory.includes('plan_json')) throw new Error('Staff planning revision schema is missing');
+if (!context.SCHEMA.CanceledItems || !['item_id', 'reason', 'canceled_by', 'requested_by'].every((c) => context.SCHEMA.CanceledItems.includes(c))) {
+  throw new Error('Canceled items log schema is missing');
+}
 if (!context.SCHEMA.NotificationMetrics || !context.SCHEMA.NotificationMetrics.includes('unit_cost')) throw new Error('Notification metrics schema is missing');
 if (!context.SCHEMA.NotificationIdempotency || !context.SCHEMA.NotificationIdempotency.includes('idem_key')) throw new Error('Notification idempotency schema is missing');
 if (!context.SCHEMA.NotificationOutbox.includes('claim_until')) throw new Error('Outbox lease schema is missing');

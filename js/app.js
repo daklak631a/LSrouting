@@ -8,9 +8,83 @@ LS.app = (function () {
   var root;
   var gasError = '';
   var inboxTab = 'UNREAD';
+  var UPDATE_NOTICE_TITLE = 'Có phiên bản GAS mới';
+  var activeUpdateNotice = null;
+  var updateNoticeMemoryCounts = {};
+  var noticeClaimBusy = false;
+  var pendingUpdateNotice = null;
 
   function st() { return U.db(); }
   function me() { return st().session ? U.byId(st().users, 'user_id', st().session) : null; }
+
+  function updateNoticeSeenKey(userId) { return 'ls_update_notice_seen_v1:' + String(userId || ''); }
+
+  function finishUpdateNoticeDisplay() {
+    activeUpdateNotice = null;
+  }
+
+  function updateNoticeDisplayCount(userId, noticeId) {
+    var key = updateNoticeSeenKey(userId), count = Number(updateNoticeMemoryCounts[key + ':' + noticeId]) || 0;
+    try {
+      var saved = window.localStorage.getItem(key), data;
+      if (saved === noticeId) count = Math.max(count, 1);
+      else if (saved) {
+        data = JSON.parse(saved);
+        if (data && data.id === noticeId) count = Math.max(count, Number(data.count) || 0);
+      }
+    } catch (ignoreStorage) {}
+    return count;
+  }
+
+  function recordUpdateNoticeDisplay(userId, noticeId, count) {
+    var key = updateNoticeSeenKey(userId), next = count + 1;
+    updateNoticeMemoryCounts[key + ':' + noticeId] = next;
+    try { window.localStorage.setItem(key, JSON.stringify({ id: noticeId, count: next })); } catch (ignoreStorage) {}
+    return next;
+  }
+
+  function closeDialog() {
+    var title = document.getElementById('dlgTitle');
+    if (activeUpdateNotice && title && title.textContent === UPDATE_NOTICE_TITLE) finishUpdateNoticeDisplay();
+    ui.closeDialog();
+  }
+
+  function maybeShowUpdateNotice() {
+    var notice = st().updateNotice, user = me();
+    if (!notice || !notice.id || !notice.version || !user || st().mustChangePassword || ui.dialogOpen()) return;
+    if (activeUpdateNotice && activeUpdateNotice.id === notice.id && activeUpdateNotice.userId === user.user_id) return;
+    var displayLimit = Number(notice.display_limit) || 3;
+    displayLimit = Math.max(1, Math.min(3, Math.floor(displayLimit)));
+    var displayCount = updateNoticeDisplayCount(user.user_id, notice.id);
+    if (displayCount >= displayLimit) return;
+    if (U.isGas()) {
+      if (pendingUpdateNotice && pendingUpdateNotice.id === notice.id && pendingUpdateNotice.userId === user.user_id) {
+        displayCount = Math.max(displayCount, pendingUpdateNotice.count - 1);
+        pendingUpdateNotice = null;
+      } else {
+        if (noticeClaimBusy) return;
+        noticeClaimBusy = true;
+        LS.api.claimUpdateNotice(notice.id).then(function(result) {
+          noticeClaimBusy = false;
+          if (!me() || me().user_id !== user.user_id || !st().updateNotice || st().updateNotice.id !== notice.id) return;
+          if (!result || !result.show) {
+            updateNoticeMemoryCounts[updateNoticeSeenKey(user.user_id) + ':' + notice.id] = displayLimit;
+            return;
+          }
+          pendingUpdateNotice = { id:notice.id, userId:user.user_id, count:result.count };
+          maybeShowUpdateNotice();
+        }).catch(function() { noticeClaimBusy = false; });
+        return;
+      }
+    }
+    recordUpdateNoticeDisplay(user.user_id, notice.id, displayCount);
+    activeUpdateNotice = { id: notice.id, userId: user.user_id };
+    ui.openDialog(UPDATE_NOTICE_TITLE,
+      ui.banner('info', 'LS-Routing · ' + notice.version, notice.message || '') +
+      '<p style="margin:1rem 0 0;text-align:center;font-size:1rem">Vui lòng ấn <strong>Ctrl + F5</strong> để cập nhật phiên bản mới.</p>' +
+      '<div class="form-end">' + ui.btn('Đã hiểu', { act: 'update-notice-dismiss', kind: 'primary' }) + '</div>',
+      { sub: 'Thông báo cập nhật phần mềm' });
+  }
 
   /* ============================ Dựng khung ============================ */
 
@@ -22,7 +96,7 @@ LS.app = (function () {
     if (st().mustChangePassword) { root.innerHTML = passwordView(u); return; }
 
     var nav = D.ROLES[u.role].nav;
-    if (nav.indexOf(current) === -1) current = nav[0];
+    if (nav.indexOf(current) === -1 && current !== 'item-activity') current = nav[0];
     var unread = st().inbox.filter(function (n) { return n.user_id === u.user_id && !n.read; }).length;
 
     root.innerHTML =
@@ -40,16 +114,17 @@ LS.app = (function () {
       U.icon('bell', 18) + (unread ? '<span class="rail-badge" style="top:-2px;right:-2px">' + unread + '</span>' : '') +
       '</button>' +
       '</div></header>' +
-      '<main class="view" id="main" tabindex="-1">' + body() + '</main>' +
+      '<main class="view" id="main" tabindex="-1">' + S.focusBar() + body() + '</main>' +
       '</div></div>' +
       tabbar(u, nav);
+    maybeShowUpdateNotice();
   }
 
   function rail(u, nav) {
     return '<aside class="rail">' +
       '<div class="rail-mark">LS</div>' +
       nav.map(function (id, idx) {
-        var s = D.SCREENS[id];
+        var s = D.screenFor(u.role, id);
         var n = badge(id);
         return '<button class="rail-btn" data-act="go" data-screen="' + id + '"' +
           ' title="' + U.attr(s.title + ' (phím ' + (idx + 1) + ')') + '" aria-keyshortcuts="' + (idx + 1) + '"' +
@@ -66,7 +141,7 @@ LS.app = (function () {
 
   function tabbar(u, nav) {
     return '<nav class="tabbar">' + nav.map(function (id) {
-      var s = D.SCREENS[id];
+      var s = D.screenFor(u.role, id);
       var n = badge(id);
       return '<button data-act="go" data-screen="' + id + '"' + (id === current ? ' aria-current="page"' : '') + '>' +
         U.icon(s.icon, 19) + '<span>' + U.esc(s.short) + '</span>' +
@@ -81,14 +156,14 @@ LS.app = (function () {
   function badge(screen) {
     var items = S.visibleItems();
     if (screen === 'queue') {
-      return items.filter(function (i) {
-        return ['CHO_TIEP_NHAN', 'CHO_PHAN_CONG', 'CHO_KS_DUYET'].indexOf(i.status) !== -1 || i.pending;
-      }).length;
+      // Đếm đúng tập việc màn Hàng chờ hiển thị được (chờ phân công trong cửa sổ
+      // ngày + đề nghị sửa/hủy + chờ KS duyệt), để số badge khớp danh sách.
+      return S.queueBadgeCount();
     }
     if (screen === 'mine') {
       return items.filter(function (i) { return ['DA_PHAN_CONG', 'DANG_THUC_HIEN'].indexOf(i.status) !== -1; }).length;
     }
-    if (screen === 'work') return items.filter(function (i) { return i.status === 'CAN_BO_SUNG'; }).length;
+    if (screen === 'work') return items.filter(function (i) { return ['CAN_BO_SUNG', 'CHUA_GIAO_HO_SO'].indexOf(i.status) !== -1; }).length;
     if (screen === 'admin') {
       var h = D.outboxHealth(st());
       return h.failed + h.waiting;
@@ -97,6 +172,32 @@ LS.app = (function () {
   }
 
   var current = null;
+  var activityReturnScreen = null;
+  var lastDashboardMinute = -1;
+
+  function refreshDashboardClock(now) {
+    if (current !== 'my-dashboard' || !st().session || ui.dialogOpen() || syncing) return false;
+    var minute = Math.floor((now || new Date()).getTime() / 60000);
+    if (minute === lastDashboardMinute) return false;
+    lastDashboardMinute = minute;
+    var openGroups = {}, rowId = '', scrollY = window.scrollY || 0;
+    Array.prototype.forEach.call(document.querySelectorAll('.personal-backlog-group'), function (group) {
+      openGroups[group.getAttribute('data-backlog-type')] = group.open;
+    });
+    var active = document.activeElement, row = active && active.closest ? active.closest('.personal-backlog-table [data-row]') : null;
+    if (row) rowId = row.getAttribute('data-row') || '';
+    render();
+    Array.prototype.forEach.call(document.querySelectorAll('.personal-backlog-group'), function (group) {
+      var type = group.getAttribute('data-backlog-type');
+      if (Object.prototype.hasOwnProperty.call(openGroups, type)) group.open = openGroups[type];
+    });
+    if (rowId) {
+      var nextRow = document.querySelector('.personal-backlog-table [data-row="' + String(rowId).replace(/["\\]/g, '') + '"]');
+      if (nextRow) nextRow.focus({ preventScroll: true });
+    }
+    window.scrollTo(0, scrollY);
+    return true;
+  }
 
   function body() {
     switch (current) {
@@ -104,10 +205,16 @@ LS.app = (function () {
       case 'room': return S.room();
       case 'room-board': return S.roomBoard();
       case 'queue': return S.queue();
+      case 'tracking': return S.tracking();
+      case 'assignment-rules': return A.assignmentView();
       case 'mine': return S.mine();
+      case 'team': return S.team();
       case 'my-dashboard': return S.personalDashboard();
       case 'board': return S.board();
-      case 'report': return S.report();
+      case 'report': return S.reportEntry();
+      case 'monitor': return S.monitorDashboard();
+      case 'time-report': return S.timeReport();
+      case 'item-activity': return S.itemActivity();
       case 'periods': return S.periods();
       case 'audit': return S.audit();
       case 'admin': return A.view();
@@ -141,23 +248,17 @@ LS.app = (function () {
   }
 
   function authView() {
-    var gasNote = U.isGas()
-      ? 'Phòng/PGD dùng mã cán bộ. LS, kiểm soát và quản trị dùng mã cán bộ kèm mật khẩu.'
-      : 'Bản xem thử trên trình duyệt dùng cùng quy tắc mã cán bộ như bản GAS.';
     return '<div class="auth">' +
       '<div class="auth-side">' +
       '<div class="auth-brand"><div class="rail-mark">LS</div><span>LS-Routing</span></div>' +
       '<div class="auth-copy"><p class="auth-eyebrow">Điều phối tín dụng</p>' +
-      '<h2 class="auth-lead">Hồ sơ đến <em>đúng người</em>, đúng thời điểm.</h2>' +
-      '<p class="auth-summary">Theo dõi một luồng xử lý rõ ràng từ tiếp nhận, phân công đến hoàn tất — không phải dò lại qua nhiều nhóm trao đổi.</p>' +
-      '<div class="auth-highlights"><span>Phân công rõ ràng</span><span>Nhật ký thao tác</span><span>Nhắc việc đúng hạn</span></div></div>' +
-      '<p class="auth-note">' + U.esc(gasNote) + '</p>' +
+      '<h2 class="auth-lead">Quản lý hồ sơ tín dụng</h2></div>' +
       '</div>' +
 
       '<div class="auth-main"><div class="auth-form">' +
       '<div class="auth-mobile-brand" aria-hidden="true"><div class="rail-mark">LS</div><span>LS-Routing</span></div>' +
       '<div class="auth-form-kicker">' + U.icon('lock', 16) + '<span>Không gian nội bộ</span></div>' +
-      '<h1>Đăng nhập</h1><p>Nhập thông tin tài khoản được cấp để tiếp tục.</p>' +
+      '<h1>Đăng nhập</h1>' +
       '<form data-form="login">' +
       ui.field('Mã cán bộ / user', ui.input('login_code', '', { required: true, placeholder: 'Nhập mã cán bộ hoặc user được cấp', id: 'loginCode', attrs: ' autocomplete="username"' })) +
       ui.field('Mật khẩu', passwordControl('password', { id: 'loginPassword', placeholder: 'Nhập mật khẩu tại đây', autocomplete: 'current-password' })) +
@@ -174,11 +275,33 @@ LS.app = (function () {
       '</div></div></div>';
   }
 
+  function sessionRestoreErrorView() {
+    return '<main class="auth"><div class="auth-main"><div class="auth-form">' +
+      '<div class="auth-mobile-brand" aria-hidden="true"><div class="rail-mark">LS</div><span>LS-Routing</span></div>' +
+      '<h1>Chưa tải được dữ liệu</h1>' +
+      '<p>Phiên đăng nhập vẫn được giữ trên thiết bị. Kiểm tra kết nối rồi thử lại.</p>' +
+      '<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1rem">' +
+      ui.btn('Thử lại', { act: 'restore-session', kind: 'primary' }) +
+      ui.btn('Đăng xuất', { act: 'logout', kind: 'quiet', icon: 'logout' }) +
+      '</div></div></div></main>';
+  }
+
+  function restoreSession() {
+    if (!LS.api || !LS.api.hasSession()) { root.innerHTML = authView(); return; }
+    root.innerHTML = '<main class="auth"><div class="auth-main"><div class="auth-form"><p class="t2">Đang khôi phục phiên đăng nhập…</p></div></div></main>';
+    return LS.api.bootstrap().then(function (snapshot) {
+      U.replace(snapshot); lastRefresh = Date.now(); current = null; S.resetFilters(); render();
+    }).catch(function () {
+      if (!LS.api.hasSession()) { root.innerHTML = authView(); return; }
+      root.innerHTML = sessionRestoreErrorView();
+    });
+  }
+
   function passwordView(u) {
     return '<div class="auth"><div class="auth-side">' +
       '<div class="auth-brand"><div class="rail-mark">LS</div><span>LS-Routing</span></div>' +
       '<div class="auth-copy"><h2 class="auth-lead">Mật khẩu tạm chỉ dùng được <em>một lần</em>.</h2>' +
-      '<p class="auth-note">Mật khẩu do quản trị cấp không gắn với riêng ai. Đặt mật khẩu của bạn trước khi vào hệ thống; tài khoản quản trị phải hoàn tất bước này trước khi đổi quyền người dùng.</p>' +
+      '<p class="auth-note">Tài khoản đang dùng mật khẩu tạm.</p>' +
       '</div></div>' +
       '<div class="auth-main"><div class="auth-form">' +
       '<h1>Đổi mật khẩu</h1><p>' + U.esc(u.full_name) + '</p>' +
@@ -229,7 +352,7 @@ LS.app = (function () {
     if (!u.active) { ui.toast('Tài khoản đang bị khóa.', 'err'); return; }
     // Bản xem thử dùng mật khẩu riêng "demo". Không đưa mật khẩu khởi tạo thật vào
     // đây: file này được đóng gói nguyên vào trang GAS, ai mở mã nguồn trang cũng đọc được.
-    if (!demoPick && String(u.auth_group || (u.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL')).toUpperCase() === 'INTERNAL') {
+    if (!demoPick && u.role !== 'PHONG_PGD') {
       if (String(password || '') !== 'demo') { ui.toast('Mật khẩu không đúng (bản xem thử dùng "demo").', 'err'); return; }
     }
 
@@ -258,7 +381,7 @@ LS.app = (function () {
     var u = me();
     // Phòng/PGD đăng nhập bằng mã, không có mật khẩu — chỉ tài khoản nội bộ
     // (LS, kiểm soát, quản lý, admin) mới cần lối tự đổi mật khẩu ở đây.
-    var canChangePassword = String(u.auth_group || (u.role === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL')) !== 'EXTERNAL';
+    var canChangePassword = u.role !== 'PHONG_PGD';
     ui.openDialog('Tài khoản',
       ui.kv([
         ['Họ tên', u.full_name], ['Email', u.email],
@@ -289,6 +412,7 @@ LS.app = (function () {
   }
 
   function scopeText(role) {
+    if (role === 'GIAM_SAT') return 'Chỉ xem số liệu tổng hợp và báo cáo toàn hệ thống.';
     if (role === 'PHONG_PGD') return 'Bạn xem được việc của đơn vị mình. Sửa hồ sơ sau khi LS đã nhận sẽ thành đề nghị chờ kiểm soát duyệt.';
     if (role === 'CAN_BO_LS') return 'Bạn chỉ xem được việc đang được giao cho mình, không xem việc của đồng nghiệp.';
     if (role === 'ADMIN') return 'Bạn quản trị cấu hình và danh mục. Vai trò này không được xem thông tin khách hàng.';
@@ -342,11 +466,20 @@ LS.app = (function () {
           var item = U.byId(st().items, 'item_id', n.item_id);
           var action = '';
           if (inboxTab === 'UNREAD') {
-            action = item
+            // Chỉ mở "Xem việc" khi việc còn mở/đang xử lý. Việc đã hủy/hoàn thành
+            // hoặc không còn trong phạm vi xem thì chỉ cần "Đánh dấu đã xem" để gỡ
+            // badge — không ép mở một việc đã đóng (vô nghĩa và dễ treo lỗi, nên
+            // thông báo kiểu "đề nghị hủy đã được duyệt" cứ kẹt ở chưa xem).
+            var openItem = item && D.STATUS[item.status] && D.STATUS[item.status].open;
+            action = openItem
               ? ui.btn('Xem việc', { act: 'inbox-view', kind: 'quiet', sm: true, data: ' data-notification-id="' + U.attr(n.id) + '" data-item-id="' + U.attr(n.item_id) + '"' })
               : ui.btn('Đánh dấu đã xem', { act: 'inbox-mark-read', kind: 'quiet', sm: true, data: ' data-notification-id="' + U.attr(n.id) + '"' });
           } else if (item) {
             action = ui.btn('Xem việc', { act: 'detail', kind: 'quiet', sm: true, data: ' data-id="' + U.attr(n.item_id) + '"' });
+          }
+          if (n.event === 'NGHI_PHEP_LS' && n.subject_user_id) {
+            action = ui.btn('Xem việc đang mở', { act: 'inbox-absence-work', kind: 'quiet', sm: true,
+              data: ' data-notification-id="' + U.attr(n.id) + '" data-subject-user-id="' + U.attr(n.subject_user_id) + '"' });
           }
           return '<div class="tl-item"><div class="tl-head">' +
             '<b>' + U.esc(D.NOTIFY_EVENTS[n.event] || D.label(n.event)) + '</b>' +
@@ -354,7 +487,7 @@ LS.app = (function () {
             '<time>' + U.fmtDT(n.at) + '</time></div>' +
             '<div class="tl-body">' +
             (item ? '<span class="t2">' + U.esc(S.itemLabel(item)) + '</span>' :
-              '<span class="t2">Việc ' + U.esc(n.item_id) + ' không còn trong phạm vi bạn xem được.</span>') +
+              '<span class="t2">' + U.esc(n.detail || ('Việc ' + (n.item_id || '') + ' không còn trong phạm vi bạn xem được.')) + '</span>') +
             action +
             '</div></div>';
         }).join('') + '</div>'
@@ -366,7 +499,11 @@ LS.app = (function () {
   /* ============================ Tiện ích ============================ */
 
   function download(name, content, mime) {
-    var blob = new Blob(['﻿' + content], { type: mime + ';charset=utf-8;' });
+    var blob = new Blob(['\uFEFF' + content], { type: mime + ';charset=utf-8;' });
+    downloadBlob(name, blob);
+  }
+
+  function downloadBlob(name, blob) {
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name;
@@ -386,12 +523,98 @@ LS.app = (function () {
     if (xlsxLoading) return xlsxLoading;
     xlsxLoading = new Promise(function (resolve, reject) {
       var s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
       s.onload = function () { resolve(window.XLSX); };
       s.onerror = function () { xlsxLoading = null; reject(new Error('Không tải được thư viện Excel')); };
       document.head.appendChild(s);
     });
     return xlsxLoading;
+  }
+
+  function styleExportSheet(X, ws, sheet) {
+    if (!ws['!ref']) return;
+    var range = X.utils.decode_range(ws['!ref']);
+    var headerRows = Array.isArray(sheet.headerRows) ? sheet.headerRows : [0];
+    var headerMap = {};
+    headerRows.forEach(function (row) { headerMap[row] = true; });
+    var lastHeader = headerRows.length ? Math.max.apply(null, headerRows) : -1;
+    var palette = {
+      navy: '17365D', blue: '245B8F', green: '548235', amber: 'A66B00', red: 'A4262C',
+      text: '243447', white: 'FFFFFF', stripe: 'F3F6FA', border: 'D9E2F0',
+      paleGreen: 'E7F1E8', paleAmber: 'FFF2CC', paleRed: 'FCE8E6'
+    };
+    var headerLabels = sheet.rows[headerRows.length ? lastHeader : 0] || [];
+    var widths = [];
+    var heights = [];
+
+    function labelFor(column) { return String(headerLabels[column] || '').toLowerCase(); }
+    function numberStyle(value, label) {
+      if (typeof value !== 'number' || !isFinite(value)) return {};
+      if (/đúng hạn|%/.test(label)) return { numFmt: '0"%"' };
+      if (/giờ|hour/.test(label)) return { numFmt: '0.0' };
+      return { numFmt: Number.isInteger(value) ? '#,##0' : '#,##0.0#' };
+    }
+    function headerColor(label) {
+      if (/quá hạn|trễ hạn/.test(label)) return palette.red;
+      if (/hoàn thành|đúng hạn/.test(label)) return palette.green;
+      if (/đang mở|tồn cuối kỳ/.test(label)) return palette.amber;
+      return palette.navy;
+    }
+
+    for (var r = range.s.r; r <= range.e.r; r++) {
+      var maxLines = 1;
+      for (var c = range.s.c; c <= range.e.c; c++) {
+        var address = X.utils.encode_cell({ r: r, c: c });
+        var cell = ws[address];
+        if (!cell) cell = ws[address] = { t: 's', v: '' };
+        var header = !!headerMap[r];
+        var label = labelFor(c);
+        var value = cell.v;
+        var border = { style: 'thin', color: { rgb: palette.border } };
+        var style = {
+          font: { name: 'Aptos', sz: 10, color: { rgb: palette.text } },
+          alignment: { vertical: 'center', horizontal: typeof value === 'number' ? 'right' : 'left', wrapText: true },
+          border: { bottom: border }
+        };
+        if (header) {
+          style.fill = { patternType: 'solid', fgColor: { rgb: headerColor(label) } };
+          style.font = { name: 'Aptos', sz: 10, bold: true, color: { rgb: palette.white } };
+          style.alignment = { vertical: 'center', horizontal: 'center', wrapText: true };
+          style.border = { bottom: { style: 'medium', color: { rgb: palette.white } } };
+        } else {
+          if ((r - lastHeader) % 2 === 0) style.fill = { patternType: 'solid', fgColor: { rgb: palette.stripe } };
+          if (r > lastHeader && c === range.s.c) style.font.bold = true;
+          if (/quá hạn|trễ hạn/.test(label) && Number(value) > 0) {
+            style.fill = { patternType: 'solid', fgColor: { rgb: palette.paleRed } };
+            style.font.color = { rgb: palette.red };
+            style.font.bold = true;
+          } else if (/hoàn thành|đúng hạn/.test(label) && Number(value) > 0) {
+            style.fill = { patternType: 'solid', fgColor: { rgb: palette.paleGreen } };
+          } else if (/đang mở|tồn cuối kỳ/.test(label) && Number(value) > 0) {
+            style.fill = { patternType: 'solid', fgColor: { rgb: palette.paleAmber } };
+          }
+          Object.assign(style, numberStyle(value, label));
+        }
+        cell.s = style;
+        var text = value === null || value === undefined ? '' : String(value);
+        var lines = text.split(/\r?\n/);
+        maxLines = Math.max(maxLines, lines.length);
+        widths[c] = Math.max(widths[c] || 0, lines.reduce(function (n, line) { return Math.max(n, line.length); }, 0));
+      }
+      heights[r] = { hpt: header ? 32 : Math.min(54, 20 + Math.max(0, maxLines - 1) * 12) };
+    }
+
+    ws['!cols'] = widths.map(function (width, index) {
+      var heading = String((sheet.rows[0] || [])[index] || '');
+      return { wch: Math.min(48, Math.max(10, width + (heading ? 3 : 2))) };
+    });
+    ws['!rows'] = heights;
+    if (sheet.autoFilter !== false && headerRows.length === 1 && ws['!ref'] && range.e.r > headerRows[0]) {
+      ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: headerRows[0], c: range.s.c }, e: range.e }) };
+    }
+    if (sheet.freeze !== false && lastHeader >= range.s.r) {
+      ws['!freeze'] = X.utils.encode_cell({ r: lastHeader + 1, c: range.s.c });
+    }
   }
 
   function downloadXlsx(name, sheets) {
@@ -402,9 +625,7 @@ LS.app = (function () {
       var wb = X.utils.book_new();
       sheets.forEach(function (s) {
         var ws = X.utils.aoa_to_sheet(s.rows);
-        ws['!cols'] = s.rows[0].map(function (_, i) {
-          return { wch: Math.min(42, Math.max(8, Math.max.apply(null, s.rows.map(function (r) { return String(r[i] === undefined || r[i] === null ? '' : r[i]).length; })) + 2)) };
-        });
+        styleExportSheet(X, ws, s);
         X.utils.book_append_sheet(wb, ws, String(s.name).replace(/[\\/?*\[\]:]/g, ' ').slice(0, 31));
       });
       X.writeFile(wb, name + '.xlsx');
@@ -430,10 +651,12 @@ LS.app = (function () {
   /* ============================ Sự kiện ============================ */
 
   var CLICK = {
-    go: function (el) { current = el.getAttribute('data-screen'); render(); window.scrollTo(0, 0); },
-    'close-dialog': ui.closeDialog,
+    go: function (el) { current = el.getAttribute('data-screen'); S.enterScreen(current); render(); window.scrollTo(0, 0); },
+    'close-dialog': closeDialog,
+    'update-notice-dismiss': function () { finishUpdateNoticeDisplay(); ui.closeDialog(); },
     shortcuts: shortcutHelp,
     logout: logout,
+    'restore-session': restoreSession,
     account: accountDialog,
     'change-password-dialog': changePasswordDialog,
     'toggle-password': togglePassword,
@@ -448,26 +671,75 @@ LS.app = (function () {
       var itemId = el.getAttribute('data-item-id');
       markInboxRead([el.getAttribute('data-notification-id')], function () { S.detail(itemId); });
     },
+    'inbox-absence-work': function (el) {
+      var userId = el.getAttribute('data-subject-user-id');
+      function openWork() { ui.closeDialog(); S.staffWorkDetail(userId, { allOpen: true }); }
+      if (inboxTab === 'UNREAD') markInboxRead([el.getAttribute('data-notification-id')], openWork);
+      else openWork();
+    },
     'login-as': function (el) { login(el.getAttribute('data-code'), '', true); },
 
     'new-request': S.newRequest,
     detail: function (el) { S.detail(el.getAttribute('data-id')); },
+    'item-activity': function (el) { S.openActivity(el.getAttribute('data-id')); },
+    'activity-back': function () { current = activityReturnScreen; render(); S.detail(S.activityItemId()); },
+    'activity-refresh': function () { S.loadActivity(false); },
+    'activity-more': function () { S.loadActivity(true); },
+    'activity-send-preview': function (el) { S.previewActivitySend(el.getAttribute('data-id')); },
+    'timing-audit': S.loadTimingAudit,
+    'timing-fix': function (el) { S.fixAuditedTimes(el.getAttribute('data-id')); },
+    'timing-owner': function (el) { S.confirmOwner(el.getAttribute('data-id')); },
+    'pause-all': S.openGlobalPause,
+    'other-work': S.openOtherWork,
+    'other-work-cancel': function (el) { S.cancelOtherWork(el.getAttribute('data-id')); },
+    'global-pause-end': function (el) { S.openEndGlobalPause(el.getAttribute('data-operation-id')); },
     'edit-item': function (el) { S.editItem(el.getAttribute('data-id')); },
+    'edit-times': function (el) { S.editTimes(el.getAttribute('data-id')); },
+    'change-due-date': function (el) { S.changeDueDate(el.getAttribute('data-id')); },
+    supplement: function (el) { S.openSupplement(el.getAttribute('data-id')); },
+    'edit-result-flags': function (el) { S.editResultFlags(el.getAttribute('data-id')); },
+    'time-export': S.exportTimeReport,
     flow: function (el) { S.flow(el.getAttribute('data-id'), el.getAttribute('data-to')); },
+    'credit-draft': function (el) { S.markCreditDraft(el.getAttribute('data-id'), el.getAttribute('data-done') === '1'); },
+    'checklist-all': function (el) { S.checklistAll(el.getAttribute('data-id')); },
+    'receive-all': function () { S.receiveAll(); },
     'add-linked': function (el) { S.addLinked(el.getAttribute('data-id')); },
     'quick-assign': function (el) { S.quickAssign(el.getAttribute('data-id')); },
     'batch-assign-open': S.openBatchAssign,
     'batch-assign-submit': S.submitBatchAssign,
+    'bulk-assign': S.submitBulkAssign,
+    'bulk-clear': S.clearPicks,
+    'cancel-request': function (el) { S.requestCancel(el.getAttribute('data-id')); },
+    'cancel-approve': function (el) { S.approveCancel(el.getAttribute('data-id')); },
     'open-filter': function (el) { S.openFilter(el.getAttribute('data-screen') || current); },
     'reset-filter': function (el) { S.resetFilter(el.getAttribute('data-screen') || current); },
     'apply-filter': function (el) { S.applyFilter(el.getAttribute('data-screen') || current); },
+    'date-picker': function (el) {
+      var input = document.getElementById(el.getAttribute('data-target'));
+      if (!input) return;
+      try { if (input.showPicker) input.showPicker(); else input.click(); }
+      catch (ignorePicker) { input.click(); }
+    },
     'apply-report': S.applyReportFilter,
     'room-backlog': function () { S.roomShowBacklog(); },
+    'board-plan': function () { S.togglePlan(); },
+    'board-khac': function () { S.toggleKhac(); },
+    'staff-work-detail': function (el) { S.staffWorkDetail(el.getAttribute('data-user-id')); },
+    'assignment-staff-work-preview': function (el) { S.assignmentStaffWorkPreview(el); },
+    'plan-edit': S.planDialog,
+    'staff-absence': S.staffAbsenceDialog,
+    'staff-absence-edit': function (el) { S.staffAbsenceEditDialog(el.getAttribute('data-id')); },
+    'my-absence': S.myAbsenceDialog,
     'board-tab': function (el) { S.setFilter('board', 'tab', el.getAttribute('data-tab') || 'report'); render(); },
     'sort-column': function (el) { S.toggleSort(el.getAttribute('data-screen') || current, el.getAttribute('data-sort') || 'date'); render(); },
     'queue-unit': function (el) { S.setFilter('queue', 'qunit', el.getAttribute('data-unit') || ''); S.setFilter('queue', 'page', 1); render(); },
-    'queue-tab': function (el) { S.setFilter('queue', 'tab', el.getAttribute('data-tab')); S.setFilter('queue', 'page', 1); render(); },
-    'queue-page': function (el) { if (!el.disabled) { S.setFilter('queue', 'page', Number(el.getAttribute('data-page')) || 1); render(); } },
+    'queue-view': function (el) { ui.closeDialog(); S.setFilter('queue', 'view', el.getAttribute('data-view') || ''); render(); window.scrollTo(0, 0); },
+    'tracking-tab': function (el) { S.setFilter('tracking', 'tab', el.getAttribute('data-tab') || 'all'); S.setFilter('tracking', 'page', 1); render(); },
+    'mine-tab': function (el) { S.setFilter('mine','tab',el.getAttribute('data-tab') || 'all'); render(); },
+    'start-work': function (el) { S.startWork(el.getAttribute('data-id')); },
+    'unit-chip': function (el) { var sc = el.getAttribute('data-screen') || 'tracking'; S.setFilter(sc, 'tunit', el.getAttribute('data-unit') || ''); S.setFilter(sc, 'page', 1); render(); },
+    'report-hub': function (el) { S.setFilter('report', 'hub', el.getAttribute('data-tab') || 'multi'); render(); },
+    'queue-page': function (el) { if (!el.disabled) { S.setFilter(el.getAttribute('data-screen') || 'queue', 'page', Number(el.getAttribute('data-page')) || 1); render(); } },
     revision: function (el) { S.revision(el.getAttribute('data-id'), el.getAttribute('data-ok') === '1'); },
     'add-row': function () {
       var box = document.getElementById('rows');
@@ -479,14 +751,20 @@ LS.app = (function () {
       el.closest('.row-item').remove();
     },
     'export-csv': S.exportCsv,
+    'audit-more': S.auditMore,
+    'cfglog-reload': function () { LS.admin.reloadConfigLog(); },
+    'audit-reload': S.auditReload,
+    'audit-run': S.auditRun,
     'download-daily-image': S.downloadDailyImage,
     'create-next-monthly-plan': function () {
       ui.confirm({ title: 'Tạo kế hoạch tháng kế tiếp', heading: 'Tạo Sheet liên kết cho tháng sau?',
-        text: 'Hệ thống sẽ tạo Google Sheet kế hoạch mới, chuyển tiếp việc đang mở và chỉ tự kích hoạt vào ngày đầu tháng kế tiếp.',
+        text: 'Tạo trước Sheet tháng mới. Ngày đầu tháng kỳ mới tự kích hoạt và việc đang mở tự chuyển sang; trước đó mọi việc vẫn làm bình thường ở tháng này.',
         ok: 'Tạo kế hoạch', run: function () { LS.api.createNextMonthlyPlan().then(function () { return refreshServer('Đã tạo kế hoạch tháng kế tiếp.'); }).catch(function (e) { ui.toast(e.message || 'Không thể tạo kế hoạch tháng.', 'err'); }); } });
     },
 
     'admin-go': function (el) { A.setSection(el.getAttribute('data-section')); render(); window.scrollTo(0, 0); },
+    'update-notice-edit': A.editUpdateNotice,
+    'update-notice-clear': A.clearUpdateNotice,
     'admin-score-toggle': function (el) {
       var hide = el.getAttribute('data-hide') === '1';
       A.setScoreHidden(hide);
@@ -512,7 +790,9 @@ LS.app = (function () {
     'unit-edit': function (el) { A.unitDialog(el.getAttribute('data-id')); },
     'user-edit': function (el) { A.userDialog(el.getAttribute('data-id')); },
     'user-reset-password': function (el) { A.resetUserPasswordDialog(el.getAttribute('data-id')); },
+    'user-delete': function (el) { A.deleteUserDialog(el.getAttribute('data-id')); },
     'user-import': A.userImportDialog,
+    'user-import-template': A.downloadUserImportTemplate,
     'reason-edit': function (el) { A.reasonDialog(el.getAttribute('data-code')); },
     'catalog-option-edit': function (el) { A.catalogOptionDialog(el.getAttribute('data-id')); },
     'assignment-rule-edit': function (el) { A.assignmentRuleDialog(el.getAttribute('data-id')); },
@@ -537,9 +817,16 @@ LS.app = (function () {
   };
 
   function onClick(ev) {
+    // Hộp thoại phân công: bấm chỗ nào trên dòng cán bộ cũng tick chọn dòng đó.
+    var pickRow = ev.target.closest('tr[data-pick-assignee]');
+    if (pickRow && !ev.target.closest('input, label, a, button')) {
+      var radio = pickRow.querySelector('input[type="radio"]');
+      if (radio && !radio.disabled) radio.checked = true;
+      return;
+    }
     var el = ev.target.closest('[data-act]');
     if (!el) {
-      if (ev.target.id === 'scrim') ui.closeDialog();
+      if (ev.target.id === 'scrim') closeDialog();
       return;
     }
     if (el.tagName === 'INPUT') return; // công tắc xử lý ở sự kiện change
@@ -548,11 +835,25 @@ LS.app = (function () {
   }
 
   var FORMS = {
+    'confirm-time-owner': S.submitOwner,
     login: function (form) { var d = new FormData(form); login(d.get('login_code'), d.get('password')); },
     confirm: ui.runConfirm,
     'change-password': changePassword,
     'new-request': S.submitNewRequest,
     'edit-item': S.submitEdit,
+    'cancel-request': S.submitCancelRequest,
+    'edit-times': S.submitTimes,
+    'change-due-date': S.submitDueDate,
+    supplement: S.submitSupplement,
+    'result-flags': S.submitResultFlags,
+    'work-plan': S.submitPlan,
+    'staff-absence': S.saveStaffAbsence,
+    'my-absence': S.saveMyAbsence,
+    'time-report': S.runTimeReport,
+    'team-view': S.runTeamView,
+    'global-pause': S.submitGlobalPause,
+    'other-work': S.submitOtherWork,
+    'end-pause': S.submitEndGlobalPause,
     flow: S.submitFlow,
     channel: A.saveChannel,
     template: A.saveTemplate,
@@ -562,12 +863,14 @@ LS.app = (function () {
     unit: A.saveUnit,
     user: A.saveUser,
     'user-reset-password': A.resetUserPassword,
+    'user-delete': A.submitDeleteUser,
     'user-import': A.importUsers,
     reason: A.saveReason,
     'catalog-option': A.saveCatalogOption,
     'assignment-rule': A.saveAssignmentRule,
     calendar: A.saveCalendar,
-    settings: A.saveSettings
+    settings: A.saveSettings,
+    'update-notice': A.saveUpdateNotice
   };
 
   function onSubmit(ev) {
@@ -580,21 +883,35 @@ LS.app = (function () {
 
   var typeTimer = null;
 
+  function onDateInput(ev) {
+    var display = ev.target.closest('[data-date-display-for]');
+    if (!display) return;
+    LS.ui.syncDateInput(display);
+    S.syncRequestWeekdays(display.closest('.row-item'));
+  }
+
   /** Lọc gõ tới đâu lọc tới đó, giữ nguyên con trỏ sau khi vẽ lại. */
   function onFilter(ev) {
     var el = ev.target.closest('[data-filter], [data-draft-filter], [data-ofilter]');
     if (!el) return;
+    var value = el.value;
+    if (el.hasAttribute('data-date-display-for')) {
+      var nativeDate = document.getElementById(el.getAttribute('data-date-display-for'));
+      if (!nativeDate) return;
+      if (el.value.trim() && !nativeDate.value) return;
+      value = nativeDate.value;
+    }
 
     if (el.hasAttribute('data-ofilter')) {
-      A.setOutFilter(el.getAttribute('data-ofilter'), el.value);
+      A.setOutFilter(el.getAttribute('data-ofilter'), value);
     } else {
       var filterScreen = el.getAttribute('data-filter-screen') || current;
       if (el.hasAttribute('data-draft-filter')) {
-        S.setDraftFilter(filterScreen, el.getAttribute('data-draft-filter'), el.value);
+        S.setDraftFilter(filterScreen, el.getAttribute('data-draft-filter'), value);
         return;
       }
       var filterKey = el.getAttribute('data-filter');
-      S.setFilter(filterScreen, filterKey, el.value);
+      S.setFilter(filterScreen, filterKey, value);
       if (filterKey === 'q') S.setFilter(filterScreen, 'page', 1);
       if (filterKey === 'sort') S.setFilter(filterScreen, 'sortDir', '');
     }
@@ -621,6 +938,27 @@ LS.app = (function () {
   function onChange(ev) {
     var t = ev.target;
 
+    if (t.type === 'date' && (t.hasAttribute('data-request-native-date') || /^dt_/.test(t.name || ''))) {
+      S.syncRequestWeekdays(t.closest('.row-item'));
+      return;
+    }
+
+    if (t.hasAttribute('data-date-native-for')) {
+      var display = document.querySelector('[data-date-display-for="' + t.getAttribute('data-date-native-for') + '"]');
+      if (display) {
+        var kind = display.getAttribute('data-date-kind');
+        display.value = kind === 'datetime-local'
+          ? U.fmtDate(t.value.split('T')[0]) + ' ' + (t.value.split('T')[1] || '').slice(0, 5) +
+            ((t.value.split('T')[1] || '').length > 5 ? ':' + t.value.split('T')[1].slice(6, 8) : '')
+          : U.fmtDate(t.value);
+        display.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return;
+    }
+
+    if (t.getAttribute('data-role') === 'request-weekday') { S.selectRequestWeekday(t); return; }
+    if (t.getAttribute('data-role') === 'request-week') { S.selectRequestWeek(t); return; }
+
     if (t.getAttribute('data-role') === 'work-type-group') {
       S.syncProductOptions(t);
       return;
@@ -631,12 +969,25 @@ LS.app = (function () {
       return;
     }
 
+    if (t.getAttribute('data-role') === 'collateral-mode') {
+      S.syncRequestQuantities(t.closest('.row-item'));
+      return;
+    }
+
     if (t.hasAttribute('data-cond')) { applyConds(); return; }
+
+    // Quy tắc phân công nhanh: tick cả nhóm sản phẩm / "Mọi sản phẩm" đồng bộ các ô còn lại.
+    if (t.hasAttribute('data-rule-scope')) { A.syncRuleScope(t); return; }
 
     var reportField = { 'report-preset': 'preset', 'report-from': 'from', 'report-to': 'to', 'report-group': 'group' };
     var reportAct = t.getAttribute('data-act');
     if (reportAct && reportField[reportAct]) {
-      S.setReportFilter(reportField[reportAct], t.value);
+      var reportValue = t.value;
+      if (t.hasAttribute('data-date-display-for')) {
+        var reportDate = document.getElementById(t.getAttribute('data-date-display-for'));
+        reportValue = reportDate ? reportDate.value : '';
+      }
+      S.setReportFilter(reportField[reportAct], reportValue);
       return;
     }
 
@@ -647,7 +998,24 @@ LS.app = (function () {
         S.saveChecklistToggle(act.getAttribute('data-id'), Number(act.getAttribute('data-index')), !!t.checked);
         return;
       }
+      if (a === 'step-toggle') {
+        var stepRow = act.closest('[data-step-row]');
+        var stepQuantity = stepRow && stepRow.querySelector('[data-act="step-quantity"]');
+        S.recordStepToggle(act.getAttribute('data-id'), act.getAttribute('data-key'), !!t.checked, stepQuantity ? stepQuantity.value : '1');
+        return;
+      }
+      if (a === 'step-quantity') {
+        S.recordStepQuantity(act.getAttribute('data-id'), act.getAttribute('data-key'), t.value);
+        return;
+      }
+      if (a === 'dossier-received') {
+        if (t.checked) S.confirmDossierReceipt(act.getAttribute('data-id'));
+        else t.checked = true;
+        return;
+      }
       if (a === 'linked-toggle') { S.toggleLinkedBox(!!t.checked); return; }
+      if (a === 'pick-row') { S.togglePick(act.getAttribute('data-id'), !!t.checked); return; }
+      if (a === 'pick-all') { S.togglePickAll(!!t.checked); return; }
       if (a === 'chan-toggle') { A.toggleChannel(act.getAttribute('data-code')); return; }
       if (a === 'rule-toggle') { A.toggleRule(act.getAttribute('data-id')); return; }
     }
@@ -676,7 +1044,8 @@ LS.app = (function () {
       ['J  ↓', 'Xuống dòng kế'],
       ['K  ↑', 'Lên dòng trước'],
       ['Enter  O', 'Mở chi tiết dòng đang chọn'],
-      ['A', 'Bấm thao tác chính của dòng (Bắt đầu, Soạn xong…)'],
+      ['A', 'Bấm thao tác chính của dòng (Tiếp nhận, Hẹn ký…)'],
+      ['C', 'Mở Hoàn thành cho dòng đang chọn (khi đủ điều kiện)'],
       ['Tab', 'Đi qua các nút trong dòng']
     ]],
     ['Hộp thoại', [
@@ -741,7 +1110,7 @@ LS.app = (function () {
 
   function onKey(ev) {
     var k = ev.key;
-    if (k === 'Escape' && ui.dialogOpen()) { ui.closeDialog(); return; }
+    if (k === 'Escape' && ui.dialogOpen()) { closeDialog(); return; }
     if (k === 'Enter' && (ev.ctrlKey || ev.metaKey) && ui.dialogOpen()) {
       var form = document.querySelector('#dialog form');
       if (form) { ev.preventDefault(); if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); }
@@ -778,6 +1147,9 @@ LS.app = (function () {
       case 'a': case 'A':
         handled = !!row && (clickFirst('.act-row .btn-primary', row) || clickFirst('.act-row [data-act="flow"], .act-row [data-act="quick-assign"]', row));
         break;
+      case 'c': case 'C':
+        handled = !!row && clickFirst('.act-row [data-act="flow"][data-to="HOAN_THANH_LS"]', row);
+        break;
       case 'n': case 'N': handled = clickFirst('#main [data-act="new-request"]'); break;
       case 'f': case 'F': handled = clickFirst('#main [data-act="open-filter"]'); break;
       case 'r': case 'R':
@@ -788,7 +1160,7 @@ LS.app = (function () {
       default:
         if (/^[1-9]$/.test(k)) {
           var nav = D.ROLES[me().role].nav, target = nav[Number(k) - 1];
-          if (target) { current = target; render(); var main = document.getElementById('main'); if (main) main.focus({ preventScroll: true }); window.scrollTo(0, 0); }
+          if (target) { current = target; S.enterScreen(current); render(); var main = document.getElementById('main'); if (main) main.focus({ preventScroll: true }); window.scrollTo(0, 0); }
           else handled = false;
         } else handled = false;
     }
@@ -797,14 +1169,23 @@ LS.app = (function () {
 
   /* ============================ Khởi động ============================ */
 
+  var clockTimer = null;
   function init() {
     root = document.getElementById('root');
     ui.bind();
     LS.charts.bind();
     U.load(D.seed);
+    if (!clockTimer) clockTimer = setInterval(function () {
+      if (st().session && !document.hidden) {
+        var now = new Date();
+        S.refreshClocks(now);
+        refreshDashboardClock(now);
+      }
+    },1000);
 
     document.addEventListener('click', onClick);
     document.addEventListener('submit', onSubmit);
+    document.addEventListener('input', onDateInput);
     document.addEventListener('input', onFilter);
     document.addEventListener('change', onChange);
     document.addEventListener('keydown', onKey);
@@ -821,9 +1202,21 @@ LS.app = (function () {
       };
       document.addEventListener('visibilitychange', onReturn);
       window.addEventListener('focus', onReturn);
-      // Luôn hiển thị màn mã cán bộ để không phụ thuộc email Google của người mở webapp.
-      // Sau khi authenticateUser() thành công, toàn bộ bootstrap vẫn chạy phía GAS.
-      root.innerHTML = authView();
+      mountQueueBadge();
+      // Mọi lệnh ghi không rõ kết quả (kể cả lệnh không đi qua background) đều
+      // dẫn tới một lần tải lại để đối chiếu với máy chủ.
+      if (LS.api.onUnknownOutcome) LS.api.onUnknownOutcome(function () { scheduleRefresh(2000); });
+      // Phiên hết hạn giữa chừng (hoặc bị quản trị khóa): về màn đăng nhập, không
+      // để người dùng tiếp tục bấm vào các nút sẽ lỗi hết.
+      LS.api.onSessionExpired(function () {
+        if (!st().session) return;
+        st().session = null; current = null; ui.closeDialog(); render();
+        ui.toast('Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.', 'warn');
+      });
+      // Mỗi trình duyệt giữ mã phiên riêng. Có mã thì khôi phục để F5 không bắt
+      // đăng nhập lại; không có thì vào thẳng form, khỏi tốn một lượt gọi máy chủ.
+      if (!LS.api.hasSession()) { root.innerHTML = authView(); return; }
+      restoreSession();
       return;
     }
 
@@ -837,12 +1230,19 @@ LS.app = (function () {
    * làm người dùng mất chỗ đang đứng.
    */
   var lastRefresh = 0;
+  var refreshSequence = 0;
 
   function refreshServer(message, silent) {
     if (!U.isGas()) return Promise.resolve();
+    var queued = LS.api.queueStatus ? LS.api.queueStatus() : { pending: syncing, epoch: 0 };
+    if (queued.pending) { scheduleRefresh(1500); return Promise.resolve(); }
+    var sequence = ++refreshSequence, epoch = queued.epoch, session = st().session;
     lastRefresh = Date.now();
     refreshOnClose = false;
     return LS.api.bootstrap().then(function (snapshot) {
+      var latest = LS.api.queueStatus ? LS.api.queueStatus() : { pending: syncing, epoch: 0 };
+      if (session !== st().session || sequence !== refreshSequence) return;
+      if (latest.pending || latest.epoch !== epoch) { scheduleRefresh(1500); return; }
       U.replace(snapshot);
       if (!ui.dialogOpen()) render();
       if (message) ui.toast(message, 'ok');
@@ -906,16 +1306,60 @@ LS.app = (function () {
       return result;
     }).catch(function (error) {
       setSyncFlag(false);
+      // Mạng rớt sau nhiều lần thử: máy chủ có thể ĐÃ ghi. Hoàn tác rồi để người
+      // dùng nhập lại là cách sinh hồ sơ trùng. Giữ nguyên màn hình; lượt tải lại
+      // do onUnknownOutcome hẹn sẽ thay bằng dữ liệu thật của máy chủ.
+      if (error && error.unknownOutcome) {
+        ui.toast((opts.label ? opts.label + ': ' : '') + error.message, 'warn');
+        return;
+      }
       if (opts.rollback) opts.rollback();
       render();
       ui.toast((opts.label ? opts.label + ' không lưu được: ' : '') +
         (error && error.message ? error.message : 'Máy chủ không phản hồi.'), 'err');
+      // Màn hình đã đổi trước khi máy chủ trả lời nên sau lỗi phải lấy lại dữ liệu thật, không để lệch.
+      scheduleRefresh(1500);
+    });
+  }
+
+  /** Nhãn nhỏ cho biết còn bao nhiêu thao tác đang lần lượt lưu. */
+  function mountQueueBadge() {
+    if (!LS.api.onQueueChange || document.getElementById('queue-badge')) return;
+    var badge = document.createElement('div');
+    badge.id = 'queue-badge';
+    badge.className = 'queue-badge';
+    badge.setAttribute('role', 'status');
+    badge.setAttribute('aria-live', 'polite');
+    document.body.appendChild(badge);
+    // Thao tác chạy ngầm: bình thường không hiện gì. Chỉ hiện khi máy chủ bận phải thử lại, hoặc hàng chờ
+    // kéo dài bất thường (hơn QUEUE_SLOW_MS), để người dùng biết còn thao tác chưa tới máy chủ và không đóng trang.
+    var QUEUE_SLOW_MS = 8000, slowTimer = null, slow = false, last = { pending: 0, retrying: false };
+    function paint() {
+      var show = last.pending > 0 && (last.retrying || slow);
+      badge.classList.toggle('is-on', show);
+      badge.classList.toggle('is-retry', !!last.retrying);
+      badge.textContent = last.retrying
+        ? 'Đang bận, tự thử lại · ' + last.pending + ' chờ lưu'
+        : 'Đang lưu ' + last.pending + ' thao tác…';
+    }
+    LS.api.onQueueChange(function (s) {
+      last = s;
+      if (!s.pending) { if (slowTimer) clearTimeout(slowTimer); slowTimer = null; slow = false; }
+      else if (!slow && !slowTimer) slowTimer = setTimeout(function () { slowTimer = null; slow = true; paint(); }, QUEUE_SLOW_MS);
+      paint();
     });
   }
 
   return {
     init: init, render: render, download: download, applyConds: applyConds,
-    refreshServer: refreshServer, background: background, scheduleRefresh: scheduleRefresh, downloadXlsx: downloadXlsx
+    showAssignmentQueue: function () {
+      var user = me();
+      if (!user || st().mustChangePassword || ['KS_LS', 'QUAN_LY_LS'].indexOf(user.role) === -1) return;
+      current = 'queue'; render(); refreshServer(); window.scrollTo(0, 0);
+    },
+    showActivity: function () { if (current !== 'item-activity') activityReturnScreen = current; current = 'item-activity'; render(); window.scrollTo(0, 0); },
+    refreshServer: refreshServer, refreshDashboardClock: refreshDashboardClock, background: background, scheduleRefresh: scheduleRefresh, downloadXlsx: downloadXlsx,
+    loadXlsx: loadXlsx, downloadBlob: downloadBlob
   };
 })();
 

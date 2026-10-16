@@ -30,7 +30,8 @@ const required = [
   [repository, 'tailWhere: tailWhere_, invalidate', 'tailWhere phải dùng được bên trong một giao dịch.'],
 
   [server, "DataRepository.tailWhere('Inbox', 200", 'Hộp thư phải lọc theo người nhận trong lúc quét.'],
-  [server, "DataRepository.tailWhere('Events', 800", 'Nhật ký phải lọc theo phạm vi vai trò trong lúc quét.'],
+  [server, "DataRepository.tailWhere('Events', limit", 'Nhật ký phải lọc theo phạm vi vai trò trong lúc quét.'],
+  [server, 'stopWhen: function(e)', 'Nhật ký phải dừng quét khi đã qua đầu khoảng ngày.'],
   [server, "DataRepository.tailWhere('NotificationOutbox', 800", 'Hàng đợi tin của cán bộ phải lọc trong lúc quét.'],
   [server, "t.tailWhere('Events', 1", 'Kiểm tra bấm lặp phải quét ngược một đoạn, không đọc trọn bảng Events.'],
   [server, '!truthy_(n.is_read)', 'Đánh dấu đã đọc phải dùng chung bộ đọc cờ truthy_.'],
@@ -38,7 +39,7 @@ const required = [
 
   [notifications, "t.tail('NotificationMetrics', 2000)", 'Hạn mức mỗi giờ chỉ được đọc phần đuôi bảng metrics.'],
   [notifications, 'function ensureWorkerTriggers', 'Phải có hàm bổ sung trigger mà không xóa trigger đang chạy.'],
-  [notifications, 'reconcileTick:', 'reconcileTick phải nằm trong danh sách trigger nền.'],
+  [notifications, 'reconcileTick_:', 'reconcileTick_ phải nằm trong danh sách trigger nền.'],
   [notifications, 'function reconcileTick', 'Phải có hàm trigger gọi reconcile().'],
   [notifications, 'Notifications.reconcile()', 'reconcileTick phải thực sự gọi reconcile().']
 ];

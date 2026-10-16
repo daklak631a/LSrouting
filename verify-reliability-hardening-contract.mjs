@@ -20,7 +20,7 @@ if (/DataRepository\.tx\(function \(t\) \{[\s\S]{0,5000}send_\(t, o\)/.test(noti
 
 if (!setup.includes('OperationalScoreSnapshots')) fail('Thiếu bảng snapshot điểm theo kỳ.');
 if (!code.includes('writeOperationalScoreSnapshot_')) fail('Thiếu bước chốt snapshot điểm khi đóng kỳ.');
-if (!code.includes('score_formula_v1')) fail('Snapshot điểm phải có version công thức.');
+if (!/SCORE_FORMULA_VERSION = 'score_formula_v[0-9]+'/.test(code)) fail('Snapshot điểm phải có version công thức.');
 if (!code.includes('function ensureRuntimeSchema_') || !code.includes('ensureRuntimeSchema_();')) fail('Kho cũ phải tự migration schema hardening khi bootstrap.');
 if (!api.includes('operationalScoreSnapshots')) fail('GAS API chưa truyền snapshot điểm về client.');
 if (!api.includes('timedDone') || !api.includes('dataQuality')) fail('GAS API chưa truyền đủ chất lượng dữ liệu điểm.');

@@ -76,17 +76,22 @@ if (D.monthsInRange(quy.from, quy.to).length !== 3) fail('Một quý phải gồ
 // Một hồ sơ có đủ bốn mốc phải tách đúng từng đoạn thời gian, không gộp
 // submitted -> completed vào giờ xử lý.
 const timed = row('TIMED_T9', '2026-09', '', '', 'HOAN_THANH_LS');
-timed.submitted_at = '2026-09-05T00:00:00.000Z';
-timed.accepted_at = '2026-09-05T02:00:00.000Z';
-timed.assigned_at = '2026-09-05T05:00:00.000Z';
-timed.completed_at = '2026-09-06T05:00:00.000Z';
+timed.submitted_at = '2026-09-21T07:30:00+07:00';
+timed.first_assigned_at = timed.assigned_at = '2026-09-21T08:30:00+07:00';
+timed.accepted_at = timed.assigned_at;
+timed.dossier_received_at = '2026-09-21T09:30:00+07:00';
+timed.processing_started_at = '2026-09-21T10:00:00+07:00';
+timed.completed_at = '2026-09-21T15:00:00+07:00';
 st.items.push(timed);
 const timingState = Object.assign({}, st, { items: [timed] });
 const timing = D.reportFromItems('2026-09', '2026-09', 'unit', timingState).total;
-if (timing.tong_gio_tiep_nhan !== 2 || timing.tong_gio_phan_cong !== 3 || timing.tong_gio_xu_ly !== 24 || timing.tong_gio_toan_trinh !== 29) {
+// Toàn trình tính từ lúc gửi 07:30 đến 15:00, trừ hai giờ nghỉ trưa.
+// Khoảng nhận 09:30 đến hoàn thành là chỉ số riêng, bằng 3,5 giờ.
+if (ctx.LSTiming.metrics(timed, D.processingCalendar(timingState)).nhan_den_xong !== 3.5) fail('Khoảng nhận đến hoàn thành phải là 3,5 giờ.');
+if (timing.tong_gio_tiep_nhan !== 1 || timing.tong_gio_phan_cong !== 1 || timing.tong_gio_xu_ly !== 3 || timing.tong_gio_toan_trinh !== 5.5) {
   fail('Các đoạn thời gian nhận/phân công/xử lý/toàn trình không được tính đúng: ' + JSON.stringify(timing));
 }
-if (timing.gio_tiep_nhan_tb !== 2 || timing.gio_phan_cong_tb !== 3 || timing.gio_xu_ly_tb !== 24 || timing.gio_toan_trinh_tb !== 29) {
+if (timing.gio_tiep_nhan_tb !== 1 || timing.gio_phan_cong_tb !== 1 || timing.gio_xu_ly_tb !== 3 || timing.gio_toan_trinh_tb !== 5.5) {
   fail('Thời gian trung bình phải suy từ tổng và số mẫu của từng đoạn.');
 }
 

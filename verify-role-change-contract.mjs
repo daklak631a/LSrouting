@@ -10,7 +10,7 @@ const required = [
   [server, 'function handoverOpenWork_', 'Server phải có thao tác bàn giao việc mở khi đổi vai trò cán bộ.'],
   [server, 'handoverOpenWork_(t, code, data.replacement_user_id', 'Đổi vai trò phải gọi bàn giao với cán bộ thay thế đã chọn.'],
   [server, "throw new Error('Còn ' + openItems.length + ' việc đang mở; chọn cán bộ thay thế trước khi đổi vai trò hoặc khóa.')", 'Lỗi thiếu cán bộ thay thế phải nói rõ cách xử lý.'],
-  [admin, 'Nếu đổi khỏi Cán bộ LS khi còn việc mở, chọn cán bộ thay thế', 'Form người dùng phải hướng dẫn bàn giao khi đổi vai trò.']
+  [admin, "ui.select('replacement_user_id'", 'Form người dùng phải có ô chọn cán bộ thay thế khi đổi vai trò.']
 ];
 
 for (const [source, marker, message] of required) {
@@ -34,6 +34,7 @@ const context = {
   Notifications: { queue: (...args) => queued.push(args) },
   Utilities: { getUuid: () => '00000000-0000-0000-0000-000000000001' }
 };
+vm.runInNewContext(read('TimeTracking.gs'), context);
 vm.runInNewContext(server, context);
 const moved = context.handoverOpenWork_(tx, 'OLD', 'NEW', 'ADMIN', [item], 'Bàn giao kiểm thử.');
 if (moved !== 1 || item.assigned_user_id !== 'NEW' || item.version !== 5) {

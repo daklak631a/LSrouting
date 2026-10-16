@@ -11,7 +11,8 @@ const required = [
   [server, 'notification_mode', 'Server must accept the user notification choice.'],
   [notifications, 'channelMode', 'GAS notification queue must support an internal-only mode.'],
   [notifications, "? ['IN_APP']", 'Internal-only mode must never select an external channel.'],
-  [screens, 'Thông báo cán bộ', 'Completion dialog must offer notifying staff.'],
+  [screens, 'Chỉ báo trong app', 'Completion dialog must offer internal-only notifications.'],
+  [screens, 'value="DEFAULT" checked', 'Completion must default to configured email plus in-app notifications.'],
   [screens, 'name="notification_mode"', 'Completion dialog must submit the notification choice.'],
   [screens, 'notification_mode: notificationMode', 'Client must send the selected notification mode.'],
   [domain, 'channelMode', 'Browser fallback must match the internal-only notification choice.']

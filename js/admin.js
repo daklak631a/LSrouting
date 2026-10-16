@@ -57,22 +57,39 @@ LS.admin = (function () {
       ['units', 'Đơn vị', 'building'],
       ['users', 'Người dùng', 'users'],
       ['reasons', 'Lý do', 'clipboard'],
-      ['catalog', 'Dropdown nguồn', 'list'],
+      ['catalog', 'Danh mục chọn', 'tag'],
       ['assignment', 'Phân công nhanh', 'zap']
     ]],
     ['Hệ thống', [
       ['calendar', 'Lịch làm việc', 'calendar'],
       ['settings', 'Cấu hình chung', 'sliders'],
+      ['update-notice', 'Thông báo phiên bản', 'bell'],
       ['data', 'Dữ liệu', 'database']
     ]]
   ];
 
-  function setSection(s) { section = s; }
+  // Nhật ký cấu hình chỉ tải khi mở mục này, không đi theo mỗi lượt tải lại của ứng dụng.
+  var cfgLogCache = null, cfgLogSequence = 0;
+  function setSection(s) { section = s; cfgLogCache = null; cfgLogSequence++; }
+
+  function loadConfigLog() {
+    var seq = ++cfgLogSequence;
+    cfgLogCache = { loading: true };
+    LS.api.getConfigLog().then(function (data) {
+      if (seq !== cfgLogSequence) return;
+      cfgLogCache = { rows: data.rows || [] };
+      LS.app.render();
+    }).catch(function (e) {
+      if (seq !== cfgLogSequence) return;
+      cfgLogCache = { error: e.message || 'Không tải được nhật ký cấu hình.' };
+      LS.app.render();
+    });
+  }
 
   function nav() {
     var h = D.outboxHealth(st());
     var alerts = {
-      outbox: h.failed + h.waiting,
+      outbox: h.failed + h.waiting + h.unknown,
       channels: st().channels.filter(function (c) { return D.CHANNELS[c.code] && !D.channelUsable(c.code, st()); }).length,
       templates: st().templates.filter(function (t) { return t.status === 'CHO_DUYET'; }).length
     };
@@ -103,6 +120,7 @@ LS.admin = (function () {
       case 'assignment': body = assignment(); break;
       case 'calendar': body = calendar(); break;
       case 'settings': body = settings(); break;
+      case 'update-notice': body = updateNotice(); break;
       case 'data': body = data(); break;
       case 'cfglog': body = cfglog(); break;
       default: body = overview();
@@ -156,8 +174,7 @@ LS.admin = (function () {
     return ui.block({
       title: 'Điểm vận hành đang ẩn', icon: 'eye-off',
       actions: ui.btn('Hiện điểm vận hành', { act: 'admin-score-toggle', data: ' data-hide="0"', sm: true, kind: 'primary', icon: 'eye' }),
-      body: ui.pad('<p class="t2">Bảng điểm ' + liveCount + ' cán bộ và ' + snapshotCount +
-        ' dòng lịch sử điểm đã chốt đang được ẩn trên trình duyệt này. Điểm vẫn được tính và chốt theo kỳ như bình thường.</p>')
+      body: ui.pad('<p class="t2">' + liveCount + ' cán bộ · ' + snapshotCount + ' bản chốt</p>')
     });
   }
 
@@ -174,10 +191,11 @@ LS.admin = (function () {
           var tone = score === null ? '' : (score >= 80 ? 'ok' : (score >= 60 ? 'warn' : 'danger'));
           return { cls: x.lateOpen ? 'flag-warn' : '', cells: [
             '<div class="t1">' + U.esc(x.user.full_name) + '</div>',
-            score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.onTime + '/' + x.done + '</span>',
-            score === null ? '<span class="t2">—</span>' : '<span class="tid">' + x.done + '/' + x.eligible + '</span>',
-            score === null ? '<span class="t2">—</span>' : (x.lateOpen ? ui.tag(String(x.lateOpen), 'danger') : '<span class="tid">0</span>'),
-            score === null ? '<span class="t2">Chưa có dữ liệu</span>' : ui.tag(String(score), tone)
+            x.timedDone ? '<span class="tid">' + x.onTime + '/' + x.timedDone + '</span>'
+              : (x.slaExemptDone ? ui.tag('Miễn HĐTC', 'neutral') : '<span class="t2">—</span>'),
+            '<span class="tid">' + x.done + '/' + x.eligible + '</span>',
+            x.lateOpen ? ui.tag(String(x.lateOpen), 'danger') : '<span class="tid">0</span>',
+            score === null ? (x.dataQuality === 'SLA_MIEN' ? ui.tag('Không tính SLA', 'neutral') : '<span class="t2">Chưa có dữ liệu</span>') : ui.tag(String(score), tone)
           ] };
         }),
         { icon: 'users', title: 'Chưa có cán bộ LS', text: '' }
@@ -202,11 +220,11 @@ LS.admin = (function () {
             '<div class="t1">' + U.esc(x.full_name || x.user_id || '—') + '</div>',
             score === '—' ? '<span class="t2">—</span>' : ui.tag(score, tone),
             '<span class="tid">' + U.esc(String(x.done || 0)) + ' / ' + U.esc(String(x.on_time || 0)) + '</span>',
-            '<span class="t2">' + U.esc(x.data_quality || 'DAT_CHUAN') + '</span>',
+            '<span class="t2">' + U.esc(x.data_quality === 'SLA_MIEN' ? 'Miễn quá hạn (HĐTC)' : (x.data_quality === 'THIEU_HAN_SLA' ? 'Thiếu hạn SLA' : (x.data_quality === 'OK' ? 'Đạt dữ liệu' : (x.data_quality || 'Đạt dữ liệu')))) + '</span>',
             '<span class="tid">' + U.fmtDT(x.captured_at || '') + '</span>'
           ] };
         }),
-        { icon: 'chart', title: 'Chưa có snapshot', text: 'Điểm sẽ xuất hiện sau khi một kỳ được chốt.' }
+        { icon: 'chart', title: 'Chưa có kỳ đã chốt', text: '' }
       )
     });
     return out;
@@ -218,7 +236,7 @@ LS.admin = (function () {
     var workerStatus = String(s.settings.worker_last_run_status || '').trim();
     var workerTone = workerStatus === 'OK' ? 'ok' : (workerStatus ? 'warn' : '');
     out += ui.block({
-      title: 'Worker thông báo', icon: 'activity',
+      title: 'Tiến trình gửi tin', icon: 'activity',
       body: ui.pad(workerAt
         ? ui.kv([
           ['Trạng thái lần chạy gần nhất', ui.tag(workerStatus || 'CHƯA CÓ', workerTone)],
@@ -226,7 +244,7 @@ LS.admin = (function () {
           ['Đã gửi / lỗi / còn lại', String(s.settings.worker_last_run_sent || 0) + ' / ' + String(s.settings.worker_last_run_failed || 0) + ' / ' + String(s.settings.worker_last_run_remaining || 0)],
           ['Backup kho gần nhất', s.settings.backup_last_at ? U.fmtDT(s.settings.backup_last_at) : 'Chưa có']
         ])
-        : ui.banner('warn', 'Worker chưa ghi nhận lần chạy', 'Trigger sẽ tự cài khi kho được mở lần đầu sau deploy.'))
+        : ui.banner('warn', 'Chưa ghi nhận lần chạy', ''))
     });
 
     out += ui.block({
@@ -265,7 +283,7 @@ LS.admin = (function () {
         ? ui.pad('<div class="f-stack">' + warnings.map(function (w) {
           return ui.banner('warn', w[0], w[1]);
         }).join('') + '</div>')
-        : ui.empty({ icon: 'check', title: 'Không có cảnh báo', text: 'Hàng đợi, kênh gửi và hạn xử lý đều trong ngưỡng.' })
+        : ui.empty({ icon: 'check', title: 'Không có cảnh báo', text: '' })
     });
 
     return out;
@@ -519,7 +537,7 @@ LS.admin = (function () {
       ui.field('Kênh', ui.select('channel', chanOpts, cur.channel, { attrs: ' id="tplChannel"' })) +
       '</div>' +
       ui.field('Tên mẫu', ui.input('name', cur.name, { required: true })) +
-      ui.field('Tiêu đề', ui.input('subject', cur.subject)) +
+      ui.field('Tiêu đề', ui.input('subject', cur.subject, { id: 'tplSubject' })) +
       ui.field('Nội dung', ui.textarea('body', cur.body, { id: 'tplBody', required: true, attrs: ' rows="7"' }),
         '') +
       '<div id="tplErrors">' + tplErrorHtml(chk) + '</div>' +
@@ -527,7 +545,8 @@ LS.admin = (function () {
 
       '<aside class="tpl-preview">' +
       '<div class="section-title">Xem trước</div>' +
-      '<div class="tpl-bubble" id="tplPreview">' + U.esc(D.renderTemplate(cur.body, sampleCtx())) + '</div>' +
+      '<div class="tpl-bubble" id="tplPreview"' + (cur.channel === 'EMAIL' ? ' style="display:none"' : '') + '>' + U.esc(D.renderTemplate(cur.body, sampleCtx())) + '</div>' +
+      '<iframe id="tplHtmlPreview" title="Xem trước email" sandbox="" style="width:100%;height:440px;border:1px solid var(--line);border-radius:8px;background:#fff;' + (cur.channel === 'EMAIL' ? '' : 'display:none') + '"></iframe>' +
       '<div class="section-title" style="margin-top:1rem">Biến chèn được</div>' +
       '<div class="var-chips">' + Object.keys(D.VARS).map(function (v) {
         return '<button type="button" class="var-chip" data-act="tpl-var" data-var="' + v + '">{{' + v + '}}</button>';
@@ -543,18 +562,20 @@ LS.admin = (function () {
   function sampleCtx() {
     return {
       ma_viec: 'ITEM_1001A', loai_viec: 'Soạn hồ sơ vay mới', don_vi: 'PGD Bến Thành',
+      can_bo_ls:'Nguyễn Văn LS',hoan_thanh_luc:'09:00 29/09/2026',lich_hen:'09:00 30/09/2026 · PGD Bến Thành',
       han_xu_ly: '16:30 21/09/2026', nguoi_giao: 'Trần Thị Kiểm Soát', link: st().settings.app_url,
       ten_khach: 'Công ty TNHH Minh Phát', thoi_gian: '09:00 22/09/2026', dia_diem: 'PGD Bến Thành',
       hotline: st().settings.hotline, ten_ngan_hang: st().settings.bank_name,
       cif: 'CIF-99201', san_pham: 'Vay vốn lưu động', so_tien: '2.000.000.000',
       so_dien_thoai: '0908123456',
       ngay_ky: '22/09/2026', gio_ky: '09:00', noi_ky: st().settings.sign_place || 'PGD Bến Thành',
+      link_ban_do: D.mapLink(st().settings.sign_place || 'PGD Bến Thành', st().settings),
       tag_can_bo: '@Nguyễn Văn LS'
     };
   }
 
   function tplErrorHtml(chk) {
-    if (chk.ok) return ui.banner('ok', 'Mẫu hợp lệ', 'Không có biến bị cấm trên kênh này.');
+    if (chk.ok) return ui.banner('ok', 'Mẫu hợp lệ', '');
     return '<div class="f-stack">' + chk.errors.map(function (e) {
       return ui.banner('danger', e, '');
     }).join('') + '</div>';
@@ -570,11 +591,23 @@ LS.admin = (function () {
       var tpl = { channel: chan.value, body: body.value };
       var chk = D.checkTemplate(tpl);
       document.getElementById('tplPreview').textContent = D.renderTemplate(body.value, sampleCtx());
+      var frame = document.getElementById('tplHtmlPreview'), isMail = chan.value === 'EMAIL';
+      if (frame) {
+        frame.style.display = isMail ? '' : 'none';
+        document.getElementById('tplPreview').style.display = isMail ? 'none' : '';
+        if (isMail) {
+          var subj = document.getElementById('tplSubject');
+          frame.srcdoc = D.emailHtml(D.renderTemplate(subj ? subj.value : '', sampleCtx()), D.renderTemplate(body.value, sampleCtx()), st().settings);
+        }
+      }
       document.getElementById('tplErrors').innerHTML = tplErrorHtml(chk);
     };
 
     body.addEventListener('input', refresh);
     chan.addEventListener('change', refresh);
+    var subjectInput = document.getElementById('tplSubject');
+    if (subjectInput) subjectInput.addEventListener('input', refresh);
+    refresh();
   }
 
   function insertVar(name) {
@@ -760,6 +793,7 @@ LS.admin = (function () {
     return ui.strip([
       ui.metric('Chờ gửi', h.backlog, h.backlog > s.settings.backlog_alert ? 'danger' : 'info'),
       ui.metric('Chờ xác nhận', h.waiting, h.waiting ? 'warn' : ''),
+      ui.metric('Cần đối soát', h.unknown, h.unknown ? 'warn' : ''),
       ui.metric('Thất bại', h.failed, h.failed ? 'danger' : ''),
       ui.metric('Không gửi', h.skipped)
     ]) +
@@ -778,7 +812,7 @@ LS.admin = (function () {
           list.map(function (o) {
             var stt = D.OUT_STATUS[o.status];
             return {
-              cls: o.status === 'THAT_BAI' ? 'flag' : (o.status === 'CHO_XAC_NHAN' ? 'flag-warn' : ''),
+              cls: o.status === 'THAT_BAI' ? 'flag' : (o.status === 'CHO_XAC_NHAN' || o.status === 'CAN_DOI_SOAT' ? 'flag-warn' : ''),
               cells: [
                 '<span class="tid">' + U.fmtDT(o.created_at) + '</span>',
                 o.item_id ? '<button class="btn btn-quiet btn-sm tid" data-act="detail" data-id="' + U.attr(o.item_id) + '">' + U.esc(o.item_id) + '</button>' : '<span class="t2">—</span>',
@@ -944,8 +978,7 @@ LS.admin = (function () {
       ]) +
       '<div style="margin-top:1rem">' + ui.sectionTitle('Nội dung') +
       '<div class="tpl-bubble">' + U.esc(o.body || '(mẫu chưa có nội dung)') + '</div></div>' +
-      ui.banner('warn', 'Kiểm tra trước khi gửi',
-        'Nội dung không được nêu chi tiết khoản vay, CIF hay số tiền. Gửi rồi không thu hồi được.') +
+      '<p class="hint">Tin đã gửi không thể thu hồi.</p>' +
       ui.formEnd('Xác nhận gửi') + '</form>',
       { size: 'md', sub: o.outbox_id });
   }
@@ -976,7 +1009,7 @@ LS.admin = (function () {
       actions: ui.btn('Thêm loại việc', { kind: 'primary', sm: true, act: 'type-edit', icon: 'plus' }),
       body: ui.table(
         [{ label: 'Mã', cls: 'fit' }, { label: 'Nhóm' }, { label: 'Tên hiển thị' }, { label: 'SLA', cls: 'num' },
-        { label: 'Việc phải làm', cls: 'num' }, { label: 'Cần hẹn', cls: 'fit' }, { label: 'KS duyệt', cls: 'fit' },
+        { label: 'Việc phải làm', cls: 'num' }, { label: 'Cần hẹn', cls: 'fit' },
         { label: 'Trạng thái', cls: 'fit' }, { label: '', cls: 'fit' }],
         st().workTypes.map(function (w) {
           return {
@@ -987,7 +1020,6 @@ LS.admin = (function () {
               '<span class="tid">' + w.sla_hours + 'h</span>',
               '<span class="tid">' + w.checklist.length + '</span>',
               w.needs_appointment ? ui.tag('Có', 'info') : '<span class="t2">Không</span>',
-              w.needs_ks_approval ? ui.tag('Có', 'gold') : '<span class="t2">Không</span>',
               w.active ? ui.tag('Hoạt động', 'ok') : ui.tag('Đã ẩn', 'neutral'),
               ui.iconBtn('pencil', { act: 'type-edit', data: ' data-code="' + U.attr(w.code) + '"', label: 'Sửa loại việc' })
             ]
@@ -1011,7 +1043,6 @@ LS.admin = (function () {
       '</div>' +
       '<div class="f-stack" style="margin-top:1rem">' +
       ui.checkbox('needs_appointment', cur.needs_appointment, 'Cần hẹn khách ký hồ sơ') +
-      ui.checkbox('needs_ks_approval', cur.needs_ks_approval, 'Cần kiểm soát duyệt hoàn thành') +
       ui.checkbox('active', cur.active, 'Đang hoạt động') +
       '</div>' +
       '<div style="margin-top:1.125rem">' +
@@ -1029,7 +1060,8 @@ LS.admin = (function () {
       name: String(d.get('name')).trim(),
       sla_hours: Number(d.get('sla_hours')),
       needs_appointment: d.get('needs_appointment') !== null,
-      needs_ks_approval: d.get('needs_ks_approval') !== null,
+      // Luồng không còn bước kiểm soát duyệt: cờ luôn tắt để dữ liệu cũ không bật lại.
+      needs_ks_approval: false,
       active: d.get('active') !== null,
       checklist: String(d.get('checklist') || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean)
     };
@@ -1134,7 +1166,7 @@ LS.admin = (function () {
       actions: ui.btn('Thêm người dùng', { kind: 'primary', sm: true, act: 'user-edit', icon: 'plus' }) +
         ui.btn('Nhập Excel/CSV', { sm: true, act: 'user-import', icon: 'upload' }),
       body: ui.table(
-        [{ label: 'Mã đăng nhập', cls: 'fit' }, { label: 'Họ tên' }, { label: 'Email' }, { label: 'Đơn vị' },
+        [{ label: 'Mã đăng nhập', cls: 'fit' }, { label: 'Họ tên' }, { label: 'Email liên kết / nhận tin' }, { label: 'Đơn vị' },
         { label: 'Vai trò', cls: 'fit' }, { label: 'Việc đang mở', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: 'Nghỉ', cls: 'fit' }, { label: '', cls: 'fit' }],
         st().users.map(function (u) {
           var open = st().items.filter(function (i) {
@@ -1144,14 +1176,16 @@ LS.admin = (function () {
             cells: [
               '<span class="tid">' + U.esc(u.login_code || u.user_id) + '</span>',
               '<div class="t1">' + U.esc(u.full_name) + '</div>',
-              '<div class="t2">' + U.esc(u.email) + '</div>',
+              '<div class="t2">Liên kết: ' + U.esc(u.linked_email || u.email || '—') + '</div>' +
+              '<div class="t2">Thông báo: ' + U.esc(u.email || '—') + '</div>',
               '<div class="t2">' + U.esc(LS.screens.unitName(u.unit_id)) + '</div>',
               ui.tag(D.ROLES[u.role].label, 'info'),
               open ? '<span class="tid">' + open + '</span>' : '<span class="t2">—</span>',
               !u.active ? ui.tag('Đã khóa', 'neutral') : D.userOff(u) ? ui.tag('Đang nghỉ', 'warn') : ui.tag('Hoạt động', 'ok'),
               u.active && D.userOff(u) ? '<div class="t2">' + U.esc((u.off_from || '') + (u.off_to ? ' → ' + u.off_to : '')) + '</div>' : '',
               (u.auth_group !== 'EXTERNAL' ? ui.iconBtn('lock', { act: 'user-reset-password', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Đặt lại mật khẩu' }) : '') +
-              ui.iconBtn('pencil', { act: 'user-edit', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Sửa người dùng' })
+              ui.iconBtn('pencil', { act: 'user-edit', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Sửa người dùng' }) +
+              (u.user_id !== st().session ? ui.iconBtn('trash', { act: 'user-delete', data: ' data-id="' + U.attr(u.user_id) + '"', label: 'Xóa người dùng' }) : '')
             ]
           };
         })
@@ -1161,14 +1195,16 @@ LS.admin = (function () {
 
   function userDialog(id) {
     var u = id ? U.byId(st().users, 'user_id', id) : null;
-    var cur = u || { user_id: '', login_code: '', auth_group: 'INTERNAL', full_name: '', email: '', unit_id: 'PHONG_LS', role: 'CAN_BO_LS', active: true, availability_status: 'AVAILABLE', off_from: '', off_to: '', off_reason: '', replacement_user_id: '', zalo_name: '', zalo_phone: '', telegram_chat_id: '' };
+    var cur = u || { user_id: '', login_code: '', auth_group: 'INTERNAL', full_name: '', email: '', linked_email: '', unit_id: 'PHONG_LS', role: 'CAN_BO_LS', active: true, availability_status: 'AVAILABLE', off_from: '', off_to: '', off_reason: '', replacement_user_id: '', zalo_name: '', zalo_phone: '', telegram_chat_id: '' };
 
     ui.openDialog(u ? 'Sửa người dùng' : 'Thêm người dùng',
       '<form data-form="user"' + (u ? ' data-id="' + U.attr(u.user_id) + '"' : '') + '>' +
       '<div class="f-row">' +
       ui.field('Mã cán bộ / user', ui.input('login_code', cur.login_code || cur.user_id, { required: true, placeholder: 'Nhập mã cán bộ hoặc user' })) +
       ui.field('Họ tên', ui.input('full_name', cur.full_name, { required: true })) +
-      ui.field('Email công vụ', ui.input('email', cur.email || '', { type: 'email' })) +
+      ui.field('Email liên kết tài khoản Google', ui.input('linked_email', cur.linked_email || cur.email || '', { type: 'email' })) +
+      ui.field('Email nhận thông báo', ui.input('email', cur.email || '', { type: 'email' })) +
+      ui.field('Nhận email hoàn thành của đơn vị',ui.checkbox('receive_completion_email',cur.receive_completion_email,'User Phòng/PGD phụ trách hồ sơ của đơn vị')) +
       ui.field('Đơn vị', ui.select('unit_id', st().units.filter(function (x) { return x.active; }).map(function (x) {
         return [x.unit_id, x.name];
       }), cur.unit_id)) +
@@ -1176,12 +1212,12 @@ LS.admin = (function () {
       ui.field('Khả năng nhận việc', ui.select('availability_status', [['AVAILABLE', 'Có thể nhận việc'], ['OFF', 'Đang nghỉ']], cur.availability_status || 'AVAILABLE')) +
       ui.field('Nghỉ từ', ui.input('off_from', cur.off_from || '', { type: 'date' })) +
       ui.field('Nghỉ đến', ui.input('off_to', cur.off_to || '', { type: 'date' })) +
-      ui.field('Cán bộ thay thế', ui.select('replacement_user_id', st().users.filter(function (x) { return x.role === 'CAN_BO_LS' && x.active && x.user_id !== cur.user_id; }).map(function (x) { return [x.user_id, x.full_name]; }), cur.replacement_user_id || '', { blank: 'Không chỉ định' }), 'Nếu đổi khỏi Cán bộ LS khi còn việc mở, chọn cán bộ thay thế; hệ thống sẽ bàn giao trong cùng thao tác.') +
+      ui.field('Cán bộ thay thế', ui.select('replacement_user_id', st().users.filter(function (x) { return x.role === 'CAN_BO_LS' && x.active && x.user_id !== cur.user_id; }).map(function (x) { return [x.user_id, x.full_name]; }), cur.replacement_user_id || '', { blank: 'Không chỉ định' })) +
       ui.field('Tên trong nhóm Zalo', ui.input('zalo_name', cur.zalo_name || '')) +
-      ui.field('Số Zalo', ui.input('zalo_phone', cur.zalo_phone || '', { type: 'tel' })) +
+      ui.field('Số điện thoại cán bộ (Zalo)', ui.input('zalo_phone', cur.zalo_phone || '', { type: 'tel' })) +
       ui.field('Chat ID Telegram', ui.input('telegram_chat_id', cur.telegram_chat_id || '')) +
       '</div>' +
-      ui.field('Mật khẩu mới', ui.input('new_password', '', { type: 'password', placeholder: 'Để trống để giữ nguyên; phòng/PGD không cần nhập' })) +
+      ui.field('Mật khẩu mới', ui.input('new_password', '', { type: 'password', placeholder: 'Không đổi mật khẩu' })) +
       '<div style="margin-top:1rem">' +
       ui.checkbox('active', cur.active, 'Tài khoản đang hoạt động') + '</div>' +
       ui.field('Lý do nghỉ', ui.textarea('off_reason', cur.off_reason || '', { placeholder: 'Ví dụ: nghỉ phép, nghỉ ốm, đi công tác' })) +
@@ -1197,6 +1233,83 @@ LS.admin = (function () {
       ui.field('Mật khẩu tạm mới', ui.input('next_password', '', { type: 'password', required: true, autocomplete: 'new-password' }), 'Tối thiểu 8 ký tự, có cả chữ và số.') +
       ui.field('Nhập lại mật khẩu tạm', ui.input('confirm_password', '', { type: 'password', required: true, autocomplete: 'new-password' })) +
       ui.formEnd('Đặt mật khẩu') + '</form>');
+  }
+
+  /** Việc đang mở của một người, chia theo còn hạn / đã quá hạn. */
+  function userOpenWork(id) {
+    var now = Date.now();
+    var open = st().items.filter(function (i) { return i.assigned_user_id === id && D.STATUS[i.status] && D.STATUS[i.status].open; });
+    var late = open.filter(function (i) { return D.lateOpen(i, now, st()); });
+    return { open: open, late: late, live: open.filter(function (i) { return late.indexOf(i) === -1; }) };
+  }
+
+  function deleteUserDialog(id) {
+    var u = U.byId(st().users, 'user_id', id);
+    if (!u) return;
+    if (u.user_id === st().session) { ui.toast('Không thể xóa chính tài khoản đang đăng nhập.', 'err'); return; }
+    var work = userOpenWork(id);
+    var finished = st().items.filter(function (i) { return i.assigned_user_id === id && !(D.STATUS[i.status] && D.STATUS[i.status].open); }).length;
+    var rules = (st().catalogOptions || []).filter(function (o) {
+      return o.catalog_key === 'ASSIGNMENT_RULE' && o.active && o.metadata && o.metadata.assignee_id === id;
+    }).length;
+    var staff = st().users.filter(function (x) { return x.user_id !== id && D.userAvailable(x); })
+      .map(function (x) { return [x.user_id, x.full_name]; });
+    var table = work.open.length ? ui.table(
+      [{ label: 'Mã việc', cls: 'fit' }, { label: 'Loại việc' }, { label: 'Trạng thái', cls: 'fit' }, { label: 'Hạn', cls: 'fit' }],
+      work.open.map(function (i) {
+        var wt = U.byId(st().workTypes, 'code', i.work_type_code);
+        var late = work.late.indexOf(i) !== -1;
+        return { cells: [
+          '<span class="tid">' + U.esc(i.source_stt || i.item_id) + '</span>',
+          '<div class="t1">' + U.esc(wt ? wt.name : i.work_type_code) + '</div>',
+          ui.tag((D.STATUS[i.status] || {}).label || i.status, late ? 'danger' : 'info'),
+          i.due_at ? U.esc(U.fmtDT(i.due_at)) + (late ? ' ' + ui.tag('Quá hạn', 'danger') : '') : '<span class="t2">—</span>'
+        ] };
+      }), { icon: 'briefcase', title: '', text: '' }) : '';
+    var intro = work.open.length
+      ? ui.banner(work.live.length ? 'warn' : 'info', work.open.length + ' việc đang mở của ' + u.full_name,
+        work.live.length ? 'Chọn cán bộ nhận bàn giao: ' + work.live.length + ' việc còn hạn phải có người xử lý tiếp.'
+          : 'Tất cả đã quá hạn nên không bắt buộc bàn giao; chọn người nhận nếu muốn giao lại luôn.')
+      : ui.banner('ok', 'Không còn việc đang xử lý', 'Có thể xóa ngay.');
+    var notes = [];
+    if (finished) notes.push(finished + ' việc đã hoàn thành/hủy sẽ giữ làm lịch sử.');
+    if (rules) notes.push(rules + ' quy tắc phân công nhanh của người này sẽ tự tắt.');
+    ui.openDialog('Xóa người dùng',
+      '<form data-form="user-delete" data-id="' + U.attr(u.user_id) + '" data-live="' + work.live.length + '">' +
+      '<p class="t2" style="margin:0 0 .75rem">Xóa vĩnh viễn <b>' + U.esc(u.full_name) + '</b> (' + U.esc(u.login_code || u.user_id) + '), không khôi phục được.</p>' +
+      intro + (table ? '<div style="margin-top:.75rem">' + table + '</div>' : '') +
+      (work.open.length ? ui.field('Giao lại cho cán bộ', ui.select('replacement_user_id', staff, '', { blank: work.live.length ? 'Chọn cán bộ nhận việc…' : 'Không giao lại' })) : '') +
+      (notes.length ? '<p class="t2" style="margin-top:.75rem">' + U.esc(notes.join(' ')) + '</p>' : '') +
+      ui.formEnd('Xóa người dùng', { danger: true }) + '</form>');
+  }
+
+  function submitDeleteUser(form) {
+    var id = form.getAttribute('data-id');
+    var u = U.byId(st().users, 'user_id', id);
+    if (!u) return;
+    var replacementId = String(new FormData(form).get('replacement_user_id') || '');
+    var work = userOpenWork(id);
+    if (work.live.length && !replacementId) { ui.toast('Chọn cán bộ nhận bàn giao ' + work.live.length + ' việc còn hạn.', 'err'); return; }
+    if (U.isGas()) {
+      LS.api.deleteUser(id, replacementId).then(function (r) {
+        ui.closeDialog();
+        var extra = r && r.moved ? ' Đã bàn giao ' + r.moved + ' việc.' : '';
+        return LS.app.refreshServer('Đã xóa người dùng ' + u.full_name + '.' + extra);
+      }).catch(function (error) { ui.toast(error.message || 'Không thể xóa người dùng.', 'err'); });
+      return;
+    }
+    var at = new Date().toISOString();
+    if (replacementId) {
+      work.open.forEach(function (i) {
+        i.assigned_user_id = replacementId; i.assigned_by = 'ADMIN'; i.assigned_at = at; i.updated_at = at;
+        i.version = Number(i.version || 0) + 1;
+      });
+    }
+    (st().catalogOptions || []).forEach(function (o) {
+      if (o.catalog_key === 'ASSIGNMENT_RULE' && o.metadata && o.metadata.assignee_id === id) o.active = false;
+    });
+    st().users = st().users.filter(function (x) { return x.user_id !== id; });
+    commit('Người dùng', 'Xóa ' + id + ' (' + u.full_name + ')' + (replacementId ? '; bàn giao ' + work.open.length + ' việc.' : '.'));
   }
 
   function resetUserPassword(form) {
@@ -1226,6 +1339,9 @@ LS.admin = (function () {
     var d = new FormData(form);
     var id = form.getAttribute('data-id');
     var email = String(d.get('email') || '').trim().toLowerCase();
+    var linkedEmail = String(d.get('linked_email') || '').trim().toLowerCase();
+    if (!U.validEmail(email) || !U.validEmail(linkedEmail) || !U.validPhone(d.get('zalo_phone'))) { ui.toast('Kiểm tra email và số điện thoại cán bộ.','err');return; }
+    if (d.get('receive_completion_email') !== null && String(d.get('role')) === 'PHONG_PGD' && !email) { ui.toast('Nhập email cán bộ để nhận thông báo hoàn thành.','err');return; }
     var loginCode = String(d.get('login_code') || '').trim();
     if (st().users.filter(function (x) { return String(x.login_code || x.user_id).toLowerCase() === loginCode.toLowerCase() && x.user_id !== id; }).length) {
       ui.toast('Mã đăng nhập đã được dùng cho tài khoản khác.', 'err');
@@ -1233,24 +1349,26 @@ LS.admin = (function () {
     }
 
     var patch = {
-      full_name: String(d.get('full_name')).trim(), email: email, login_code: loginCode,
+      full_name: String(d.get('full_name')).trim(), email: email, linked_email: linkedEmail, login_code: loginCode,
+      receive_completion_email:String(d.get('role')) === 'PHONG_PGD' && d.get('receive_completion_email') !== null,
       unit_id: String(d.get('unit_id')), role: String(d.get('role')), active: d.get('active') !== null,
       auth_group: String(d.get('role')) === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL',
       new_password: String(d.get('new_password') || ''),
       availability_status: String(d.get('availability_status') || 'AVAILABLE').toUpperCase(),
       off_from: String(d.get('off_from') || ''), off_to: String(d.get('off_to') || ''),
       off_reason: String(d.get('off_reason') || '').trim(), replacement_user_id: String(d.get('replacement_user_id') || ''),
-      zalo_name: String(d.get('zalo_name') || '').trim(), zalo_phone: String(d.get('zalo_phone') || '').trim(),
+      zalo_name: String(d.get('zalo_name') || '').trim(), zalo_phone: U.normalizePhone(d.get('zalo_phone')),
       telegram_chat_id: String(d.get('telegram_chat_id') || '').trim()
     };
     var targetId = id || U.uid('U');
     if (U.isGas()) {
       LS.api.saveCatalog('user', targetId, {
-        full_name: patch.full_name, email: patch.email, login_code: patch.login_code, auth_group: patch.auth_group,
+        full_name: patch.full_name, email: patch.email, linked_email: patch.linked_email, login_code: patch.login_code, auth_group: patch.auth_group,
         new_password: patch.new_password, unit_id: patch.unit_id, role: patch.role, is_active: patch.active,
         availability_status: patch.availability_status, off_from: patch.off_from, off_to: patch.off_to,
         off_reason: patch.off_reason, replacement_user_id: patch.replacement_user_id,
-        zalo_name: patch.zalo_name, zalo_phone: patch.zalo_phone, telegram_chat_id: patch.telegram_chat_id
+        zalo_name: patch.zalo_name, zalo_phone: patch.zalo_phone, telegram_chat_id: patch.telegram_chat_id,
+        receive_completion_email:patch.receive_completion_email
       }).then(function () { ui.closeDialog(); return LS.app.refreshServer('Đã lưu người dùng.'); })
         .catch(function (error) { ui.toast(error.message || 'Không thể lưu người dùng.', 'err'); });
       return;
@@ -1291,11 +1409,51 @@ LS.admin = (function () {
     }
   }
 
+  var USER_IMPORT_COLUMNS = [
+    'login_code','full_name','unit_id','role','linked_email','notification_email','is_active','sort_order','zalo_name','user_phone',
+    'receive_completion_email','availability_status','off_from','off_to','off_reason','replacement_user_id','telegram_chat_id','source_tab'
+  ];
+
+  function downloadUserImportTemplate() {
+    var name = 'mau_nhap_users.xlsx';
+    var mime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    var encoded = window.LS_USER_IMPORT_TEMPLATE_B64;
+    if (encoded) {
+      var binary = atob(encoded), bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      LS.app.downloadBlob(name, new Blob([bytes], { type: mime }));
+      return;
+    }
+    fetch('templates/mau_nhap_users.xlsx', { credentials: 'same-origin' }).then(function (response) {
+      if (!response.ok) throw new Error('Không tải được mẫu Excel.');
+      return response.blob();
+    }).then(function (blob) { LS.app.downloadBlob(name, blob); })
+      .catch(function (error) { ui.toast(error.message || 'Không tải được mẫu Excel.', 'err'); });
+  }
+
   function userImportDialog() {
     ui.openDialog('Nhập danh sách cán bộ',
       '<form data-form="user-import">' +
-      ui.field('Tệp Excel đã xuất CSV', '<input class="input" type="file" name="file" accept=".csv,.tsv,.txt" required>') +
+      ui.field('Tệp Excel hoặc CSV/TSV', '<input class="input" type="file" name="file" accept=".xlsx,.xls,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values" required>') +
+      '<div class="t2" style="margin:.5rem 0 1rem">Cột bắt buộc: login_code, full_name, unit_id.</div>' +
+      '<div class="form-end">' + ui.btn('Tải mẫu Excel', { act: 'user-import-template', icon: 'download' }) + '</div>' +
       ui.formEnd('Nhập dữ liệu') + '</form>');
+  }
+
+  function parseImportMatrix(matrix) {
+    var rows = (matrix || []).filter(function (row) {
+      return Array.isArray(row) && row.some(function (cell) { return String(cell === undefined || cell === null ? '' : cell).trim() !== ''; });
+    });
+    if (!rows.length) return [];
+    function headerKey(value) {
+      return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    }
+    var headers = rows.shift().map(headerKey);
+    return rows.map(function (values) {
+      var row = {};
+      headers.forEach(function (key, index) { if (key) row[key] = String(values[index] === undefined || values[index] === null ? '' : values[index]).trim(); });
+      return row;
+    });
   }
 
   function parseImportText(text) {
@@ -1312,37 +1470,46 @@ LS.admin = (function () {
       }
       out.push(cur.trim()); return out;
     }
-    var headers = cells(lines.shift()).map(function (x) {
-      return x.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-    });
-    return lines.map(function (line) {
-      var values = cells(line), row = {};
-      headers.forEach(function (key, index) { row[key] = values[index] || ''; });
-      return row;
-    });
+    return parseImportMatrix(lines.map(cells));
   }
 
   function importUsers(form) {
     var file = form.querySelector('input[type=file]').files[0];
-    if (!file) { ui.toast('Chọn file CSV/TSV trước.', 'err'); return; }
+    if (!file) { ui.toast('Chọn file Excel, CSV hoặc TSV trước.', 'err'); return; }
     var reader = new FileReader();
     reader.onload = function () {
       var rows;
-      try { rows = parseImportText(reader.result); } catch (e) { ui.toast('Không đọc được file nhập.', 'err'); return; }
-      if (!rows.length) { ui.toast('File không có dòng dữ liệu.', 'err'); return; }
-      if (!U.isGas()) {
-        rows.forEach(function (r) {
-          var code = String(r.login_code || r.ma_can_bo || '').trim();
-          if (!code || !r.full_name || !r.unit_id) return;
-          st().users.push({ user_id: r.user_id || U.uid('U'), login_code: code, auth_group: (r.role || 'PHONG_PGD') === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL', full_name: r.full_name, email: r.email || '', unit_id: r.unit_id, role: r.role || 'PHONG_PGD', active: r.is_active !== 'false' });
-        });
-        commit('Người dùng', 'Nhập danh sách cán bộ từ CSV.'); return;
+      function applyRows(parsedRows) {
+        rows = parsedRows;
+        if (!rows.length) { ui.toast('File không có dòng dữ liệu.', 'err'); return; }
+        if (!U.isGas()) {
+          rows.forEach(function (r) {
+            var code = String(r.login_code || r.ma_can_bo || '').trim();
+            if (!code || !r.full_name || !r.unit_id) return;
+            var notificationEmail = r.notification_email || r.email || r.email_cong_vu || '';
+            var linkedEmail = r.linked_email || r.email_lien_ket || r.google_email || notificationEmail;
+            st().users.push({ user_id: r.user_id || U.uid('U'), login_code: code, auth_group: (r.role || 'PHONG_PGD') === 'PHONG_PGD' ? 'EXTERNAL' : 'INTERNAL', full_name: r.full_name, email: notificationEmail, linked_email: linkedEmail, zalo_phone: U.normalizePhone(r.user_phone || r.phone || r.so_dien_thoai || r.zalo_phone || ''), zalo_name: r.zalo_name || '', unit_id: r.unit_id, role: r.role || 'PHONG_PGD', active: r.is_active !== 'false' });
+          });
+          commit('Người dùng', 'Nhập danh sách cán bộ từ Excel/CSV.'); return;
+        }
+        LS.api.importUsers(rows).then(function (result) {
+          ui.closeDialog(); return LS.app.refreshServer('Đã nhập ' + (result.created + result.updated) + ' cán bộ.');
+        }).catch(function (error) { ui.toast(error.message || 'Không thể nhập danh sách cán bộ.', 'err'); });
       }
-      LS.api.importUsers(rows).then(function (result) {
-        ui.closeDialog(); return LS.app.refreshServer('Đã nhập ' + (result.created + result.updated) + ' cán bộ.');
-      }).catch(function (error) { ui.toast(error.message || 'Không thể nhập danh sách cán bộ.', 'err'); });
+      if (/\.xlsx?$/i.test(file.name || '')) {
+        LS.app.loadXlsx().then(function (X) {
+          var book = X.read(reader.result, { type: 'array', cellText: true });
+          var sheet = book.Sheets.Users || book.Sheets[book.SheetNames[0]];
+          if (!sheet) throw new Error('Excel không có sheet dữ liệu.');
+          return parseImportMatrix(X.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '', blankrows: false }));
+        }).then(applyRows).catch(function (error) { ui.toast(error.message || 'Không đọc được file Excel.', 'err'); });
+        return;
+      }
+      try { rows = parseImportText(reader.result); } catch (e) { ui.toast('Không đọc được file nhập.', 'err'); return; }
+      applyRows(rows);
     };
-    reader.readAsText(file, 'UTF-8');
+    if (/\.xlsx?$/i.test(file.name || '')) reader.readAsArrayBuffer(file);
+    else reader.readAsText(file, 'UTF-8');
   }
 
   /* ============================ Lý do ============================ */
@@ -1432,7 +1599,7 @@ LS.admin = (function () {
       patch.option_id = id; patch.active = patch.is_active; delete patch.is_active;
       st().catalogOptions = st().catalogOptions || []; st().catalogOptions.push(patch);
     }
-    commit('Dropdown nguồn', (found ? 'Sửa ' : 'Thêm ') + id + '.');
+    commit('Danh mục chọn', (found ? 'Sửa ' : 'Thêm ') + id + '.');
   }
 
   /* ============================ Phân công nhanh ============================ */
@@ -1448,16 +1615,18 @@ LS.admin = (function () {
     return ui.block({
       title: 'Cấu hình phân công nhanh', count: rows.length, icon: 'zap',
       actions: ui.btn('Thêm quy tắc', { kind: 'primary', sm: true, act: 'assignment-rule-edit', icon: 'plus' }),
+      note: 'Phòng do cán bộ nào phụ trách thì hồ sơ <b>cầm cố</b> của phòng đó mặc định về cán bộ ấy. Sản phẩm / cấu phần khác tick thêm trong từng quy tắc. Nút <b>Phân công nhanh</b> ở Hàng chờ giao theo các quy tắc này.',
       body: ui.table(
-        [{ label: 'Phòng' }, { label: 'Loại việc' }, { label: 'Sản phẩm' }, { label: 'Cán bộ LS' }, { label: 'Ưu tiên', cls: 'num' }, { label: 'Trạng thái', cls: 'fit' }, { label: '', cls: 'fit' }],
+        [{ label: 'Phòng' }, { label: 'Sản phẩm / cấu phần' }, { label: 'Cán bộ LS' }, { label: 'Thứ tự', cls: 'num' }, { label: 'Tự giao', cls: 'fit' }, { label: 'Ưu tiên xử lý', cls: 'fit' }, { label: 'Trạng thái', cls: 'fit' }, { label: '', cls: 'fit' }],
         rows.map(function (x) {
           var m = x.metadata || {}, staff = U.byId(st().users, 'user_id', m.assignee_id);
           return { cells: [
             '<div class="t1">' + U.esc(LS.screens.unitName(m.unit_id || x.unit_id) || 'Tất cả phòng') + '</div>',
-            '<div class="t2">' + U.esc((U.byId(st().workTypes, 'code', m.work_type_code) || {}).name || 'Mọi loại việc') + '</div>',
-            '<div class="t2">' + U.esc(m.product_name || 'Mọi sản phẩm') + '</div>',
+            ruleScopeCell(x),
             '<div class="t1">' + U.esc(staff ? staff.full_name : x.label) + '</div>',
             '<span class="tid">' + U.esc(String(m.priority || x.sort_order || 9999)) + '</span>',
+            m.auto_assign ? ui.tag('Bật', 'ok') : ui.tag('Tắt', 'neutral'),
+            m.priority_processing ? ui.tag('Có', 'danger') : ui.tag('Không', 'neutral'),
             x.active ? ui.tag('Đang dùng', 'ok') : ui.tag('Đã ẩn', 'neutral'),
             ui.iconBtn('pencil', { act: 'assignment-rule-edit', data: ' data-id="' + U.attr(x.option_id) + '"', label: 'Sửa quy tắc' })
           ] };
@@ -1466,29 +1635,98 @@ LS.admin = (function () {
     });
   }
 
+  /** Mã loại việc một quy tắc áp dụng (rỗng = mọi sản phẩm), gồm cả quy tắc cũ chỉ có một mã. */
+  function ruleCodes(x) {
+    var m = x.metadata || {};
+    return D.ruleWorkTypeCodes({ work_type_codes: m.work_type_codes, work_type_code: m.work_type_code || x.code });
+  }
+
+  /** Ô "Sản phẩm / cấu phần" của bảng quy tắc: vài tên đầu rồi "+N", đủ danh sách trong tooltip. */
+  function ruleScopeCell(x) {
+    var m = x.metadata || {}, codes = ruleCodes(x);
+    var names = codes.map(function (code) { return (U.byId(st().workTypes, 'code', code) || {}).name || code; });
+    var label = !codes.length ? 'Mọi sản phẩm' : names.slice(0, 2).join(', ') + (names.length > 2 ? ' +' + (names.length - 2) : '');
+    return '<div class="t2"' + (names.length > 2 ? ' title="' + U.attr(names.join('\n')) + '"' : '') + '>' + U.esc(label) + '</div>' +
+      (m.product_name ? '<div class="t2">Sản phẩm: ' + U.esc(m.product_name) + '</div>' : '');
+  }
+
+  /** Danh sách tick sản phẩm, gom theo loại việc; mỗi nhóm có ô tick cả nhóm. */
+  function ruleProductPicker(selected, allProducts) {
+    var groups = [], byGroup = {};
+    st().workTypes.filter(function (w) { return w.active; }).forEach(function (w) {
+      var g = w.group || w.name;
+      if (!byGroup[g]) { byGroup[g] = []; groups.push(g); }
+      byGroup[g].push(w);
+    });
+    return '<label class="check"><input type="checkbox" name="all_products" data-rule-scope data-rule-all' + (allProducts ? ' checked' : '') + '>' +
+      '<span>Mọi sản phẩm<span class="hint">kể cả sản phẩm thêm sau này; bỏ tick để chọn từng sản phẩm</span></span></label>' +
+      '<div class="rule-products' + (allProducts ? ' is-off' : '') + '" id="rule-products">' + groups.map(function (g) {
+        var every = byGroup[g].every(function (w) { return selected.indexOf(w.code) !== -1; });
+        return '<div class="rule-group" role="group" aria-label="' + U.attr(g) + '"><label class="check rule-group-head"><input type="checkbox" data-rule-scope data-rule-group="' + U.attr(g) + '"' + (every ? ' checked' : '') + '>' +
+          '<span><b>' + U.esc(g) + '</b></span></label>' + byGroup[g].map(function (w) {
+            return '<label class="check"><input type="checkbox" name="work_type_codes" value="' + U.attr(w.code) + '" data-rule-scope data-rule-item="' + U.attr(g) + '"' +
+              (selected.indexOf(w.code) !== -1 ? ' checked' : '') + '><span>' + U.esc(w.name) +
+              (D.isPledgeWorkType(w) ? '<span class="hint">cầm cố — mặc định đi theo cán bộ phụ trách phòng</span>' : '') + '</span></label>';
+          }).join('') + '</div>';
+      }).join('') + '</div>';
+  }
+
+  /** Tick cả nhóm / "Mọi sản phẩm" đổi thì đồng bộ các ô còn lại trong hộp thoại. */
+  function syncRuleScope(target) {
+    var dlg = document.getElementById('dialog');
+    if (!dlg) return;
+    var boxes = function (selector) { return Array.prototype.slice.call(dlg.querySelectorAll(selector)); };
+    if (target && target.hasAttribute('data-rule-group')) {
+      boxes('input[data-rule-item]').forEach(function (b) {
+        if (b.getAttribute('data-rule-item') === target.getAttribute('data-rule-group')) b.checked = target.checked;
+      });
+    }
+    boxes('input[data-rule-group]').forEach(function (head) {
+      var items = boxes('input[data-rule-item]').filter(function (b) { return b.getAttribute('data-rule-item') === head.getAttribute('data-rule-group'); });
+      head.checked = items.length > 0 && items.every(function (b) { return b.checked; });
+    });
+    var all = dlg.querySelector('[data-rule-all]'), box = dlg.querySelector('#rule-products');
+    if (all && box) box.classList.toggle('is-off', all.checked);
+  }
+
   function assignmentRuleDialog(id) {
     var x = id ? U.byId(st().catalogOptions || [], 'option_id', id) : null;
     var m = x && x.metadata ? x.metadata : {};
     var units = st().units.filter(function (u) { return u.active && (u.kind === 'PGD' || u.kind === 'DON_VI_GUI'); });
     var staff = LS.screens.staffList();
+    // Quy tắc mới: tick sẵn các sản phẩm cầm cố. Quy tắc cũ giữ đúng phạm vi đã lưu.
+    var selected = x ? ruleCodes(x) : st().workTypes.filter(function (w) { return w.active && D.isPledgeWorkType(w); }).map(function (w) { return w.code; });
     ui.openDialog(x ? 'Sửa quy tắc phân công' : 'Thêm quy tắc phân công',
       '<form data-form="assignment-rule"' + (x ? ' data-id="' + U.attr(x.option_id) + '"' : '') + '>' +
       '<div class="f-row">' +
-      ui.field('Phòng', ui.select('unit_id', units.map(function (u) { return [u.unit_id, u.name]; }), m.unit_id || (x && x.unit_id) || '', { blank: 'Tất cả phòng' })) +
-      ui.field('Loại việc', ui.select('work_type_code', st().workTypes.filter(function (w) { return w.active; }).map(function (w) { return [w.code, w.name]; }), m.work_type_code || '', { blank: 'Mọi loại việc' })) +
-      ui.field('Sản phẩm', ui.input('product_name', m.product_name || '', { placeholder: 'Để trống = mọi sản phẩm' })) +
-      ui.field('Cán bộ LS', ui.select('assignee_id', staff.map(function (u) { return [u.user_id, u.full_name]; }), m.assignee_id || '', { attrs: ' required' })) +
-      ui.field('Ưu tiên', ui.input('priority', m.priority || 1, { type: 'number', min: 1 })) +
-      '</div>' + ui.checkbox('active', !x || x.active, 'Đang dùng') + ui.formEnd('Lưu quy tắc') + '</form>'
+      ui.field('Phòng / PGD', ui.select('unit_id', units.map(function (u) { return [u.unit_id, u.name]; }), m.unit_id || (x && x.unit_id) || '', { blank: 'Tất cả phòng' })) +
+      ui.field('Cán bộ LS phụ trách', ui.select('assignee_id', staff.map(function (u) { return [u.user_id, u.full_name]; }), m.assignee_id || '', { attrs: ' required' })) +
+      ui.field('Thứ tự ưu tiên', ui.input('priority', m.priority || 1, { type: 'number', min: 1 })) +
+      '</div>' +
+      '<input type="hidden" name="product_name" value="' + U.attr(m.product_name || '') + '">' +
+      '<div style="margin-top:1rem">' + ui.sectionTitle('Hồ sơ giao cho cán bộ này') +
+      '<p class="t2">Mặc định là hồ sơ cầm cố của phòng. Tick thêm sản phẩm / cấu phần khác để giao cho cán bộ này.</p>' +
+      ruleProductPicker(selected, !!x && !selected.length) + '</div>' +
+      '<div style="margin-top:1rem">' +
+      ui.checkbox('auto_assign', !!m.auto_assign, 'Tự động giao khi tạo hồ sơ') +
+      ui.checkbox('priority_processing', !!m.priority_processing, 'Đánh dấu ưu tiên xử lý cho cán bộ LS') +
+      ui.checkbox('active', !x || x.active, 'Đang dùng') + '</div>' + ui.formEnd('Lưu quy tắc') + '</form>',
+      { size: 'lg' }
     );
   }
 
   function saveAssignmentRule(form) {
     var d = new FormData(form), id = form.getAttribute('data-id') || U.uid('RULE');
-    var unitId = String(d.get('unit_id') || ''), workType = String(d.get('work_type_code') || ''), product = String(d.get('product_name') || '').trim(), assignee = String(d.get('assignee_id') || '');
+    var unitId = String(d.get('unit_id') || ''), product = String(d.get('product_name') || '').trim(), assignee = String(d.get('assignee_id') || '');
     var staff = U.byId(st().users, 'user_id', assignee);
     if (!staff || staff.role !== 'CAN_BO_LS' || !staff.active) { ui.toast('Chọn cán bộ LS đang hoạt động.', 'err'); return; }
-    var metadata = { unit_id: unitId, work_type_code: workType, product_name: product, assignee_id: assignee, priority: Number(d.get('priority') || 1) };
+    var allProducts = d.get('all_products') !== null;
+    var codes = allProducts ? [] : (d.getAll ? d.getAll('work_type_codes') : []).map(String);
+    if (!allProducts && !codes.length) { ui.toast('Tick ít nhất một sản phẩm, hoặc chọn "Mọi sản phẩm".', 'err'); return; }
+    // work_type_code giữ lại khi chỉ có một sản phẩm để màn hình mở từ bản cũ vẫn đọc được quy tắc.
+    var workType = codes.length === 1 ? codes[0] : '';
+    var metadata = { unit_id: unitId, work_type_code: workType, work_type_codes: codes, product_name: product, assignee_id: assignee, priority: Number(d.get('priority') || 1),
+      auto_assign: d.get('auto_assign') !== null, priority_processing: d.get('priority_processing') !== null };
     var patch = { catalog_key: 'ASSIGNMENT_RULE', unit_id: unitId, code: workType || 'ALL', label: staff.full_name,
       role_kind: assignee, sort_order: metadata.priority, source_tab: 'Admin', source_row: '', is_active: d.get('active') !== null, metadata_json: JSON.stringify(metadata) };
     if (U.isGas()) {
@@ -1577,31 +1815,111 @@ LS.admin = (function () {
 
   function saveCalendar(form) {
     var d = new FormData(form);
-    var c = st().calendar;
-    c.days = DOW.map(function (x) { return Number(x[0]); }).filter(function (n) { return d.get('dow_' + n) !== null; });
-    if (!c.days.length) { ui.toast('Chọn ít nhất một ngày làm việc.', 'err'); return; }
-    c.open = String(d.get('open'));
-    c.close = String(d.get('close'));
-    c.breakFrom = String(d.get('breakFrom') || '');
-    c.breakTo = String(d.get('breakTo') || '');
-    c.holidays = String(d.get('holidays') || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+    var current = st().calendar;
+    var next = {
+      days: DOW.map(function (x) { return Number(x[0]); }).filter(function (n) { return d.get('dow_' + n) !== null; }),
+      open: String(d.get('open') || ''), close: String(d.get('close') || ''),
+      breakFrom: String(d.get('breakFrom') || ''), breakTo: String(d.get('breakTo') || ''),
+      holidays: String(d.get('holidays') || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean)
+    };
+    var issues=LSTiming.calendarIssues(next);
+    if (issues.length) { ui.toast(issues.join(' '), 'err'); return; }
 
     if (U.isGas()) {
       LS.api.saveSettings({
-        work_days: c.days.join(','), work_open: c.open, work_close: c.close,
-        work_break: c.breakFrom + '-' + c.breakTo, holidays: c.holidays.join(',')
+        work_days: next.days.join(','), work_open: next.open, work_close: next.close,
+        work_break: next.breakFrom + '-' + next.breakTo, holidays: next.holidays.join(',')
       }).then(function () { return LS.app.refreshServer('Đã lưu lịch làm việc.'); })
         .catch(function (error) { ui.toast(error.message || 'Không thể lưu lịch làm việc.', 'err'); });
       return;
     }
 
-    logCfg('Lịch làm việc', 'Cập nhật ngày làm việc, giờ làm và ' + c.holidays.length + ' ngày nghỉ.');
+    Object.assign(current,next);
+    logCfg('Lịch làm việc', 'Cập nhật ngày làm việc, giờ làm và ' + next.holidays.length + ' ngày nghỉ.');
     U.save();
     LS.app.render();
     ui.toast('Đã lưu lịch làm việc.');
   }
 
   /* ============================ Cấu hình chung ============================ */
+
+  function updateNotice() {
+    var notice = st().updateNotice;
+    var actions = ui.btn(notice ? 'Sửa & gửi lại' : 'Tạo thông báo', {
+      act: 'update-notice-edit', kind: 'primary', sm: true, icon: notice ? 'refresh' : 'plus'
+    });
+    if (notice) actions += ui.btn('Gỡ thông báo', { act: 'update-notice-clear', kind: 'danger', sm: true, icon: 'close' });
+    var body = notice
+      ? ui.banner('info', 'Đang thông báo phiên bản ' + notice.version, notice.message || 'Vui lòng ấn Ctrl + F5 để cập nhật phiên bản mới.') +
+        '<p class="t2" style="margin-top:.75rem">Mỗi tài khoản thấy tối đa ' + U.esc(Math.min(3, notice.display_limit || 3)) + ' lần · Đã phát hành: ' + U.esc(U.fmtDT(notice.published_at)) + '</p>'
+      : ui.empty({ icon: 'bell', title: 'Chưa có thông báo cập nhật', text: 'Tạo thông báo sau khi đã deploy phiên bản GAS mới.' });
+    return ui.block({
+      title: 'Thông báo cập nhật phiên bản', icon: 'bell', actions: actions,
+      note: 'Thông báo bật lên khi user đăng nhập hoặc tải lại dữ liệu; tự ngừng trên từng trình duyệt sau số lần đã đặt.',
+      body: ui.pad(body)
+    });
+  }
+
+  function editUpdateNotice() {
+    var notice = st().updateNotice || {};
+    ui.openDialog('Thông báo phiên bản mới',
+      '<form data-form="update-notice">' +
+      ui.field('Mã phiên bản GAS', ui.input('version', notice.version || '', {
+        required: true, attrs: ' maxlength="60"', placeholder: 'Ví dụ: GAS @72'
+      })) +
+      ui.field('Số lần popup hiển thị', ui.input('display_limit', notice.display_limit || 3, {
+        required: true, type: 'number', min: 1, max: 3, attrs: ' step="1"'
+      }), 'Mặc định 3 lần cho mỗi tài khoản, tính chung trên các thiết bị.') +
+      ui.field('Nội dung bổ sung', ui.textarea('message', notice.message || '', {
+        attrs: ' maxlength="800"', placeholder: 'Có thể ghi ngắn gọn các thay đổi chính.'
+      })) +
+      '<div class="form-end">' + ui.btn('Hủy', { act: 'close-dialog', kind: 'quiet' }) +
+      ui.btn('Phát thông báo cho toàn bộ user', { type: 'submit', kind: 'primary', icon: 'bell' }) + '</div>' +
+      '</form>');
+  }
+
+  function saveUpdateNotice(form) {
+    var d = new FormData(form);
+    var input = {
+      version: String(d.get('version') || '').trim(),
+      message: String(d.get('message') || '').trim(),
+      display_limit: Number(d.get('display_limit') || 3)
+    };
+    if (!input.version) { ui.toast('Nhập mã phiên bản GAS cần thông báo.', 'err'); return; }
+    if (!Number.isInteger(input.display_limit) || input.display_limit < 1 || input.display_limit > 3) {
+      ui.toast('Số lần hiển thị phải từ 1 đến 3.', 'err'); return;
+    }
+    if (U.isGas()) {
+      LS.api.saveUpdateNotice(input).then(function () {
+        ui.closeDialog();
+        return LS.app.refreshServer('Đã phát thông báo cập nhật tới toàn bộ user.');
+      }).catch(function (error) { ui.toast(error.message || 'Không thể phát thông báo cập nhật.', 'err'); });
+      return;
+    }
+    input.id = U.uid('UPD'); input.published_at = U.now();
+    st().updateNotice = input;
+    logCfg('Thông báo phiên bản', 'Phát thông báo cập nhật GAS ' + input.version + ' tới toàn bộ người dùng, tối đa ' + input.display_limit + ' lần mỗi tài khoản.');
+    U.save(); ui.closeDialog(); LS.app.render();
+    ui.toast('Đã phát thông báo cập nhật tới toàn bộ user.');
+  }
+
+  function clearUpdateNotice() {
+    ui.confirm({
+      title: 'Gỡ thông báo phiên bản', heading: 'Popup sẽ không hiện với các lượt tải dữ liệu sau.',
+      text: 'Những user đã nhìn thấy thông báo không bị ảnh hưởng.', ok: 'Gỡ thông báo', danger: true,
+      run: function () {
+        if (U.isGas()) {
+          LS.api.saveUpdateNotice({ active: false }).then(function () {
+            return LS.app.refreshServer('Đã gỡ thông báo phiên bản.');
+          }).catch(function (error) { ui.toast(error.message || 'Không thể gỡ thông báo.', 'err'); });
+          return;
+        }
+        st().updateNotice = null;
+        logCfg('Thông báo phiên bản', 'Gỡ thông báo cập nhật GAS.');
+        U.save(); LS.app.render(); ui.toast('Đã gỡ thông báo phiên bản.');
+      }
+    });
+  }
 
   function settings() {
     var s = st().settings;
@@ -1614,6 +1932,10 @@ LS.admin = (function () {
         ui.field('Tên ngân hàng', ui.input('bank_name', s.bank_name, { required: true })) +
         ui.field('Số tổng đài', ui.input('hotline', s.hotline)) +
         ui.field('Nơi ký hồ sơ', ui.input('sign_place', s.sign_place || '')) +
+        ui.field('Link Google Maps nơi ký', ui.input('sign_map_url', s.sign_map_url || '', { placeholder: 'https://maps.app.goo.gl/… (dán từ nút Chia sẻ)' })) +
+        ui.field('Màu thương hiệu email', ui.input('brand_color', s.brand_color || '', { placeholder: '#006b68' })) +
+        ui.field('Logo email (link https)', ui.input('logo_url', s.logo_url || '', { placeholder: 'https://…/logo.png' })) +
+        ui.field('Banner đầu email (link https)', ui.input('email_banner_url', s.email_banner_url || '', { placeholder: 'https://…/banner.jpg — nên dưới 150 KB' })) +
         ui.field('Địa chỉ ứng dụng', ui.input('app_url', s.app_url)) +
         '</div>' +
 
@@ -1623,10 +1945,8 @@ LS.admin = (function () {
         ui.field('Đầu tuần báo cáo', ui.select('week_start', [['MONDAY', 'Thứ Hai'], ['SUNDAY', 'Chủ Nhật']], s.week_start)) +
         ui.field('Thời hạn lưu (tháng)', ui.input('retention_months', s.retention_months, { type: 'number', min: 1 })) +
         ui.field('Giới hạn dòng khi xuất', ui.input('export_row_limit', s.export_row_limit, { type: 'number', min: 100 })) +
-        '</div><div class="f-row">' +
-        ui.field('Chỉ tiêu hoàn thành / tháng (toàn LS)', ui.input('target_done_month', s.target_done_month || '', { type: 'number', min: 0 })) +
-        ui.field('Chỉ tiêu hoàn thành / tháng (mỗi cán bộ)', ui.input('target_done_staff_month', s.target_done_staff_month || '', { type: 'number', min: 0 })) +
-        '</div></div>' +
+        '</div>' +
+        '</div>' +
 
         '<div style="margin-top:1.125rem">' + ui.sectionTitle('Vận hành') +
         '<div class="f-row">' +
@@ -1651,10 +1971,10 @@ LS.admin = (function () {
     var d = new FormData(form);
     var s = st().settings;
     var before = s.env;
-    ['bank_name', 'hotline', 'sign_place', 'app_url', 'timezone', 'week_start', 'env', 'gateway_url', 'gateway_auth_ref'].forEach(function (k) {
+    ['bank_name', 'hotline', 'sign_place', 'sign_map_url', 'brand_color', 'logo_url', 'email_banner_url', 'app_url', 'timezone', 'week_start', 'env', 'gateway_url', 'gateway_auth_ref'].forEach(function (k) {
       s[k] = String(d.get(k) || '').trim();
     });
-    ['retention_months', 'export_row_limit', 'backlog_alert', 'target_done_month', 'target_done_staff_month'].forEach(function (k) {
+    ['retention_months', 'export_row_limit', 'backlog_alert'].forEach(function (k) {
       s[k] = Number(d.get(k) || 0);
     });
 
@@ -1682,11 +2002,9 @@ LS.admin = (function () {
         ui.kv([
           ['Hồ sơ', String(s.requests.length)],
           ['Việc', String(s.items.length)],
-          ['Sự kiện', String(s.events.length)],
           ['Tin trong hàng đợi', String(s.outbox.length)],
-          ['Người dùng', String(s.users.length)],
-          ['Nhật ký cấu hình', String(s.configLog.length)]
-        ]) +
+          ['Người dùng', String(s.users.length)]
+        ].concat(U.isGas() ? [] : [['Sự kiện', String(s.events.length)], ['Nhật ký cấu hình', String(s.configLog.length)]])) +
         '<div class="form-end">' +
         ui.btn('Xuất toàn bộ JSON', { act: 'export-json', icon: 'download' }) +
         ui.btn('Khôi phục dữ liệu mẫu', { act: 'reset-data', kind: 'danger', icon: 'refresh' }) +
@@ -1696,11 +2014,15 @@ LS.admin = (function () {
   }
 
   function cfglog() {
+    // Chưa bấm "Xem nhật ký" thì không gọi máy chủ và chưa có dòng nào.
+    var remote = U.isGas(), cache = cfgLogCache || {};
+    var rows = remote ? (cache.rows || []) : st().configLog;
     return ui.block({
-      title: 'Nhật ký cấu hình', count: st().configLog.length, icon: 'history',
-      body: ui.table(
+      title: 'Nhật ký cấu hình', count: remote && !cache.rows ? undefined : rows.length, icon: 'history',
+      actions: remote ? ui.btn(cache.rows ? 'Xem lại' : 'Xem nhật ký', { act: 'cfglog-reload', icon: cache.rows ? 'refresh' : 'history', sm: true, kind: cache.rows ? 'line' : 'primary', disabled: !!cache.loading }) : '',
+      body: (remote && cache.error ? ui.banner('danger', 'Không lấy được nhật ký cấu hình', cache.error) : '') + ui.table(
         [{ label: 'Thời gian', cls: 'fit' }, { label: 'Người thực hiện' }, { label: 'Khu vực', cls: 'fit' }, { label: 'Nội dung' }],
-        st().configLog.map(function (c) {
+        rows.map(function (c) {
           return {
             cells: [
               '<span class="tid">' + U.fmtDT(c.at) + '</span>',
@@ -1710,15 +2032,17 @@ LS.admin = (function () {
             ]
           };
         }),
-        { icon: 'history', title: 'Chưa có thay đổi cấu hình nào', text: '' }
+        { icon: 'history', title: remote && cache.loading ? 'Đang tải nhật ký…' : remote && !cache.rows ? 'Chưa xem nhật ký' : 'Chưa có thay đổi cấu hình nào', text: '' }
       )
     });
   }
 
+  function reloadConfigLog() { loadConfigLog(); LS.app.render(); }
+
   /* ============================ Xuất ra ngoài ============================ */
 
   return {
-    view: view, setSection: setSection, setScoreHidden: setScoreHidden,
+    view: view, reloadConfigLog: reloadConfigLog, assignmentView: assignment, syncRuleScope: syncRuleScope, setSection: setSection, setScoreHidden: setScoreHidden,
     channelDialog: channelDialog, saveChannel: saveChannel, toggleChannel: toggleChannel, testChannel: testChannel,
     templateDialog: templateDialog, saveTemplate: saveTemplate, approveTemplate: approveTemplate, insertVar: insertVar,
     ruleDialog: ruleDialog, saveRule: saveRule, toggleRule: toggleRule,
@@ -1727,12 +2051,14 @@ LS.admin = (function () {
     setOutFilter: function (k, v) { oFilter[k] = v; },
     typeDialog: typeDialog, saveType: saveType,
     unitDialog: unitDialog, saveUnit: saveUnit,
-    userDialog: userDialog, saveUser: saveUser, userImportDialog: userImportDialog, importUsers: importUsers,
+    userDialog: userDialog, deleteUserDialog: deleteUserDialog, submitDeleteUser: submitDeleteUser, saveUser: saveUser, userImportDialog: userImportDialog,
+    downloadUserImportTemplate: downloadUserImportTemplate, importUsers: importUsers,
     resetUserPasswordDialog: resetUserPasswordDialog, resetUserPassword: resetUserPassword,
     reasonDialog: reasonDialog, saveReason: saveReason,
     catalogOptionDialog: catalogOptionDialog, saveCatalogOption: saveCatalogOption,
     assignmentRuleDialog: assignmentRuleDialog, saveAssignmentRule: saveAssignmentRule,
     saveCalendar: saveCalendar, saveSettings: saveSettings,
+    editUpdateNotice: editUpdateNotice, saveUpdateNotice: saveUpdateNotice, clearUpdateNotice: clearUpdateNotice,
     logCfg: logCfg
   };
 })();

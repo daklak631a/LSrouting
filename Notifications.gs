@@ -180,6 +180,13 @@ var Notifications = (function () {
         return x.unit_id === r.unit_id && x.role === 'PHONG_PGD' && bool_(x.is_active);
       }).forEach(function (x) { out.push(staff_(x)); });
     }
+    if (audience === 'PHONG_PHU_TRACH' && r) {
+      // Chỉ cán bộ Phòng/PGD đã đưa hồ sơ này nhận email, không phát cho cả đơn vị.
+      t.rows('Users').filter(function(x) {
+        return x.role === 'PHONG_PGD' && bool_(x.is_active) &&
+          x.user_id === (r.requestor_id || r.created_by);
+      }).forEach(function(x) { out.push(staff_(x)); });
+    }
     // Nhóm nội bộ là một người nhận ảo: địa chỉ nằm ở cấu hình kênh, không ở bảng Users.
     if (audience === 'NHOM') {
       var gmf = cfg_(t, 'GMF');
@@ -203,10 +210,13 @@ var Notifications = (function () {
    */
   function addressFor_(channel, rcp) {
     if (channel === 'IN_APP') return rcp.kind === 'NOI_BO' ? rcp.id : '';
-    if (channel === 'EMAIL') return /@/.test(String(rcp.email || '')) ? rcp.email : '';
+    if (channel === 'EMAIL') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(rcp.email || '').trim()) ? String(rcp.email).trim().toLowerCase() : '';
     if (channel === 'TELEGRAM') return rcp.telegram || '';
     if (channel === 'GMF') return rcp.kind === 'NHOM' ? rcp.phone : '';
-    if (channel === 'ZBS' || channel === 'SMS') return rcp.kind === 'KHACH' ? rcp.phone || '' : '';
+    if (channel === 'ZBS' || channel === 'SMS') {
+      if(rcp.kind !== 'KHACH') return '';
+      try { return validatePhone_(rcp.phone); } catch(e) { return ''; }
+    }
     return '';
   }
 
@@ -214,9 +224,90 @@ var Notifications = (function () {
     if (channel === 'EMAIL') return 'Người nhận chưa có email công vụ';
     if (channel === 'TELEGRAM') return 'Người nhận chưa đăng ký chat Telegram';
     if (channel === 'GMF') return 'Kênh nhóm chỉ gửi cho nhóm nội bộ';
-    if (channel === 'ZBS' || channel === 'SMS') return 'Kênh này chỉ gửi cho khách có số điện thoại';
+    if (channel === 'ZBS' || channel === 'SMS') return 'Số điện thoại khách hàng trống hoặc không hợp lệ; kiểm tra số 0 đầu';
     if (channel === 'IN_APP') return 'Thông báo trong app chỉ gửi cho người dùng nội bộ';
     return 'Người nhận chưa có địa chỉ phù hợp với kênh ' + channel;
+  }
+
+  /** Link chỉ đường Google Maps: link Admin dán cho nơi ký chung, hoặc dựng từ địa chỉ chữ. */
+  function mapLink_(place, set) {
+    set = set || {};
+    place = String(place || set.sign_place || '').trim();
+    var fixed = String(set.sign_map_url || '').trim();
+    if (/^https:\/\//.test(fixed) && (!place || place === String(set.sign_place || '').trim())) return fixed;
+    return place ? 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(place) : '';
+  }
+
+  function htmlEsc_(v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /**
+   * Dựng email HTML đúng nhận diện: dải màu thương hiệu + logo, nội dung, nút bấm cho
+   * dòng "Nhãn: https://…" và chân thư. Bản chữ thuần vẫn gửi kèm cho client không đọc HTML.
+   */
+  function emailHtml_(subject, body, set) {
+    set = set || {};
+    var brand = /^#[0-9a-fA-F]{6}$/.test(String(set.brand_color || '').trim()) ? String(set.brand_color).trim() : '#006b68';
+    var logo = /^https:\/\//.test(String(set.logo_url || '').trim()) ? String(set.logo_url).trim() : '';
+    var bank = htmlEsc_(set.bank_name || '');
+    function linkify(text) {
+      return htmlEsc_(text).replace(/(https:\/\/[^\s<]+)/g, '<a href="$1" style="color:' + brand + '">$1</a>');
+    }
+    // Phân loại từng dòng: nút bấm (Nhãn: https://…), thẻ thông tin (Nhãn: giá trị liền nhau), đoạn văn.
+    // Dòng "Nhãn:" mà giá trị rỗng (biến chưa có dữ liệu) bị bỏ, không để lại nhãn cụt.
+    var blocks = [], card = null;
+    String(body || '').split(/\r?\n/).forEach(function (line) {
+      var raw = line.trim();
+      if (!raw) { card = null; return; }
+      if (/^[^:]{1,24}:$/.test(raw)) return;
+      var btn = /^([^:]{1,40}):\s*(https:\/\/\S+)$/.exec(raw);
+      if (btn) { card = null; blocks.push({ k: 'btn', label: btn[1], url: btn[2] }); return; }
+      var kv = /^([^:,.]{2,24}):\s+(\S.*)$/.exec(raw);
+      if (kv) {
+        if (!card) { card = { k: 'card', rows: [] }; blocks.push(card); }
+        card.rows.push([kv[1], kv[2]]);
+        return;
+      }
+      card = null;
+      blocks.push({ k: 'p', text: raw });
+    });
+    var parts = blocks.map(function (b) {
+      if (b.k === 'btn') {
+        var maps = /google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps/.test(b.url);
+        return '<p style="margin:18px 0"><a href="' + htmlEsc_(b.url) + '" style="display:inline-block;background:' + brand +
+          ';color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:6px">' +
+          htmlEsc_(maps ? 'Chỉ đường bằng Google Maps' : b.label) + '</a></p>';
+      }
+      if (b.k === 'card') {
+        return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0;background:#f4f9f8;border-left:4px solid ' + brand + '">' +
+          '<tr><td style="padding:12px 16px"><table role="presentation" cellpadding="0" cellspacing="0">' +
+          b.rows.map(function (r) {
+            return '<tr><td style="padding:4px 14px 4px 0;color:#5d7270;font-size:13px;white-space:nowrap;vertical-align:top">' + htmlEsc_(r[0]) +
+              '</td><td style="padding:4px 0;font-weight:bold;font-size:14px">' + linkify(r[1]) + '</td></tr>';
+          }).join('') + '</table></td></tr></table>';
+      }
+      return '<p style="margin:0 0 10px">' + linkify(b.text) + '</p>';
+    }).join('');
+    var banner = /^https:\/\//.test(String(set.email_banner_url || '').trim()) ? String(set.email_banner_url).trim() : '';
+    return '<!doctype html><html><body style="margin:0;padding:0;background:#f1f5f4">' +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f4"><tr><td align="center" style="padding:24px 12px">' +
+      '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#1d2b2a">' +
+      (banner
+        ? '<tr><td style="background:' + brand + ';padding:0;line-height:0"><img src="' + htmlEsc_(banner) + '" alt="' + bank + '" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0"></td></tr>'
+        : '<tr><td style="background:' + brand + ';padding:18px 24px;color:#ffffff;font-size:18px;font-weight:bold">' +
+          (logo ? '<img src="' + htmlEsc_(logo) + '" alt="" height="36" style="vertical-align:middle;margin-right:10px;border:0">' : '') + bank + '</td></tr>') +
+      '<tr><td style="padding:24px 24px 8px;font-size:18px;font-weight:bold;color:' + brand + '">' + htmlEsc_(subject) + '</td></tr>' +
+      '<tr><td style="padding:8px 24px 20px;font-size:14px;line-height:1.55">' + parts + '</td></tr>' +
+      '<tr><td style="padding:14px 24px;background:#f7faf9;border-top:1px solid #e2ecea;font-size:12px;color:#5d7270;line-height:1.5">' +
+      'Email tự động, vui lòng không trả lời thư này.' + '</td></tr>' +
+      '</table></td></tr></table></body></html>';
+  }
+
+  function settingsSnapshot_() {
+    var set = {};
+    DataRepository.getAll('Settings').forEach(function (row) { set[row.key] = row.value; });
+    return set;
   }
 
   function context_(t, item) {
@@ -232,6 +323,9 @@ var Notifications = (function () {
 
     return {
       nguoi_giao: assigner ? assigner.object.full_name : '',
+      can_bo_ls: officer ? officer.object.full_name : '',
+      hoan_thanh_luc: notificationDateTime_(item.completed_at),
+      lich_hen: appt.at ? notificationDateTime_(appt.at)+' · '+(appt.place || 'Chưa có địa điểm') : 'Chưa có lịch hẹn khách hàng',
       tag_can_bo: officer ? '@' + (officer.object.zalo_name || officer.object.full_name) : '',
       ma_viec: item.item_id,
       loai_viec: wt ? wt.object.display_name : item.work_type_code,
@@ -247,6 +341,7 @@ var Notifications = (function () {
       san_pham: item.product_name || '',
       so_dien_thoai: r.phone || ''
       ,noi_ky: appt.place || set.sign_place || ''
+      ,link_ban_do: mapLink_(appt.place, set)
       ,gio_ky: appt.at || ''
       ,ngay_ky: appt.date || ''
     };
@@ -259,7 +354,7 @@ var Notifications = (function () {
     DE_NGHI_SUA: 'Có đề nghị sửa chờ duyệt',
     QUA_HAN: 'Việc đã quá hạn xử lý',
     DANG_HEN_KH: 'Đã đặt lịch hẹn ký với khách',
-    HOAN_THANH_LS: 'LS đã hoàn thành phần việc'
+    HOAN_THANH_LS: 'Hồ sơ đã hoàn thành'
   };
 
   /** Tin trong app không có mẫu; dựng một dòng đủ hiểu từ chính sự kiện. */
@@ -305,18 +400,21 @@ var Notifications = (function () {
     if (outboxStatus === 'DA_HUY') return 'CANCELLED';
     if (outboxStatus === 'KHONG_GUI') return 'KHONG_GUI';
     if (outboxStatus === 'THAT_BAI') return 'FAILED';
+    if (outboxStatus === 'CAN_DOI_SOAT') return 'UNKNOWN';
     return 'QUEUED';
   }
 
   /** Một outbox_id chỉ có một dòng metrics; retry cập nhật dòng đó. */
-  function recordMetric_(t, outbox, status, providerMsgId) {
+  function recordMetric_(t, outbox, status, providerMsgId, isNew) {
     var item = outbox.item_id ? t.find('WorkItems', 'item_id', outbox.item_id) : null;
     var request = item ? t.find('Requests', 'request_id', item.object.request_id) : null;
     var channel = cfg_(t, outbox.channel);
     var config = channel ? channel._config : {};
     var plan = item && item.object.period_id ? t.find('MonthlyPlans', 'period_id', item.object.period_id) : null;
     var now = new Date().toISOString();
-    var existing = t.find('NotificationMetrics', 'outbox_id', outbox.outbox_id);
+    // Tin vừa xếp có outbox_id mới tinh: tra trọn bảng metrics (lớn dần theo mỗi
+    // tin) trong khóa ghi chỉ để biết chắc là chưa có.
+    var existing = isNew ? null : t.find('NotificationMetrics', 'outbox_id', outbox.outbox_id);
     var row = {
       metric_id: existing ? existing.object.metric_id : 'MET_' + Utilities.getUuid().replace(/-/g, '').substring(0, 12).toUpperCase(),
       outbox_id: outbox.outbox_id,
@@ -377,6 +475,7 @@ var Notifications = (function () {
     var viaGroup = !!(appt && appt.via_group);
     var rules = t.rows('NotifyRules').filter(function (x) {
       if (x.event !== event || !bool_(x.enabled)) return false;
+      if (channelMode === 'IN_APP' && x.audience === 'PHONG_PHU_TRACH') return false;
       if (x.when_case === 'GROUP' && !viaGroup) return false;
       if (x.when_case === 'DIRECT' && viaGroup) return false;
       return true;
@@ -389,7 +488,9 @@ var Notifications = (function () {
     var now = new Date().toISOString();
 
     rules.forEach(function (rule) {
-      var requested = requestedChannel_(item, event);
+      // Kênh khách chọn (Zalo/SMS/Email) chỉ áp cho tin gửi khách; email báo cán bộ
+      // Phòng/PGD luôn đi theo kênh khai trong quy tắc.
+      var requested = rule.audience === 'KHACH' ? requestedChannel_(item, event) : '';
       var channels = channelMode === 'IN_APP'
         ? ['IN_APP']
         : (requested ? [requested] : String(rule.channels || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean));
@@ -397,9 +498,14 @@ var Notifications = (function () {
       recipients_(t, rule.audience, item).forEach(function (rcp) {
         if (rcp.id === actorId && rule.audience !== 'KHACH') return;
 
-        var bucket = Number(rule.throttle_minutes) > 0
-          ? ':' + Math.floor(Date.now() / (Number(rule.throttle_minutes) * 60000)) : '';
-        var key = [item.item_id, event, rule.audience, rcp.id].join(':') + bucket;
+        // Nhắc quá hạn chạy mỗi giờ cho mọi hồ sơ trễ: throttle 4 giờ nghĩa là
+        // mỗi hồ sơ sinh thêm dòng Outbox/Idempotency/Metrics/Inbox 6 lần/ngày,
+        // bảng phình mãi. Sàn 1 ngày cho QUA_HAN.
+        var throttle = Number(rule.throttle_minutes) || 0;
+        if (event === 'QUA_HAN') throttle = Math.max(throttle, 1440);
+        var bucket = throttle > 0 ? ':' + Math.floor(Date.now() / (throttle * 60000)) : '';
+        var occurrence = event === 'QUA_HAN' ? '' : ':v' + String(Number(item.version) || 1);
+        var key = [item.item_id, event, rule.audience, rcp.id].join(':') + occurrence + bucket;
         if (existing[key] || !reserveIdempotency_(t, key, 'PENDING', now)) return;
         existing[key] = true;
 
@@ -459,7 +565,7 @@ var Notifications = (function () {
         // nếu tiến trình bị dừng giữa chừng.
         t.append('NotificationOutbox', outbox);
         rememberIdempotency_(t, key, outbox.outbox_id, now);
-        recordMetric_(t, outbox, chosen ? 'QUEUED' : 'KHONG_GUI', '');
+        recordMetric_(t, outbox, chosen ? 'QUEUED' : 'KHONG_GUI', '', true);
         made += 1;
       });
     });
@@ -563,7 +669,9 @@ var Notifications = (function () {
   function subjectSnapshot_(o) {
     if (!o.template_code) return 'Thông báo LS — ' + o.item_id;
     var tpl = DataRepository.getAll('Templates').filter(function (x) { return x.code === o.template_code; })[0];
-    return tpl && tpl.subject ? render_(tpl.subject, { ma_viec: o.item_id }) : 'Thông báo LS — ' + o.item_id;
+    if (!tpl || !tpl.subject) return 'Thông báo LS — ' + o.item_id;
+    var set = settingsSnapshot_();
+    return render_(tpl.subject, { ma_viec: o.item_id, ten_ngan_hang: set.bank_name || '', hotline: set.hotline || '' });
   }
 
   /** Gọi provider ngoài lock, chỉ đọc cấu hình và trả message_id. */
@@ -580,23 +688,38 @@ var Notifications = (function () {
     if (o.channel === 'IN_APP') return { id: 'INAPP', note: '' };
     if (o.channel === 'EMAIL') {
       if (k.mode !== 'MAILAPP') throw new Error('Gmail API chưa được nối. Cần hộp thư tổ chức và quyền gmail.send đã phê duyệt.');
-      MailApp.sendEmail({ to: o.recipient, subject: subjectSnapshot_(o), body: o.body, noReply: true });
+      var mailSubject = subjectSnapshot_(o);
+      try { MailApp.sendEmail({ to: o.recipient, subject: mailSubject, body: o.body, htmlBody: emailHtml_(mailSubject, o.body, settingsSnapshot_()), noReply: true }); }
+      catch (emailErr) { emailErr.deliveryUnknown = true; throw emailErr; }
       return { id: 'MAILAPP', note: 'Gửi thành công không đồng nghĩa người nhận đã đọc' };
     }
 
     var gateway = gatewaySnapshot_();
     if (!gateway.url || !gateway.token) throw new Error('Chưa cấu hình gateway gửi tin cho kênh ' + o.channel + '.');
-    var resp = UrlFetchApp.fetch(gateway.url, {
-      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-      headers: { 'X-Idempotency-Key': o.idem_key, 'Authorization': 'Bearer ' + gateway.token },
-      payload: JSON.stringify({ channel: o.channel, provider: k.provider || o.channel, to: o.recipient,
-        template: o.template_code, body: o.body, item_id: o.item_id,
-        provider_config: { oa_id: k.oa_id || '', app_id: k.app_id || '', sender_id: k.sender_id || '', secret_ref: k.secret_ref || '' } })
-    });
+    var resp;
+    try {
+      resp = UrlFetchApp.fetch(gateway.url, {
+        method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        headers: { 'X-Idempotency-Key': o.idem_key, 'Authorization': 'Bearer ' + gateway.token },
+        payload: JSON.stringify({ channel: o.channel, provider: k.provider || o.channel, to: o.recipient,
+          template: o.template_code, body: o.body, item_id: o.item_id,
+          provider_config: { oa_id: k.oa_id || '', app_id: k.app_id || '', sender_id: k.sender_id || '', secret_ref: k.secret_ref || '' } })
+      });
+    } catch (fetchErr) { fetchErr.deliveryUnknown = true; throw fetchErr; }
     var code = resp.getResponseCode();
-    if (code < 200 || code >= 300) throw new Error('Gateway trả mã ' + code + ': ' + resp.getContentText().substring(0, 200));
-    var data = JSON.parse(resp.getContentText() || '{}');
-    if (!data.message_id) throw new Error('Gateway không trả mã tin, chưa coi là đã gửi.');
+    var responseText = resp.getContentText() || '', data = {};
+    try { data = JSON.parse(responseText); } catch (ignoreJson) {}
+    if (code === 409 || code >= 500 || data.outcome === 'unknown') {
+      var uncertain = new Error('Kết quả gửi qua gateway chưa xác định; cần đối soát trước khi gửi lại.');
+      uncertain.deliveryUnknown = true;
+      throw uncertain;
+    }
+    if (code < 200 || code >= 300) throw new Error('Gateway trả mã ' + code + ': ' + responseText.substring(0, 200));
+    if (!data.message_id) {
+      var missingId = new Error('Gateway không trả mã tin; kết quả gửi chưa xác định, cần đối soát.');
+      missingId.deliveryUnknown = true;
+      throw missingId;
+    }
     return { id: data.message_id, note: '' };
   }
 
@@ -638,16 +761,38 @@ var Notifications = (function () {
     });
   }
 
+  /** A send attempt with an unknown result must never be put back on retry. */
+  function markUnknownClaim_(o, note) {
+    return DataRepository.tx(function (t) {
+      var found = t.find('NotificationOutbox', 'outbox_id', o.outbox_id);
+      if (!found || String(found.object.claim_token || '') !== String(o.claim_token || '')) return false;
+      var fields = { status: 'CAN_DOI_SOAT', note: String(note || 'Kết quả gửi chưa xác định; cần đối soát thủ công trước khi xử lý tiếp.').substring(0, 300),
+        next_try_at: '', claim_token: '', claim_until: '' };
+      t.write(found, fields);
+      o.status = fields.status; o.next_try_at = '';
+      recordMetric_(t, o, metricStatus_(fields.status), '');
+      return true;
+    });
+  }
+
   function runOutbox(batchSize) {
     try {
       var claimed = claimPending_(batchSize || 20);
       var done = 0, failed = claimed.blocked || 0;
       claimed.items.forEach(function (o) {
+        var result;
         try {
-          var result = sendClaimed_(o);
-          if (finishClaim_(o, result)) done += 1;
+          result = sendClaimed_(o);
         } catch (err) {
-          if (failClaim_(o, err)) failed += 1;
+          var recorded = err && err.deliveryUnknown ? markUnknownClaim_(o, err.message) : failClaim_(o, err);
+          if (recorded) failed += 1;
+          return;
+        }
+        try {
+          if (finishClaim_(o, result)) done += 1;
+          else if (markUnknownClaim_(o, 'Đã gửi nhưng không ghi nhận được kết quả gửi; cần đối soát thủ công.')) failed += 1;
+        } catch (finishErr) {
+          if (markUnknownClaim_(o, 'Đã gửi nhưng không ghi nhận được kết quả gửi; cần đối soát thủ công.')) failed += 1;
         }
       });
       var output = { sent: done, failed: failed, remaining: claimed.remaining, rate_limited: claimed.rate_limited || 0 };
@@ -677,19 +822,13 @@ var Notifications = (function () {
       });
       suspect.forEach(function (o) {
         var expired = o.status === 'DANG_GUI';
-        var channel = cfg_(t, o.channel) || {};
-        var tries = Number(o.retry_count || 0) + (expired ? 1 : 0);
-        var emailReview = expired && o.channel === 'EMAIL';
-        var giveUp = emailReview || (expired && tries >= Number(channel.max_retry || 3));
+        var uncertain = expired || !o.provider_msg_id;
         t.write(t.find('NotificationOutbox', 'outbox_id', o.outbox_id), {
-          status: giveUp ? 'KHONG_GUI' : 'THAT_BAI',
-          note: emailReview ? 'Đối soát: email có thể đã gửi; không tự gửi lại, cần kiểm tra trước khi retry' :
-            (expired ? 'Đối soát: lease gửi tin đã hết hạn' : 'Đối soát: không có mã phản hồi nhà cung cấp'),
-          retry_count: tries, next_try_at: giveUp ? '' : backoff_(tries), claim_token: '', claim_until: ''
+          status: uncertain ? 'CAN_DOI_SOAT' : 'THAT_BAI',
+          note: uncertain ? 'Đối soát: kết quả gửi chưa xác định; không tự gửi lại.' : 'Đối soát: chưa có mã phản hồi nhà cung cấp.',
+          next_try_at: '', claim_token: '', claim_until: ''
         });
-        // Không hạ metrics theo thì màn chi phí vẫn tính tiền cho tin vừa bị loại.
-        o.status = giveUp ? 'KHONG_GUI' : 'THAT_BAI';
-        o.retry_count = tries;
+        o.status = uncertain ? 'CAN_DOI_SOAT' : 'THAT_BAI';
         o.sent_at = '';
         recordMetric_(t, o, metricStatus_(o.status), '');
       });
@@ -708,8 +847,13 @@ var Notifications = (function () {
   function sweepOverdue() {
     var nowIso = new Date().toISOString();
     return DataRepository.tx(function (t) {
-      var late = t.rows('WorkItems').filter(function (i) {
-        return OPEN_FOR_SLA.indexOf(i.status) !== -1 && i.due_at && String(i.due_at) < nowIso;
+      var allItems = t.rows('WorkItems');
+      var exemptByItem = slaExemptByItem_(allItems, t.rows('WorkTypes'));
+      var nowMs = Date.now();
+      var late = allItems.filter(function (i) {
+        // Dòng gốc đã chuyển tháng vẫn giữ trạng thái mở; nhắc trên nó là nhắc trùng với dòng mới.
+        return OPEN_FOR_SLA.indexOf(i.status) !== -1 && !i.carried_to_item_id && i.due_at &&
+          String(i.due_at) < nowIso && !slaExemptItem_(i, exemptByItem) && nowMs > new Date(i.due_at).getTime();
       });
       var made = 0;
       late.forEach(function (i) { made += queue(t, i, 'QUA_HAN', ''); });
@@ -754,9 +898,13 @@ var Notifications = (function () {
    * ở màn chi phí.
    */
   var WORKER_TRIGGERS = {
-    outboxTick: function () { return ScriptApp.newTrigger('outboxTick').timeBased().everyMinutes(5); },
-    overdueTick: function () { return ScriptApp.newTrigger('overdueTick').timeBased().everyHours(1); },
-    reconcileTick: function () { return ScriptApp.newTrigger('reconcileTick').timeBased().everyHours(6); }
+    outboxTick_: function () { return ScriptApp.newTrigger('outboxTick_').timeBased().everyMinutes(5); },
+    overdueTick_: function () { return ScriptApp.newTrigger('overdueTick_').timeBased().everyHours(1); },
+    reconcileTick_: function () { return ScriptApp.newTrigger('reconcileTick_').timeBased().everyHours(6); },
+    // Hàng chờ đồng bộ Sheet kế hoạch: thao tác người dùng chỉ đánh dấu, trigger này ghi.
+    planSyncTick_: function () { return ScriptApp.newTrigger('planSyncTick_').timeBased().everyMinutes(5); },
+    // Đầu ngày làm việc: tự trả về Phòng/PGD các việc đã giao mà cán bộ LS chưa tiếp nhận hồ sơ.
+    autoReturnTick_: function () { return ScriptApp.newTrigger('autoReturnTick_').timeBased().everyDays(1).atHour(7); }
   };
 
   /**
@@ -769,7 +917,13 @@ var Notifications = (function () {
    */
   function ensureWorkerTriggers() {
     var have = {};
-    ScriptApp.getProjectTriggers().forEach(function (tr) { have[tr.getHandlerFunction()] = true; });
+    ScriptApp.getProjectTriggers().forEach(function (tr) {
+      var fn = tr.getHandlerFunction();
+      if(['outboxTick','overdueTick','reconcileTick'].indexOf(fn) !== -1) ScriptApp.deleteTrigger(tr);
+      // Trigger trùng (nhiều lượt cùng tạo) chạy song song vô ích: giữ một.
+      else if (have[fn] && WORKER_TRIGGERS[fn]) ScriptApp.deleteTrigger(tr);
+      else have[fn] = true;
+    });
     var added = [];
     Object.keys(WORKER_TRIGGERS).forEach(function (fn) {
       if (have[fn]) return;
@@ -789,7 +943,7 @@ var Notifications = (function () {
 
   return {
     queue: queue, queueTest: queueTest, runOutbox: runOutbox, reconcile: reconcile,
-    sweepOverdue: sweepOverdue, addressFor: addressFor_,
+    sweepOverdue: sweepOverdue, addressFor: addressFor_, emailHtml: emailHtml_, mapLink: mapLink_,
     installWorker: installWorker, ensureWorkerTriggers: ensureWorkerTriggers,
     blocker: blocker_, recordMetricStatus: function (t, outbox, status) {
       recordMetric_(t, outbox, status, outbox.provider_msg_id || '');
@@ -798,18 +952,33 @@ var Notifications = (function () {
 })();
 
 function outboxTick() {
+  requireAdmin_();
+  return outboxTick_();
+}
+
+function outboxTick_() {
   var r = Notifications.runOutbox(20);
   Logger.log('Outbox: gửi ' + r.sent + ', lỗi ' + r.failed + ', còn ' + r.remaining);
 }
 
 function overdueTick() {
+  requireAdmin_();
+  return overdueTick_();
+}
+
+function overdueTick_() {
   var r = Notifications.sweepOverdue();
   Logger.log('Quá hạn: ' + r.late + ' việc, xếp ' + r.queued + ' tin.');
 }
 
 function reconcileTick() {
+  requireAdmin_();
+  return reconcileTick_();
+}
+
+function reconcileTick_() {
   var r = Notifications.reconcile();
   Logger.log('Đối soát: đánh dấu lại ' + r.flagged + ' tin nghi ngờ.');
 }
 
-function installOutboxWorker() { Notifications.installWorker(); }
+function installOutboxWorker() { requireAdmin_(); return Notifications.installWorker(); }

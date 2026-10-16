@@ -32,7 +32,7 @@ const app = read('js/app.js');
 const gasApi = read('js/gas-api.js');
 const required = [
   [server, 'processing_started_at', 'WorkItems/server phải lưu mốc LS bắt đầu xử lý hồ sơ.'],
-  [server, "if (u.role === 'CAN_BO_LS') return e.by === u.user_id", 'Bootstrap phải giới hạn nhật ký cán bộ LS theo chính người thực hiện.'],
+  [server, "inScope = function(e) { return e.by === u.user_id; }", 'Nhật ký phải giới hạn cán bộ LS theo chính người thực hiện.'],
   [server, 'function saveChecklist', 'Server phải có API lưu tick nhóm việc.'],
   [screens, 'function personalDashboard', 'Phải có dashboard cá nhân cho cán bộ LS.'],
   [screens, 'function saveChecklist', 'UI phải có thao tác lưu tick nhóm việc.'],

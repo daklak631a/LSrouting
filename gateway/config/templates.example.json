@@ -1,0 +1,20 @@
+{
+  "_huong_dan": [
+    "Chép file này thành templates.json rồi điền zns_template_id thật sau khi Zalo duyệt mẫu.",
+    "Khóa ngoài cùng là MÃ MẪU của LS-Routing (cột code bảng Templates).",
+    "params: { ten_tham_so_ZNS: ten_bien_LS }. Bên trái do Zalo quy định, bên phải do bạn đặt trong nội dung mẫu LS-Routing.",
+    "optional: danh sách tham số ZNS được phép thiếu; các tham số còn lại thiếu là chặn gửi."
+  ],
+
+  "TPL_HEN_KY": {
+    "zns_template_id": "DIEN_ID_ZALO_CAP",
+    "params": {
+      "customer_name": "ten_khach",
+      "place": "noi_ky",
+      "time": "gio_ky",
+      "date": "ngay_ky",
+      "hotline": "hotline"
+    },
+    "optional": ["hotline"]
+  }
+}

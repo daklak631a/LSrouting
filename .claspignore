@@ -5,6 +5,8 @@
 **/**
 
 !Code.gs
+!TimeTracking.gs
+!Planning.gs
 !DataRepository.gs
 !Notifications.gs
 !SetupSheetDB.gs

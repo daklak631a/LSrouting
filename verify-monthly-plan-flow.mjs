@@ -17,7 +17,7 @@ if (!/Requests:\s*\[[\s\S]*period_id/.test(schema) || !/WorkItems:\s*\[[\s\S]*pe
 if (!server.includes('function createNextMonthlyPlan') || !server.includes('function activateDueMonthlyPlans_') || !server.includes('function activateMonthlyPlans')) {
   throw new Error('The server cannot prepare and activate monthly plans.');
 }
-if (!schema.includes('function installMonthlyPlanTrigger') || !schema.includes("newTrigger('activateMonthlyPlans')")) {
+if (!schema.includes('function installMonthlyPlanTrigger') || !schema.includes("newTrigger('activateMonthlyPlans_')")) {
   throw new Error('Automatic monthly activation trigger is missing.');
 }
 if (!server.includes('function createMonthlyPlanWorkbook_') || !server.includes('function syncMonthlyPlanWorkbook_')) {

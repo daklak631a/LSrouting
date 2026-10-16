@@ -1,0 +1,27 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import crypto from 'node:crypto';
+import assert from 'node:assert/strict';
+const html=fs.readFileSync('Index.gas.html','utf8');
+const output=content=>({content,getContent:()=>content,setTitle(){return this;},addMetaTag(){return this;}});
+const ctx={HtmlService:{createHtmlOutputFromFile:()=>output(html),createHtmlOutput:output}};
+vm.runInNewContext(fs.readFileSync('Code.gs','utf8'),ctx);
+assert.equal(ctx.doGet().content,html,'Normal app must retain existing output');
+const download=ctx.doGet({parameter:{download:'firefox'}}).content;
+const pack=JSON.parse(/window\.LS_FIREFOX_PACKAGE=(\{[^\r\n]+?\});/.exec(html)[1]);
+const match=/download="([^"]+)" href="data:application\/octet-stream;base64,([^"]+)"/.exec(download);
+assert.ok(match,'Download route must contain a downloadable package');
+assert.equal(match[1],pack.filename);
+const bytes=Buffer.from(match[2],'base64'),archive=fs.readFileSync('outputs/'+pack.filename);
+assert.ok(bytes.equals(archive),'GAS download must preserve signed package bytes exactly');
+assert.ok(download.includes(crypto.createHash('sha256').update(archive).digest('hex')));
+if(pack.signed){
+  assert.ok(download.includes('Bản đã ký Mozilla'));
+  assert.ok(download.includes('Install Add-on From File'));
+  assert.ok(!download.includes('Load Temporary Add-on'));
+} else assert.ok(download.includes('Gói chưa ký Mozilla'),'Do not present unsigned package as permanent installation');
+assert.ok(!download.includes('ls_routing_session'));
+const unsigned={version:pack.version,filename:'ls-routing-firefox-'+pack.version+'.zip',signed:false,payload:'UEs=',sha256:'a'.repeat(64)};
+assert.ok(ctx.firefoxDownloadHtml_('window.LS_FIREFOX_PACKAGE='+JSON.stringify(unsigned)+';').includes('Gói chưa ký Mozilla'));
+assert.throws(()=>ctx.firefoxDownloadHtml_('window.LS_FIREFOX_PACKAGE='+JSON.stringify({...pack,filename:'wrong.xpi'})+';'),/Tên gói/);
+console.log('GAS Firefox download: signed byte equality, hash, permanent installation instructions and unsigned fallback passed.');

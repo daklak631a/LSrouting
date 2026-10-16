@@ -18,7 +18,8 @@ var SCHEMA = {
   // hoặc INTERNAL (LS/KS/quản trị, bắt buộc mật khẩu).
   Users: ['user_id', 'full_name', 'email', 'login_code', 'auth_group', 'password_hash', 'must_change_password',
     'unit_id', 'role', 'sort_order', 'source_tab', 'is_active', 'zalo_name', 'zalo_phone',
-    'telegram_chat_id', 'availability_status', 'off_from', 'off_to', 'off_reason', 'replacement_user_id'],
+    'telegram_chat_id', 'availability_status', 'off_from', 'off_to', 'off_reason', 'replacement_user_id',
+    'receive_completion_email', 'linked_email'],
 
   // Danh mục nguồn của các dropdown trong Sheet kế hoạch (VRM/PRM, sản phẩm,
   // LS). Không xoá dòng đã dùng; chỉ đổi is_active để giữ lịch sử hồ sơ.
@@ -31,15 +32,21 @@ var SCHEMA = {
   Reasons: ['code', 'group_name', 'label', 'is_active'],
 
   MonthlyPlans: ['period_id', 'month_key', 'name', 'start_date', 'end_date', 'activation_at',
-    'status', 'spreadsheet_id', 'spreadsheet_url', 'created_by', 'created_at', 'activated_at', 'archived_at'],
+    'status', 'spreadsheet_id', 'spreadsheet_url', 'created_by', 'created_at', 'activated_at', 'archived_at',
+    'handoff_from_period_id', 'handoff_status', 'handoff_completed_at'],
+
+  StaffPlans: ['plan_id', 'period_type', 'start_date', 'end_date', 'status', 'version',
+    'lines_json', 'snapshot_json', 'assigned_by', 'assigned_at', 'updated_at'],
+  StaffPlanHistory: ['history_id', 'plan_id', 'version', 'action', 'by', 'at', 'plan_json'],
 
   Requests: ['request_id', 'period_id', 'origin_request_id', 'carryover_from_request_id', 'unit_id', 'created_by', 'customer_name', 'customer_kind',
     'cif', 'phone', 'email', 'priority_flags_json', 'requestor_id', 'requestor_name', 'requestor_kind',
     'note', 'created_at', 'updated_at'],
 
-  WorkItems: ['item_id', 'period_id', 'origin_item_id', 'carryover_from_item_id', 'request_id', 'work_type_code', 'product_name', 'collateral_mode', 'occurrence_date',
-    'source_stt', 'source_tab', 'status', 'assigned_user_id', 'assigned_by', 'submitted_at', 'accepted_at', 'assigned_at',
-    'due_at', 'completed_at', 'processing_started_at', 'appointment_json', 'checklist_json', 'pending_json', 'note',
+  WorkItems: ['item_id', 'period_id', 'origin_item_id', 'carryover_from_item_id', 'request_id', 'work_type_code', 'product_name', 'collateral_mode', 'requested_mortgage_contract_count', 'requested_export_folder_count', 'occurrence_date',
+    'source_stt', 'source_tab', 'status', 'assigned_user_id', 'assigned_by', 'last_assignee_id', 'submitted_at', 'accepted_at', 'assigned_at',
+    'due_at', 'due_at_override', 'completed_at', 'processing_started_at', 'appointment_json', 'checklist_json', 'pending_json', 'note',
+    'dossier_received_at', 'dossier_received_by', 'timing_source', 'first_assigned_at', 'processing_sessions_json', 'sla_pause_log_json', 'execution_state', 'execution_changed_at',
     // Việc mở sang kỳ sau được nhân thành dòng mới ở kỳ đó. Không đánh dấu dòng
     // cũ thì báo cáo nhiều kỳ đếm một việc thành nhiều việc.
     'carried_to_item_id',
@@ -51,6 +58,16 @@ var SCHEMA = {
     // Mốc bắt đầu chờ bên ngoài (tạm dừng / đang hẹn khách): hạn xử lý được lùi
     // đúng số giờ làm đã chờ khi việc quay lại xử lý. Rỗng nghĩa là hạn đang chạy.
     'sla_paused_at',
+    // Ưu tiên vận hành do quy tắc tự giao hoặc quản lý chọn khi phân công.
+    'is_priority',
+    // Giao dịch hệ thống cán bộ LS tick khi hoàn thành hồ sơ vay: {"GIAI_NGAN":true,"RLOS":true}.
+    // Rỗng nghĩa là hồ sơ hoàn thành trước khi có tick — bảng ngày đoán theo tên loại việc.
+    'result_flags_json',
+    // Phần việc cán bộ cũ đã làm xong lúc bị đổi người, tính kết quả cho họ:
+    // {"HD_THE_CHAP":{"user_id":"...","at":"...","by":"..."}}. Người nhận chỉ được tính phần còn lại.
+    'result_credit_json',
+    // Hẹn bổ sung do Phòng/PGD ghi sau khi đổi ngày phát sinh: {"at","note","by","created_at"}; không bắt buộc, không đổi luồng.
+    'supplement_json',
     'version', 'created_at', 'updated_at'],
 
   Events: ['event_id', 'item_id', 'type', 'by', 'at', 'reason', 'before_json', 'after_json'],
@@ -80,12 +97,12 @@ var SCHEMA = {
     'work_type_code', 'status', 'provider_msg_id', 'sent_at', 'unit_cost', 'currency',
     'cost_version', 'retry_count', 'created_at', 'updated_at'],
 
-  Inbox: ['id', 'user_id', 'item_id', 'event', 'at', 'is_read'],
+  Inbox: ['id', 'user_id', 'item_id', 'event', 'at', 'is_read', 'detail', 'subject_user_id'],
 
   // Số liệu chốt của từng kỳ. Các cột đếm cộng dồn được qua nhiều kỳ vì mỗi việc
   // chỉ tính ở kỳ nó phát sinh; `ton_cuoi_ky` là ảnh chụp nên lấy theo kỳ cuối,
   // không cộng. Giữ tổng giờ và số mẫu của từng đoạn để gộp nhiều kỳ vẫn đúng.
-  PeriodSummary: ['summary_id', 'period_id', 'month_key', 'dimension', 'dim_key', 'dim_label',
+  PeriodSummary: ['summary_id', 'period_id', 'month_key', 'dimension', 'dim_key', 'dim_label', 'timing_formula_version',
     'phat_sinh', 'chuyen_tiep_vao', 'hoan_thanh', 'huy', 'ton_cuoi_ky', 'qua_han',
     'tong_gio_tiep_nhan', 'so_tiep_nhan', 'tong_gio_phan_cong', 'so_phan_cong',
     'tong_gio_xu_ly', 'so_xu_ly', 'tong_gio_toan_trinh', 'so_toan_trinh', 'updated_at'],
@@ -99,6 +116,17 @@ var SCHEMA = {
   // --- Vận hành ---
   ConfigLog: ['id', 'at', 'by', 'area', 'detail'],
 
+  // Sổ lưu riêng các việc đã hủy: không xóa dòng WorkItems (giữ lịch sử, báo cáo),
+  // nhưng mỗi lần hủy chép một dòng ảnh chụp sang đây kèm lý do và người hủy/đề nghị.
+  CanceledItems: ['cancel_id', 'item_id', 'request_id', 'period_id', 'unit_id', 'source_stt', 'customer_name', 'cif',
+    'work_type_code', 'product_name', 'status_before', 'assigned_user_id', 'reason',
+    'canceled_by', 'canceled_at', 'requested_by', 'requested_at', 'requested_reason'],
+
+  // Việc khác cán bộ LS tự ghi kèm số lượng (họp đầu ngày, scan hoàn thiện hồ sơ...), không gắn hồ sơ nào.
+  // Cộng vào dòng Khác của bảng kết quả ngày theo work_date. Ghi nhầm thì đánh dấu canceled_at, không xóa dòng.
+  // minutes: số phút chia cho lượt này khi kết thúc Tạm dừng toàn bộ; operation_id: lượt tạm dừng mà nó thuộc về (rỗng nếu ghi ngoài lượt tạm dừng).
+  OtherWork: ['work_id', 'user_id', 'work_date', 'category', 'quantity', 'minutes', 'operation_id', 'at', 'canceled_at', 'canceled_by'],
+
   Settings: ['key', 'value', 'description', 'updated_at']
 };
 
@@ -109,6 +137,12 @@ var HEADER_BG = '#006b68';
  * Không dùng Sheet kế hoạch tuần đang vận hành làm kho dữ liệu mới.
  */
 function createStorageWorkbook() {
+  requireAdmin_();
+  return createStorageWorkbook_();
+}
+
+/** Khởi tạo kho từ trình soạn thảo khi chưa có tài khoản ứng dụng. */
+function createStorageWorkbook_() {
   var props = PropertiesService.getScriptProperties();
   var savedId = props.getProperty('LS_SHEET_ID');
   var ss, created = false;
@@ -123,8 +157,8 @@ function createStorageWorkbook() {
 
   var starter = created ? ss.getSheets()[0] : null;
   var report = setupSheetDB_(ss);
-  installMonthlyPlanTrigger();
-  installMaintenanceTrigger();
+  installMonthlyPlanTrigger_();
+  installMaintenanceTrigger_();
   Notifications.installWorker();
 
   // Sheet1 chỉ là tab mặc định của file mới, không thuộc mô hình dữ liệu.
@@ -146,14 +180,19 @@ function createStorageWorkbook() {
 }
 
 function setupSheetDB() {
+  requireAdminOrScriptOwner_();
+  return setupSheetDBEditor_();
+}
+
+function setupSheetDBEditor_() {
   var id = PropertiesService.getScriptProperties().getProperty('LS_SHEET_ID');
   var ss = id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) {
     throw new Error('Chưa có kho lưu trữ. Chạy createStorageWorkbook() trước.');
   }
   var report = setupSheetDB_(ss);
-  installMonthlyPlanTrigger();
-  installMaintenanceTrigger();
+  installMonthlyPlanTrigger_();
+  installMaintenanceTrigger_();
   Notifications.installWorker();
   Logger.log(report.length ? report.join('\n') : 'Kho dữ liệu đã đúng cấu trúc.');
   notify_(report.length ? report.join('\n') : 'Kho dữ liệu đã đúng cấu trúc.');
@@ -162,24 +201,49 @@ function setupSheetDB() {
 
 /** Cài trigger nền để kỳ đã tạo sớm tự kích hoạt khi đến ngày bắt đầu. */
 function installMonthlyPlanTrigger() {
-  var triggers = ScriptApp.getProjectTriggers();
-  var exists = triggers.some(function (trigger) {
-    return trigger.getHandlerFunction() === 'activateMonthlyPlans';
+  requireAdmin_();
+  return installMonthlyPlanTrigger_();
+}
+
+/** Giữ đúng một trigger cho handler; trả true nếu đã có. */
+function keepSingleTrigger_(triggers, handler) {
+  var seen = false;
+  triggers.forEach(function (trigger) {
+    if (trigger.getHandlerFunction() !== handler) return;
+    if (seen) ScriptApp.deleteTrigger(trigger);
+    seen = true;
   });
+  return seen;
+}
+
+function installMonthlyPlanTrigger_() {
+  var triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(function(trigger) {
+    if(trigger.getHandlerFunction() === 'activateMonthlyPlans') ScriptApp.deleteTrigger(trigger);
+  });
+  // Nhiều lượt chạy cùng lúc từng tạo trigger trùng; giữ một, xóa phần dư.
+  var exists = keepSingleTrigger_(triggers, 'activateMonthlyPlans_');
   if (!exists) {
-    ScriptApp.newTrigger('activateMonthlyPlans').timeBased().everyHours(1).create();
+    ScriptApp.newTrigger('activateMonthlyPlans_').timeBased().everyHours(1).create();
   }
   return { installed: true, existing: exists };
 }
 
 /** Cài maintenance hằng ngày để backup kho và ghi trạng thái vận hành. */
 function installMaintenanceTrigger() {
+  requireAdmin_();
+  return installMaintenanceTrigger_();
+}
+
+function installMaintenanceTrigger_() {
   var triggers = ScriptApp.getProjectTriggers();
-  var exists = triggers.some(function (trigger) {
-    return trigger.getHandlerFunction() === 'maintenanceTick';
+  triggers.forEach(function(trigger) {
+    if(trigger.getHandlerFunction() === 'maintenanceTick') ScriptApp.deleteTrigger(trigger);
   });
+  // Nhiều lượt chạy cùng lúc từng tạo trigger trùng; giữ một, xóa phần dư.
+  var exists = keepSingleTrigger_(triggers, 'maintenanceTick_');
   if (!exists) {
-    ScriptApp.newTrigger('maintenanceTick').timeBased().everyDays(1).atHour(2).create();
+    ScriptApp.newTrigger('maintenanceTick_').timeBased().everyDays(1).atHour(2).create();
   }
   return { installed: true, existing: exists };
 }
@@ -233,9 +297,56 @@ function backupStorageWorkbook_() {
 }
 
 function maintenanceTick() {
+  requireAdmin_();
+  return maintenanceTick_();
+}
+
+function maintenanceTick_() {
   var result = backupStorageWorkbook_();
+  try { result.staff_plans = closeEndedStaffPlans_(); } catch (err) { Logger.log('Chưa chốt kế hoạch cán bộ: ' + err); }
+  try { result.expired_sessions = pruneSessions_(true); } catch (err) { Logger.log('Chưa dọn phiên hết hạn: ' + err); }
+  try { result.retention = runRetention_(); } catch (err) { Logger.log('Chưa dọn dữ liệu cũ: ' + err); }
   Logger.log('Maintenance: ' + JSON.stringify(result));
   return result;
+}
+
+/**
+ * Dọn dữ liệu nhật ký/tin đã xong và đủ cũ, chạy trong khung bảo trì 2h sáng.
+ *
+ * Chỉ xóa bảng chuyển vận/chống trùng; KHÔNG đụng sổ chi phí (NotificationMetrics)
+ * hay nhật ký trạng thái (Events) — hai bảng đó là chứng từ, giữ để archive theo
+ * kỳ chứ không xóa theo tuổi. Tin chưa xong (THAT_BAI/DANG_GUI/CHO_*) và thông
+ * báo chưa đọc luôn được giữ lại.
+ */
+function runRetention_() {
+  var settings = {};
+  DataRepository.getAll('Settings').forEach(function (r) { settings[r.key] = r.value; });
+
+  function days_(key, def) {
+    var v = Number(settings[key]);
+    return isFinite(v) && v > 0 ? v : def;
+  }
+  var now = Date.now();
+  function olderThan_(ts, days) {
+    var t = Date.parse(String(ts || ''));
+    return isFinite(t) && (now - t) > days * 86400000;
+  }
+  var terminal = { DA_GUI: true, KHONG_GUI: true };
+  var outboxDays = days_('retention_outbox_days', 7);
+  var idemDays = days_('retention_idem_days', 14);
+  var inboxDays = days_('retention_inbox_read_days', 30);
+
+  var out = {};
+  out.outbox = DataRepository.pruneLeading('NotificationOutbox', function (o) {
+    return terminal[o.status] === true && olderThan_(o.created_at, outboxDays);
+  });
+  out.idempotency = DataRepository.pruneLeading('NotificationIdempotency', function (o) {
+    return olderThan_(o.created_at, idemDays);
+  });
+  out.inbox = DataRepository.pruneLeading('Inbox', function (n) {
+    return truthy_(n.is_read) && olderThan_(n.at, inboxDays);
+  });
+  return out;
 }
 
 function setupSheetDB_(ss) {
@@ -276,6 +387,7 @@ function setupSheetDB_(ss) {
 
   seedCatalog_(ss, report);
   ensureSourceTemplateSetting_(ss, report);
+  ensureRetentionSettings_(ss, report);
   upgradeWorkTypeAppointment_(ss, report);
   ensureNotificationIdempotency_(ss, report);
   return report;
@@ -346,6 +458,78 @@ function appendIfMissingRow_(sheet, keyColumn, keyValue, defaults, report, label
  * để trống `when_case` nên nó chạy cả khi việc đã chuyển sang đường nhóm nội bộ.
  * Bổ sung mẫu cho từng kênh và đánh dấu R6 là đường báo thẳng khách.
  */
+/**
+ * Đưa mẫu email hẹn khách về bản chuẩn thương hiệu. Kho cũ có thể để mẫu này sai kênh
+ * (vd. SMS) nên quy tắc R6 không tìm được mẫu cho EMAIL và không bao giờ gửi được.
+ *  - Sai kênh: luôn sửa lại EMAIL.
+ *  - Chưa được duyệt mà chưa có link chỉ đường: thay bằng bản chuẩn.
+ *  Cả hai trường hợp đều chuyển sang CHO_DUYET để Admin xem trước rồi bấm Duyệt. Mẫu đã
+ *  duyệt đúng kênh thì giữ nguyên, không ghi đè nội dung Admin đã chốt.
+ */
+function upgradeMailMapLink_(templates, report) {
+  if (!templates || templates.getLastRow() <= 1) return;
+  var values = templates.getDataRange().getValues();
+  var header = values[0] || [];
+  function col(name) { return header.indexOf(name); }
+  var codeCol = col('code'), nameCol = col('name'), chanCol = col('channel'), statusCol = col('status'), subjCol = col('subject'),
+    bodyCol = col('body'), byCol = col('approved_by'), atCol = col('approved_at');
+  if (codeCol === -1 || chanCol === -1 || statusCol === -1 || subjCol === -1 || bodyCol === -1) return;
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][codeCol]).trim() !== 'TPL_MAIL_HEN_KY') continue;
+    var wrongChannel = String(values[i][chanCol]).trim() !== 'EMAIL';
+    var approved = String(values[i][statusCol]).trim() === 'DA_DUYET';
+    var hasMap = String(values[i][bodyCol]).indexOf('{{link_ban_do}}') !== -1;
+    // Bản chuẩn đời trước (nội dung còn nguyên) được nâng lên bản mới; bản Admin đã tự sửa thì giữ.
+    var priorStock = String(values[i][bodyCol]) === 'Kính chào Quý khách {{ten_khach}},\n{{ten_ngan_hang}} trân trọng mời Quý khách đến ký hồ sơ theo lịch hẹn dưới đây:\nThời gian: {{gio_ky}} ngày {{ngay_ky}}\nĐịa điểm: {{noi_ky}}\nChỉ đường: {{link_ban_do}}\nQuý khách vui lòng mang theo giấy tờ tùy thân (CCCD/CMND) khi đến ký.\nNếu cần đổi lịch, vui lòng liên hệ tổng đài {{hotline}}.\nTrân trọng,\n{{ten_ngan_hang}}';
+    if (!wrongChannel && !priorStock && (approved || hasMap)) return;
+    var row = i + 1;
+    templates.getRange(row, chanCol + 1).setValue('EMAIL');
+    if (nameCol !== -1) templates.getRange(row, nameCol + 1).setValue('Email thông báo lịch hẹn ký hồ sơ');
+    templates.getRange(row, subjCol + 1).setValue('Thông báo lịch hẹn ký hồ sơ tại {{ten_ngan_hang}}');
+    templates.getRange(row, bodyCol + 1).setValue('Kính chào Quý khách {{ten_khach}},\n{{ten_ngan_hang}} xin thông báo lịch hẹn ký hồ sơ của Quý khách như sau:\nThời gian: {{gio_ky}} ngày {{ngay_ky}}\nĐịa điểm: {{noi_ky}}\nChỉ đường: {{link_ban_do}}\nQuý khách vui lòng mang theo giấy tờ tùy thân (CCCD/CMND) khi đến ký.\nNếu cần đổi lịch, vui lòng liên hệ cán bộ Quản lý.\nTrân trọng,\n{{ten_ngan_hang}}');
+    templates.getRange(row, statusCol + 1).setValue('CHO_DUYET');
+    if (byCol !== -1) templates.getRange(row, byCol + 1).setValue('');
+    if (atCol !== -1) templates.getRange(row, atCol + 1).setValue('');
+    report.push('Đưa mẫu email hẹn khách TPL_MAIL_HEN_KY về bản chuẩn thương hiệu' + (wrongChannel ? ' (đã sửa kênh về EMAIL)' : '') + ' — chờ Admin duyệt');
+    return;
+  }
+}
+
+/** Đặt một giá trị cấu hình có sẵn; báo cáo khi có thay đổi. */
+function setSettingIfDifferent_(sheet, key, value, report) {
+  if (!sheet || sheet.getLastRow() <= 1) return;
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  var keyCol = header.indexOf('key'), valCol = header.indexOf('value'), atCol = header.indexOf('updated_at');
+  if (keyCol === -1 || valCol === -1) return;
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][keyCol]).trim() !== key) continue;
+    if (String(values[i][valCol]) === value) return;
+    sheet.getRange(i + 1, valCol + 1).setValue(value);
+    if (atCol !== -1) sheet.getRange(i + 1, atCol + 1).setValue(new Date().toISOString());
+    report.push('Đặt cấu hình ' + key + ' = ' + value);
+    return;
+  }
+}
+
+function upgradeDoneTemplateWording_(templates, report) {
+  if (!templates || templates.getLastRow() <= 1) return;
+  var values = templates.getDataRange().getValues();
+  var header = values[0] || [];
+  var codeCol = header.indexOf('code'), subjCol = header.indexOf('subject'), bodyCol = header.indexOf('body');
+  if (codeCol === -1 || subjCol === -1 || bodyCol === -1) return;
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][codeCol]).trim() !== 'TPL_DONE_INTERNAL') continue;
+    // Chỉ đổi lời văn còn nguyên bản gốc; mẫu Admin đã tự sửa thì giữ.
+    if (String(values[i][subjCol]) === 'LS hoàn thành hồ sơ {{ma_viec}}') {
+      templates.getRange(i + 1, subjCol + 1).setValue('Hồ sơ {{ma_viec}} đã hoàn thành');
+      templates.getRange(i + 1, bodyCol + 1).setValue(String(values[i][bodyCol]).replace('đã hoàn thành phần việc LS.', 'đã hoàn thành.'));
+      report.push('Cập nhật lời văn email hoàn thành: Hồ sơ đã hoàn thành');
+    }
+    return;
+  }
+}
+
 function upgradeAppointmentRule_(rules, report) {
   if (!rules || rules.getLastRow() <= 1) return;
   var values = rules.getDataRange().getValues();
@@ -411,6 +595,30 @@ function upgradeWorkTypeAppointment_(ss, report) {
   report.push('Bật bắt buộc hẹn khách ký cho ' + changed + ' loại việc');
 }
 
+/** Kho cũ chưa có khóa dọn dữ liệu: bổ sung với mặc định để admin chỉnh được. */
+function ensureRetentionSettings_(ss, report) {
+  var sheet = ss.getSheetByName('Settings');
+  if (!sheet || sheet.getLastRow() <= 1) return;
+  var values = sheet.getDataRange().getValues();
+  var keyCol = values[0].indexOf('key');
+  if (keyCol === -1) return;
+  var have = {};
+  for (var i = 1; i < values.length; i++) have[String(values[i][keyCol])] = true;
+  var now = new Date().toISOString();
+  var defaults = [
+    ['retention_outbox_days', '7', 'Số ngày giữ tin đã gửi/không gửi trong hàng đợi trước khi dọn'],
+    ['retention_idem_days', '14', 'Số ngày giữ khóa chống trùng tin trước khi dọn'],
+    ['retention_inbox_read_days', '30', 'Số ngày giữ thông báo đã đọc trong hộp thư trước khi dọn']
+  ];
+  var added = 0;
+  defaults.forEach(function (row) {
+    if (have[row[0]]) return;
+    sheet.appendRow([row[0], row[1], row[2], now]);
+    added += 1;
+  });
+  if (added) report.push('Bổ sung ' + added + ' cấu hình dọn dữ liệu cũ');
+}
+
 function ensureSourceTemplateSetting_(ss, report) {
   var sheet = ss.getSheetByName('Settings');
   if (!sheet || sheet.getLastRow() <= 1) return;
@@ -462,7 +670,7 @@ function seedCatalog_(ss, report) {
   var adminAdded = appendIfMissingRow_(users, 'user_id', 'ADMIN', {
     user_id: 'ADMIN', full_name: 'Quản trị hệ thống', email: '', login_code: 'admin', auth_group: 'INTERNAL',
     password_hash: '', must_change_password: false, unit_id: 'HE_THONG', role: 'ADMIN', sort_order: 1,
-    source_tab: 'Cấu hình khởi tạo', is_active: true, zalo_name: '', zalo_phone: '',
+    source_tab: 'Cấu hình khởi tạo', is_active: true, zalo_name: '', zalo_phone: '', linked_email: '',
     availability_status: 'AVAILABLE', off_from: '', off_to: '', off_reason: '', replacement_user_id: ''
   }, report, 'tài khoản quản trị khởi tạo');
   if (adminAdded) report.push('Đã tạo tài khoản admin khởi tạo; mật khẩu mặc định chỉ được kiểm tra phía máy chủ và phải đổi sau khi đăng nhập');
@@ -547,8 +755,8 @@ function seedCatalog_(ss, report) {
         'Kính chào {{ten_khach}}, {{ten_ngan_hang}} mời Quý khách đến {{dia_diem}} lúc {{thoi_gian}} để hoàn tất thủ tục.\nLiên hệ {{hotline}} nếu cần đổi lịch.', '', ''],
       ['TPL_SMS_HEN_KY', 'SMS mời khách đến ký hồ sơ', 'SMS', 'NHAP', '',
         '{{ten_ngan_hang}} mời Quý khách đến {{noi_ky}} lúc {{gio_ky}} ngày {{ngay_ky}}. Liên hệ {{hotline}} nếu cần đổi lịch.', '', ''],
-      ['TPL_MAIL_HEN_KY', 'Email mời khách đến ký hồ sơ', 'EMAIL', 'NHAP', 'Lịch hẹn ký hồ sơ: {{ma_viec}}',
-        'Kính chào {{ten_khach}},\n{{ten_ngan_hang}} mời Quý khách đến {{noi_ky}} lúc {{gio_ky}} ngày {{ngay_ky}} để hoàn tất thủ tục.\nLiên hệ {{hotline}} nếu cần đổi lịch.', '', ''],
+      ['TPL_MAIL_HEN_KY', 'Email thông báo lịch hẹn ký hồ sơ', 'EMAIL', 'NHAP', 'Thông báo lịch hẹn ký hồ sơ tại {{ten_ngan_hang}}',
+        'Kính chào Quý khách {{ten_khach}},\n{{ten_ngan_hang}} xin thông báo lịch hẹn ký hồ sơ của Quý khách như sau:\nThời gian: {{gio_ky}} ngày {{ngay_ky}}\nĐịa điểm: {{noi_ky}}\nChỉ đường: {{link_ban_do}}\nQuý khách vui lòng mang theo giấy tờ tùy thân (CCCD/CMND) khi đến ký.\nNếu cần đổi lịch, vui lòng liên hệ cán bộ Quản lý.\nTrân trọng,\n{{ten_ngan_hang}}', '', ''],
       ['TPL_NHOM_HEN_KY', 'Nhắn nhóm nội bộ nhờ mời khách lên ký', 'GMF', 'NHAP', '',
         '{{tag_can_bo}} việc {{ma_viec}} ({{don_vi}}) cần mời khách lên ký lúc {{gio_ky}} ngày {{ngay_ky}} tại {{noi_ky}}. Mở hệ thống: {{link}}', '', '']
     ];
@@ -562,9 +770,9 @@ function seedCatalog_(ss, report) {
   }, report, 'mẫu SMS nháp cho workbook cũ');
 
   appendIfMissingRow_(templates, 'code', 'TPL_MAIL_HEN_KY', {
-    code: 'TPL_MAIL_HEN_KY', name: 'Email mời khách đến ký hồ sơ', channel: 'EMAIL', status: 'NHAP',
-    subject: 'Lịch hẹn ký hồ sơ: {{ma_viec}}',
-    body: 'Kính chào {{ten_khach}},\n{{ten_ngan_hang}} mời Quý khách đến {{noi_ky}} lúc {{gio_ky}} ngày {{ngay_ky}} để hoàn tất thủ tục.\nLiên hệ {{hotline}} nếu cần đổi lịch.',
+    code: 'TPL_MAIL_HEN_KY', name: 'Email thông báo lịch hẹn ký hồ sơ', channel: 'EMAIL', status: 'NHAP',
+    subject: 'Thông báo lịch hẹn ký hồ sơ tại {{ten_ngan_hang}}',
+    body: 'Kính chào Quý khách {{ten_khach}},\n{{ten_ngan_hang}} xin thông báo lịch hẹn ký hồ sơ của Quý khách như sau:\nThời gian: {{gio_ky}} ngày {{ngay_ky}}\nĐịa điểm: {{noi_ky}}\nChỉ đường: {{link_ban_do}}\nQuý khách vui lòng mang theo giấy tờ tùy thân (CCCD/CMND) khi đến ký.\nNếu cần đổi lịch, vui lòng liên hệ cán bộ Quản lý.\nTrân trọng,\n{{ten_ngan_hang}}',
     approved_by: '', approved_at: ''
   }, report, 'mẫu email hẹn ký cho workbook cũ');
 
@@ -598,17 +806,52 @@ function seedCatalog_(ss, report) {
   }, report, 'quy tắc báo nhóm nội bộ khi khách không có kênh liên hệ');
 
   upgradeAppointmentRule_(rules, report);
+  appendIfMissingRow_(templates,'code','TPL_DONE_INTERNAL',{
+    code:'TPL_DONE_INTERNAL',name:'Email báo Phòng/PGD hoàn thành',channel:'EMAIL',status:'DA_DUYET',
+    subject:'Hồ sơ {{ma_viec}} đã hoàn thành',
+    body:'Hồ sơ {{ma_viec}} — {{loai_viec}} của {{ten_khach}} đã hoàn thành.\nCán bộ LS: {{can_bo_ls}}.\nHoàn thành: {{hoan_thanh_luc}}.\nLịch hẹn KH: {{lich_hen}}.\nXem hồ sơ: {{link}}',
+    approved_at:new Date().toISOString()
+  },report,'mẫu email hoàn thành cho Phòng/PGD');
+  appendIfMissingRow_(rules,'rule_id','R9',{
+    rule_id:'R9',event:'HOAN_THANH_LS',audience:'PHONG_PHU_TRACH',channels:'EMAIL',template_code:'TPL_DONE_INTERNAL',
+    enabled:true,needs_confirm:false,throttle_minutes:0,when_case:''
+  },report,'email hoàn thành cho người gửi hồ sơ và user nhận thông báo của đơn vị');
+
+  appendIfMissingRow_(templates,'code','TPL_APPT_INTERNAL',{
+    code:'TPL_APPT_INTERNAL',name:'Email báo Phòng/PGD đã hẹn khách ký',channel:'EMAIL',status:'DA_DUYET',
+    subject:'Đã hẹn khách ký hồ sơ {{ma_viec}}',
+    body:'Hồ sơ {{ma_viec}} — {{loai_viec}} của {{ten_khach}} đã được LS hẹn khách ký.\nLịch hẹn KH: {{lich_hen}}.\nCán bộ LS: {{can_bo_ls}}.\nXem hồ sơ: {{link}}',
+    approved_at:new Date().toISOString()
+  },report,'mẫu email báo Phòng/PGD khi LS hẹn khách ký');
+  appendIfMissingRow_(rules,'rule_id','R10',{
+    rule_id:'R10',event:'DANG_HEN_KH',audience:'PHONG_PHU_TRACH',channels:'EMAIL',template_code:'TPL_APPT_INTERNAL',
+    enabled:true,needs_confirm:false,throttle_minutes:0,when_case:''
+  },report,'email báo cán bộ Phòng/PGD khi LS đã hẹn khách ký');
+  upgradeDoneTemplateWording_(templates,report);
+  upgradeMailMapLink_(templates,report);
+  var settingsSheet = ss.getSheetByName('Settings');
+  setSettingIfDifferent_(settingsSheet, 'bank_name', 'BIDV Đắk Lắk', report);
+  [['sign_map_url','','Link Google Maps của nơi ký, chèn vào email hẹn khách'],
+   ['brand_color','#006b68','Màu thương hiệu của email (mã #rrggbb)'],
+   ['logo_url','','Link https ảnh logo hiện đầu email'],
+   ['email_banner_url','','Link https ảnh banner hiện đầu email (nên dưới 150 KB, rộng 1200 px)']].forEach(function (d) {
+    appendIfMissingRow_(settingsSheet,'key',d[0],{key:d[0],value:d[1],description:d[2],updated_at:new Date().toISOString()},report,'cấu hình email');
+  });
 
   var settings = ss.getSheetByName('Settings');
   if (settings.getLastRow() <= 1) {
     var t = new Date().toISOString();
     var cfg = [
-      ['schema_version', '5', 'Phiên bản cấu trúc bảng', t],
+      ['schema_version', '6', 'Phiên bản cấu trúc bảng', t],
       ['source_template', 'KE HOACH HO TRO TIN DUNG T9.2026 TUAN 4', 'Mẫu Sheet gốc dùng để nạp đơn vị và danh mục loại việc', t],
       ['source_template_spreadsheet_id', '18CIBRA4nTFDio7Z1P0ESxP1UwR17F_KKXUMTs6ILqSI', 'ID workbook mẫu để sao chép nguyên tab, công thức, dropdown và định dạng cho từng tháng', t],
-      ['bank_name', 'Ngân hàng', 'Tên dùng trong mẫu tin gửi khách', t],
+      ['bank_name', 'BIDV Đắk Lắk', 'Tên dùng trong mẫu tin gửi khách', t],
       ['hotline', '', 'Số tổng đài in trong tin hẹn', t],
       ['sign_place', '', 'Nơi ký hồ sơ dùng chung cho mọi đơn vị', t],
+      ['sign_map_url', '', 'Link Google Maps của nơi ký, chèn vào email hẹn khách', t],
+      ['brand_color', '#006b68', 'Màu thương hiệu của email (mã #rrggbb)', t],
+      ['logo_url', '', 'Link https ảnh logo hiện đầu email', t],
+      ['email_banner_url', '', 'Link https ảnh banner hiện đầu email (nên dưới 150 KB, rộng 1200 px)', t],
       ['app_url', '', 'Link cán bộ mở từ thông báo', t],
       ['timezone', 'Asia/Ho_Chi_Minh', 'Múi giờ mốc thời gian và báo cáo', t],
       ['week_start', 'MONDAY', 'Ngày đầu tuần của kỳ báo cáo', t],
@@ -620,6 +863,9 @@ function seedCatalog_(ss, report) {
       ['backlog_alert', '20', 'Ngưỡng cảnh báo tồn hàng đợi gửi', t],
       ['export_row_limit', '5000', 'Giới hạn dòng mỗi lần xuất báo cáo', t],
       ['retention_months', '60', 'Thời hạn lưu dữ liệu', t],
+      ['retention_outbox_days', '7', 'Số ngày giữ tin đã gửi/không gửi trong hàng đợi trước khi dọn', t],
+      ['retention_idem_days', '14', 'Số ngày giữ khóa chống trùng tin trước khi dọn', t],
+      ['retention_inbox_read_days', '30', 'Số ngày giữ thông báo đã đọc trong hộp thư trước khi dọn', t],
       ['env', 'THU_NGHIEM', 'Môi trường vận hành', t],
       ['gateway_url', '', 'Điểm nhận yêu cầu gửi tin ngoài', t],
       ['gateway_auth_ref', 'LS_GATEWAY_TOKEN', 'Tên thuộc tính ScriptProperties chứa token gateway, không lưu token trong Sheet', t],

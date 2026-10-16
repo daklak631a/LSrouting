@@ -21,7 +21,7 @@ const only = (rows) => rows.length === 1 ? rows[0] : fail('Mong đợi đúng m�
 /* 1. Quy tắc dùng kênh trong app mà không khai mẫu vẫn phải phát được.
       Thông báo trong app không đi qua nhà cung cấp nên không có "mẫu được duyệt". */
 for (const event of ['DE_NGHI_SUA', 'HOAN_THANH_LS']) {
-  const row = only(D.queueNotifications(item('C1_' + event), event, st, null));
+  const row = only(D.queueNotifications(item('C1_' + event), event, st, null, 'IN_APP'));
   if (row.channel !== 'IN_APP' || row.status !== 'DA_GUI') {
     fail('Quy tắc IN_APP không khai mẫu phải gửi được, nhận: ' + row.channel + '/' + row.status + ' — ' + row.note);
   }
@@ -30,7 +30,7 @@ for (const event of ['DE_NGHI_SUA', 'HOAN_THANH_LS']) {
 
 /* 2. Kênh khách chọn lúc hẹn ký chỉ áp cho tin hẹn ký, không kéo theo tin nội bộ. */
 const appt = { at: '2026-09-25T02:00:00.000Z', date: '2026-09-25', time: '09:00', place: 'PGD', via_group: false, channel: 'EMAIL' };
-const noiBo = only(D.queueNotifications(item('C2', { appointment: appt }), 'HOAN_THANH_LS', st, null));
+const noiBo = only(D.queueNotifications(item('C2', { appointment: appt }), 'HOAN_THANH_LS', st, null, 'IN_APP'));
 if (noiBo.channel !== 'IN_APP') fail('Việc có lịch hẹn không được kéo tin nội bộ sang kênh báo khách.');
 
 /* 3. Địa chỉ phải khớp kiểu của kênh: email không nhận số điện thoại. */
@@ -61,11 +61,20 @@ st.settings.gateway_url = 'https://gateway.example/send';
 st.settings.gateway_token_set = 'true';
 
 const nhom = only(D.queueNotifications(
-  item('C5', { appointment: Object.assign({}, appt, { via_group: true, channel: 'NHOM' }) }), 'DANG_HEN_KH', st, null));
+  item('C5', { appointment: Object.assign({}, appt, { via_group: true, channel: 'NHOM' }) }), 'DANG_HEN_KH', st, null)
+  .filter((row) => row.audience === 'NHOM'));
 if (nhom.channel !== 'GMF' || nhom.recipient !== 'GRP-LS-001') {
   fail('Đường nhóm nội bộ phải gửi vào mã nhóm đã cấu hình, nhận: ' + nhom.channel + '/' + nhom.recipient + ' — ' + nhom.note);
 }
 if (nhom.status === 'KHONG_GUI') fail('Tin nhóm nội bộ không gửi được: ' + nhom.note);
+
+/* 5b. Hẹn ký báo email cho cán bộ Phòng/PGD; kênh khách chọn (SMS) không được kéo tin này đi. */
+const henPhong = D.queueNotifications(item('C5B', { appointment: Object.assign({}, appt, { channel: 'SMS' }) }), 'DANG_HEN_KH', st, null)
+  .filter((row) => row.audience === 'PHONG_PHU_TRACH');
+if (henPhong.length && henPhong.some((row) => row.channel !== 'EMAIL')) fail('Tin báo Phòng khi hẹn ký phải đi bằng email, không theo kênh khách chọn.');
+if (!st.notifyRules.some((r) => r.event === 'DANG_HEN_KH' && r.audience === 'PHONG_PHU_TRACH')) fail('Thiếu quy tắc email báo Phòng khi LS hẹn khách ký.');
+const doneTpl = st.templates.find((t) => t.code === 'TPL_DONE_INTERNAL');
+if (!/đã hoàn thành/.test(doneTpl.subject)) fail('Email hoàn thành phải ghi rõ hồ sơ đã hoàn thành.');
 
 /* 6. Hạn mức thư là hạn mức mỗi ngày, không phải hạn mức trọn đời. */
 const email = st.channels.find((c) => c.code === 'EMAIL');
@@ -116,7 +125,7 @@ const must = [
   [notifications, 'function emailQuota_', 'Hạn mức thư phải tính theo ngày.'],
   [notifications, 'next_try_at', 'Tin thất bại phải có mốc thử lại.'],
   [notifications, 'function sweepOverdue', 'Phải có bộ quét việc quá hạn phía máy chủ.'],
-  [notifications, "ScriptApp.newTrigger('overdueTick')", 'Bộ quét quá hạn phải có trigger.'],
+  [notifications, "ScriptApp.newTrigger('overdueTick_')", 'Bộ quét quá hạn phải có trigger nội bộ.'],
   [notifications, "code !== 'IN_APP'", 'Tin trong app không được đòi mẫu đã duyệt.'],
   [server, 'function requireRole_', 'Vai trò phải được kiểm theo danh sách cho phép.'],
   [server, 'function changeOutbox', 'Cán bộ phải xác nhận được tin của việc mình phụ trách.'],
