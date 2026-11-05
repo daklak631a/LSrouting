@@ -34,12 +34,12 @@ LS.ui.toast = (message, kind) => { toasts.push([message, kind]); };
 LS.load(D.seed);
 const st = LS.db();
 
-// 1. LS và QLKH tạo đề nghị được tạm dừng; chỉ LS tiếp tục xử lý.
+// 1. LS và QLKH tạo đề nghị được tạm dừng; LS và QLKH tạo đề nghị tiếp tục xử lý (máy chủ chỉ cho QLKH tiếp tục phần mình đã dừng).
 Object.keys(D.FLOW).forEach((from) => (D.FLOW[from] || []).filter((s) => s.to === 'TAM_DUNG').forEach((s) => {
   assert.deepEqual(Array.from(s.roles), ['CAN_BO_LS','PHONG_PGD'], 'Tạm dừng ở ' + from + ' cho LS và QLKH tạo đề nghị');
 }));
 const fromPause = (to) => D.FLOW.TAM_DUNG.find((s) => s.to === to);
-assert.deepEqual(Array.from(fromPause('DANG_THUC_HIEN').roles), ['CAN_BO_LS'], 'Tiếp tục xử lý chỉ cán bộ LS bấm');
+assert.deepEqual(Array.from(fromPause('DANG_THUC_HIEN').roles), ['CAN_BO_LS', 'PHONG_PGD'], 'Tiếp tục xử lý: cán bộ LS và QLKH tạo đề nghị, KS/QL không');
 assert.ok(fromPause('DA_PHAN_CONG').roles.includes('KS_LS') && fromPause('DA_PHAN_CONG').roles.includes('QUAN_LY_LS'), 'KS/QL vẫn đổi người hồ sơ đang dừng');
 assert.ok(fromPause('HUY').roles.includes('KS_LS'), 'KS vẫn hủy được hồ sơ đang dừng');
 

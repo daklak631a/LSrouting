@@ -378,7 +378,6 @@ LS.api = (function () {
     createNextMonthlyPlan: function () { return write('createNextMonthlyPlan'); },
     createRequest: function (payload) { return write('createRequest', payload); },
     transitionItem: function (id, to, opts) { return write('transitionItem', id, to, opts || {}); },
-    addSupplementAppointment: function (id, at, note, expectedVersion) { return write('addSupplementAppointment', id, at, note, expectedVersion); },
     rescheduleItem: function (id, dueAt, reason, expectedVersion) { return write('rescheduleItem', id, dueAt, reason, expectedVersion); },
     assignWorkItemsBatch: function (rows) { return write('assignWorkItemsBatch', rows || []); },
     confirmDossierReceipt: function (id, version) { return write('confirmDossierReceipt', id, version); },

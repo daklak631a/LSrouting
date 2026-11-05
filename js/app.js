@@ -696,7 +696,6 @@ LS.app = (function () {
     'edit-item': function (el) { S.editItem(el.getAttribute('data-id')); },
     'edit-times': function (el) { S.editTimes(el.getAttribute('data-id')); },
     'change-due-date': function (el) { S.changeDueDate(el.getAttribute('data-id')); },
-    supplement: function (el) { S.openSupplement(el.getAttribute('data-id')); },
     'edit-result-flags': function (el) { S.editResultFlags(el.getAttribute('data-id')); },
     'time-export': S.exportTimeReport,
     flow: function (el) { S.flow(el.getAttribute('data-id'), el.getAttribute('data-to')); },
@@ -844,7 +843,6 @@ LS.app = (function () {
     'cancel-request': S.submitCancelRequest,
     'edit-times': S.submitTimes,
     'change-due-date': S.submitDueDate,
-    supplement: S.submitSupplement,
     'result-flags': S.submitResultFlags,
     'work-plan': S.submitPlan,
     'staff-absence': S.saveStaffAbsence,
@@ -938,21 +936,21 @@ LS.app = (function () {
   function onChange(ev) {
     var t = ev.target;
 
-    if (t.type === 'date' && (t.hasAttribute('data-request-native-date') || /^dt_/.test(t.name || ''))) {
-      S.syncRequestWeekdays(t.closest('.row-item'));
-      return;
-    }
-
     if (t.hasAttribute('data-date-native-for')) {
       var display = document.querySelector('[data-date-display-for="' + t.getAttribute('data-date-native-for') + '"]');
       if (display) {
         var kind = display.getAttribute('data-date-kind');
-        display.value = kind === 'datetime-local'
+        display.value = !t.value ? '' : kind === 'datetime-local'
           ? U.fmtDate(t.value.split('T')[0]) + ' ' + (t.value.split('T')[1] || '').slice(0, 5) +
             ((t.value.split('T')[1] || '').length > 5 ? ':' + t.value.split('T')[1].slice(6, 8) : '')
           : U.fmtDate(t.value);
         display.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
       }
+    }
+
+    if (t.type === 'date' && (t.hasAttribute('data-request-native-date') || /^dt_/.test(t.name || ''))) {
+      S.syncRequestWeekdays(t.closest('.row-item'));
       return;
     }
 

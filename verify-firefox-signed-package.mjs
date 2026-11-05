@@ -6,7 +6,7 @@ import { verifySignedPackage, readXpi } from './lib/firefox-package.mjs';
 
 const signed = verifySignedPackage('extension-firefox');
 assert.ok(signed?.signed);
-assert.equal(signed.version,'1.0.0');
+assert.equal(signed.version,JSON.parse(fs.readFileSync('extension-firefox/manifest.json','utf8')).version);
 assert.ok(signed.bytes.equals(fs.readFileSync('outputs/'+signed.filename)),'Build must copy signed file unchanged');
 if(process.argv[2])assert.ok(signed.bytes.equals(fs.readFileSync(process.argv[2])),'Published XPI must equal owner-supplied Mozilla download');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(),'ls-firefox-signed-'));

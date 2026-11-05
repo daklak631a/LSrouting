@@ -20,7 +20,7 @@ tx.scan=(n,fn)=>tx.rows(n).forEach(o=>fn(c=>o[c]===undefined?'':o[c]));tx.select
 server.DataRepository={tx:fn=>{
   const before=JSON.parse(JSON.stringify(db));
   try{return fn(tx);}catch(e){Object.keys(db).forEach(k=>{db[k]=before[k];});throw e;}
-},getAll:n=>db[n]||[],find:(n,k,id)=>tx.find(n,k,id)?.object};
+},scanSnapshot:(n,fn)=>{const r=(db[n]||[]);r.forEach(o=>fn(c=>o[c]===undefined?"":o[c]));return r.length;}, getAll:n=>db[n]||[],find:(n,k,id)=>tx.find(n,k,id)?.object};
 server.requireActor_=()=>actor;server.currentUser_=()=>actor;server.stamp_=()=>clock;server.id_=()=> 'ID'+(++serial);
 server.markPlanDirty_=()=>{};server.Notifications={queue:()=>0};
 const base=id=>({item_id:id,request_id:'R',period_id:'P',status:'DA_PHAN_CONG',assigned_user_id:'LS1',

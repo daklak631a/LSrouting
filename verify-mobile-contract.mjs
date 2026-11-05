@@ -22,7 +22,7 @@ if (!css.includes('.auth-side { min-height: 100dvh;') || !css.includes('.passwor
 }
 
 // Mobile login is a focused app screen, not a narrowed desktop split layout.
-['.auth-mobile-brand', 'min-height: 60px;', 'min-height: 64px;', 'font-size: 2.125rem;', 'border-radius: 30px;', 'grid-template-columns: 1fr;'].forEach((rule) => {
+['.auth-mobile-brand', 'min-height: 60px;', 'min-height: 64px;', 'font-size: 2.125rem;', 'border-radius: 20px;', 'grid-template-columns: 1fr;'].forEach((rule) => {
   if (!css.includes(rule)) throw new Error('Thiếu bề mặt đăng nhập mobile lớn, tập trung: ' + rule);
 });
 if (!app.includes('class="auth-mobile-brand"')) {

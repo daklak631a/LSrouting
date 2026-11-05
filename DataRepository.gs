@@ -33,6 +33,7 @@ var DataRepository = (function () {
   var SHARED_MAX_CHARS = 95000;
   var SHARED_TABLES = ['Users', 'Units', 'WorkTypes', 'Reasons', 'CatalogOptions', 'Settings',
     'NotifyRules', 'Templates', 'Channels', 'MonthlyPlans'];
+  var WARM_INDEX_COLUMNS_ = { WorkItems: ['item_id'], Requests: ['request_id'] };
 
   var book_ = null;
   var cache = {};   // tên tab -> { sheet, headers, values, locked, idx, pending, dirty }
@@ -97,6 +98,10 @@ var DataRepository = (function () {
     if (!sc) return;
     try { sc.put('LS_TBLGEN_' + name, String(Date.now()) + '_' + Math.floor(Math.random() * 1e6), 21600); }
     catch (ignore) { try { sc.remove('LS_TBLGEN_' + name); } catch (ignore2) {} }
+  }
+
+  function tracksGeneration_(name) {
+    return name === 'WorkItems' || SHARED_TABLES.indexOf(name) !== -1;
   }
 
   function readShared_(name) {
@@ -209,8 +214,17 @@ var DataRepository = (function () {
     if (last > have) {
       var extra = s.getRange(have + 1, 1, last - have, c.headers.length).getValues();
       reads += 1;
+      var firstIndex = c.values.length;
       for (var i = 0; i < extra.length; i++) c.values.push(extra[i]);
-      c.idx = null;
+      if (c.idx) {
+        Object.keys(c.idx).forEach(function (col) {
+          var map = c.idx[col];
+          for (var j = 0; j < extra.length; j++) {
+            var key = String(extra[j][Number(col)]);
+            if (!(key in map)) map[key] = firstIndex + j;
+          }
+        });
+      }
     }
     c.synced = true;
     c.fresh = {};
@@ -380,16 +394,7 @@ var DataRepository = (function () {
     if (staleInTx_(c) && !catalog_(name)) c = sync_(name);
     var col = c.headers.indexOf(keyCol);
     if (col === -1) throw new Error('Bảng ' + name + ' không có cột ' + keyCol + '.');
-    if (!c.idx) c.idx = {};
-    var map = c.idx[col];
-    if (!map) {
-      map = Object.create(null);
-      for (var i = 1; i < c.values.length; i++) {
-        var k = String(c.values[i][col]);
-        if (!(k in map)) map[k] = i;
-      }
-      c.idx[col] = map;
-    }
+    var map = indexColumn_(c, col);
     var at = map[String(keyVal)];
     if (at === undefined) {
       // Danh mục chưa đối chiếu phần đuôi: có thể dòng vừa được thêm (vd. user mới).
@@ -422,6 +427,19 @@ var DataRepository = (function () {
     };
   }
 
+  function indexColumn_(c, col) {
+    if (!c.idx) c.idx = {};
+    if (!c.idx[col]) {
+      var map = Object.create(null);
+      for (var i = 1; i < c.values.length; i++) {
+        var key = String(c.values[i][col]);
+        if (!(key in map)) map[key] = i;
+      }
+      c.idx[col] = map;
+    }
+    return c.idx[col];
+  }
+
   /**
    * Quét bảng mà không đọc lại trọn bảng trong khóa: dùng bản đã đọc trước khóa cộng phần đuôi vừa thêm.
    * CHỈ dùng cho cột không bao giờ đổi sau khi tạo dòng (mã hồ sơ, việc chính, kỳ, mã STT, đơn vị gửi…),
@@ -432,6 +450,22 @@ var DataRepository = (function () {
     if (staleInTx_(c) && !catalog_(name)) c = sync_(name);
     var getter = rowGetter_(c);
     for (var i = 1; i < c.values.length; i++) fn(getter(c.values[i]));
+  }
+
+  /** Quét phần dữ liệu được thêm sau snapshot đọc trước khóa; offset là số dòng dữ liệu, không tính header. */
+  function scanFrom_(name, dataRows, fn) {
+    var c = load_(name);
+    if (staleInTx_(c) && !catalog_(name)) c = sync_(name);
+    var getter = rowGetter_(c), start = Math.max(1, Math.floor(Number(dataRows) || 0) + 1);
+    for (var i = start; i < c.values.length; i++) fn(getter(c.values[i]));
+  }
+
+  /** Quét snapshot ngoài khóa bằng hàng thô; trả số dòng để lần ghi chỉ quét phần đuôi mới. */
+  function scanSnapshot_(name, fn) {
+    if (txDepth > 0) throw new Error('LS_SCAN_SNAPSHOT_IN_TX: Chỉ quét snapshot ngoài giao dịch.');
+    var c = load_(name), getter = rowGetter_(c);
+    for (var i = 1; i < c.values.length; i++) fn(getter(c.values[i]));
+    return Math.max(0, c.values.length - 1);
   }
 
   /**
@@ -563,7 +597,7 @@ var DataRepository = (function () {
 
     c.pending = [];
     c.dirty = {};
-    if (SHARED_TABLES.indexOf(name) !== -1) bumpShared_(name);
+    if (tracksGeneration_(name)) bumpShared_(name);
   }
 
   function flushAll_() {
@@ -623,7 +657,7 @@ var DataRepository = (function () {
       var c = cache[name];
       c.pending = [];
       c.dirty = {};
-      if (SHARED_TABLES.indexOf(name) !== -1) bumpShared_(name);
+      if (tracksGeneration_(name)) bumpShared_(name);
     });
   }
 
@@ -690,7 +724,7 @@ var DataRepository = (function () {
       if (eligibleCount > 0) {
         s.deleteRows(2, eligibleCount);
         delete cache[name];
-        if (SHARED_TABLES.indexOf(name) !== -1) bumpShared_(name);
+        if (tracksGeneration_(name)) bumpShared_(name);
       }
       return { deleted: eligibleCount, scanned: scanned, stopped: stopped };
     } finally {
@@ -728,7 +762,7 @@ var DataRepository = (function () {
       if (guard) guard(row);
       s.deleteRow(2 + at);
       delete cache[name];
-      if (SHARED_TABLES.indexOf(name) !== -1) bumpShared_(name);
+      if (tracksGeneration_(name)) bumpShared_(name);
       return { deleted: 1, row: row };
     } finally {
       txDepth = 0;
@@ -745,7 +779,7 @@ var DataRepository = (function () {
     var api = {
       append: append_, find: findRow_, write: write_,
       rows: rowsToObjects_, tail: tail_, tailWhere: tailWhere_, invalidate: invalidate_,
-      scan: scan_, select: select_
+      scan: scan_, scanFrom: scanFrom_, select: select_
     };
     if (txDepth > 0) return fn(api);
 
@@ -753,6 +787,13 @@ var DataRepository = (function () {
     // người khác đứng chờ. Bảng lỗi/thiếu thì để giao dịch tự đọc như cũ.
     ((options && options.warm) || []).forEach(function (name) {
       try { load_(name); } catch (ignore) { delete cache[name]; }
+    });
+    Object.keys(WARM_INDEX_COLUMNS_).forEach(function (name) {
+      if (!cache[name]) return;
+      WARM_INDEX_COLUMNS_[name].forEach(function (keyCol) {
+        var col = cache[name].headers.indexOf(keyCol);
+        if (col !== -1) indexColumn_(cache[name], col);
+      });
     });
     // Bảng chỉ-thêm (nhật ký, hộp thư…): lấy sẵn hàng tiêu đề, trong khóa chỉ còn ghi.
     ((options && options.append) || []).forEach(function (name) {
@@ -789,6 +830,7 @@ var DataRepository = (function () {
 
   return {
     getAll: rowsToObjects_,
+    scanSnapshot: scanSnapshot_,
     tail: tail_,
     tailWhere: tailWhere_,
     find: function (name, keyCol, keyVal) {
@@ -800,6 +842,11 @@ var DataRepository = (function () {
     pruneLeading: pruneLeading_,
     deleteRow: deleteRow_,
     sheetReads: function () { return reads; },
+    generation: function (name) {
+      var sc = scriptCache_();
+      if (!sc) return '';
+      try { return sharedGen_(sc, name); } catch (ignore) { return ''; }
+    },
     clearCache: function () { cache = {}; },
     /** Sau khi sửa trực tiếp cấu trúc/dữ liệu Sheet ngoài repository. */
     invalidateShared: function (names) {

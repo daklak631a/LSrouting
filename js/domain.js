@@ -170,7 +170,7 @@ LS.domain = (function () {
     ],
 
     TAM_DUNG: [
-      { to: 'DANG_THUC_HIEN', label: 'Tiếp tục xử lý', short: 'Tiếp tục', roles: ['CAN_BO_LS'], reason: 'free', primary: true, rank: 1 },
+      { to: 'DANG_THUC_HIEN', label: 'Tiếp tục xử lý', short: 'Tiếp tục', roles: ['CAN_BO_LS', 'PHONG_PGD'], reason: 'free', primary: true, rank: 1 },
       { to: 'DA_PHAN_CONG', label: 'Đổi người xử lý', short: 'Đổi người', roles: ['KS_LS', 'QUAN_LY_LS'], assignee: true, reason: 'free', rank: 2, notify: 'DOI_NGUOI' },
       { to: 'HUY', label: 'Hủy việc', short: 'Hủy', roles: ['KS_LS', 'QUAN_LY_LS'], reason: 'HUY', rank: 9 }
     ],
@@ -472,6 +472,7 @@ LS.domain = (function () {
     DUYET_HUY: 'Đề nghị hủy đã được duyệt',
     TU_CHOI_HUY: 'Đề nghị hủy bị từ chối',
     HEN_BO_SUNG: 'Phòng/PGD hẹn bổ sung',
+    QLKH_TIEP_TUC: 'Phòng/PGD cho tiếp tục hồ sơ đã tạm dừng',
     NGHI_PHEP_LS: 'Cán bộ LS tự khai nghỉ phép'
   };
 
@@ -1323,7 +1324,8 @@ LS.domain = (function () {
     HD_THE_CHAP: 'Đã soạn xong HĐ thế chấp', NHAP_KHO: 'Đã nhập kho TSĐB', XUAT_KHO: 'Đã xuất kho TSĐB'
   };
   var STEP_QUANTITY_LABELS = {
-    HD_TIN_DUNG: 'Số lượng HĐ tín dụng', HD_THE_CHAP: 'Số lượng HĐ thế chấp', XUAT_KHO: 'Số lượng tài sản xuất'
+    HD_TIN_DUNG: 'Số lượng HĐ tín dụng', HD_THE_CHAP: 'Số lượng HĐ thế chấp',
+    NHAP_KHO: 'Số lượng tài sản nhập', XUAT_KHO: 'Số lượng tài sản xuất'
   };
 
   function stepQuantityLabel(key) { return STEP_QUANTITY_LABELS[key] || ''; }
@@ -1378,7 +1380,7 @@ LS.domain = (function () {
     return stepKeys(item, wt).map(function (k) {
       var c = credit[k] || {};
       return { key: k, label: COLLATERAL_STEP_LABELS[k], user_id: c.user_id || '', at: c.at || '', by: c.by || '', done: !!c.user_id,
-        quantity: Math.max(1, Math.floor(Number(c.user_id ? c.quantity : (k === 'HD_THE_CHAP' ? item.requested_mortgage_contract_count : item.requested_export_folder_count)) || 1)) };
+        quantity: Math.max(1, Math.floor(Number(c.user_id ? c.quantity : (k === 'HD_THE_CHAP' ? item.requested_mortgage_contract_count : k === 'XUAT_KHO' ? item.requested_export_folder_count : 1)) || 1)) };
     });
   }
 

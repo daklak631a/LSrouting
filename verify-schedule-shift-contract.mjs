@@ -3,7 +3,7 @@
  *  - Hồ sơ tồn trong bảng kết quả ngày tính theo ngày đang xem: dời sang ngày sau thì không còn tồn hôm nay, đến ngày mới mới tính;
  *  - hồ sơ LS đã nhận (hoặc đã giao cán bộ) mà ngày bị dời sang tuần sau vẫn nằm trong Quản lý hồ sơ;
  *  - Phòng/PGD có nút bút chì sửa nhanh ngay trên dòng; Kiểm soát/Quản lý không có;
- *  - "Hẹn bổ sung" của Phòng/PGD: tùy chọn, chỉ trong chi tiết, không đổi trạng thái/hạn/phiên bản luồng, báo cán bộ đang giữ hồ sơ;
+ *  - "Hẹn bổ sung" đã gỡ: Phòng/PGD không còn thêm ghi chú khi hồ sơ đã giao LS; lịch hẹn bổ sung cũ vẫn xem được;
  *  - dashboard cá nhân có bảng Kết quả thực hiện chỉ của chính cán bộ đó;
  *  - nhật ký chỉ tải khi bấm "Xem nhật ký" (kiểm chi tiết ở verify-lazy-logs-contract);
  *  - báo cáo giờ: phiên/lượt tạm dừng đã khép trong ngày mà làm ngoài giờ được cộng cho người đó; lượt "Khác" chỉ tính khi có việc khác gắn vào.
@@ -114,43 +114,29 @@ const cell = (html, label) => {
   st.items.length = 0;
 }
 
-// 4. Hẹn bổ sung ở chế độ cục bộ: chỉ Phòng/PGD tạo đề nghị, chỉ trong chi tiết, không đổi luồng.
+// 4. Hẹn bổ sung đã gỡ: hồ sơ đã giao LS thì Phòng/PGD không thêm được ghi chú; lịch hẹn bổ sung cũ vẫn hiện cho mọi người xem.
 {
   const target = item({ item_id: 'SUP_1', source_stt: 'SUP_1', due_at: '2026-10-09T10:00:00.000Z',
-    appointment: { at: '2026-10-08T03:00:00.000Z', channel: 'EMAIL', place: 'Quầy 1' } });
+    supplement: { at: '2026-10-12T02:30:00.000Z', note: 'Khách hẹn lại sau khi đổi ngày', by: pgd.user_id, created_at: now } });
   const stranger = st.users.find((u) => u.role === 'PHONG_PGD' && u.user_id !== pgd.user_id);
-  const before = JSON.stringify({ status: target.status, assigned: target.assigned_user_id, due: target.due_at, appointment: target.appointment });
   as(pgd);
   LS.screens.detail('SUP_1');
-  assert.ok(dialog.includes('data-act="supplement" data-id="SUP_1"'), 'Phòng/PGD có nút Hẹn bổ sung trong chi tiết');
-  assert.ok(!LS.screens.work().includes('data-act="supplement"'), 'Nút chỉ nằm trong con mắt, không ra ngoài dòng');
+  assert.ok(!dialog.includes('data-act="supplement"'), 'Phòng/PGD không còn nút Hẹn bổ sung');
+  assert.ok(dialog.includes('Hẹn bổ sung') && dialog.includes('Khách hẹn lại sau khi đổi ngày'), 'Lịch hẹn bổ sung cũ vẫn hiển thị trong chi tiết');
+  assert.ok(!LS.screens.work().includes('data-act="supplement"'));
+  assert.equal(LS.screens.openSupplement, undefined, 'Không còn hộp thoại Hẹn bổ sung');
+  assert.equal(LS.screens.submitSupplement, undefined, 'Không còn hàm lưu Hẹn bổ sung');
+  assert.equal(LS.api.addSupplementAppointment, undefined, 'Không còn lệnh gọi máy chủ');
   as(officer);
   LS.screens.detail('SUP_1');
   assert.ok(!dialog.includes('data-act="supplement"'), 'Cán bộ LS không có nút');
+  assert.ok(dialog.includes('Khách hẹn lại sau khi đổi ngày'), 'LS vẫn xem được lịch hẹn bổ sung cũ');
   as(leader);
   LS.screens.detail('SUP_1');
   assert.ok(!dialog.includes('data-act="supplement"'), 'Kiểm soát không có nút');
   if (stranger) { as(stranger); LS.screens.detail('SUP_1'); assert.ok(!dialog.includes('data-act="supplement"'), 'Phòng khác không có nút'); }
-  as(pgd);
-  LS.screens.openSupplement('SUP_1');
-  assert.match(dialog, /data-form="supplement"[^>]*data-id="SUP_1"[^>]*data-version="3"/);
-  assert.match(dialog, /name="at"[^>]*type="datetime-local"|type="datetime-local"[^>]*name="at"/);
-  const attrs = {};
-  const form = { _fields: { at: '2026-10-12T09:30', note: 'Khách hẹn lại sau khi đổi ngày' },
-    getAttribute: (k) => (k === 'data-id' ? 'SUP_1' : k === 'data-version' ? '3' : attrs[k] || null), setAttribute: (k, v) => { attrs[k] = v; }, removeAttribute: (k) => { delete attrs[k]; } };
-  LS.screens.submitSupplement(form);
-  assert.equal(target.version, 4, 'Ghi nhận đổi phiên bản như mọi thay đổi khác');
-  assert.equal(target.supplement.note, 'Khách hẹn lại sau khi đổi ngày');
-  assert.equal(target.supplement.at, '2026-10-12T02:30:00.000Z', 'Giờ nhập là giờ Việt Nam');
-  assert.equal(JSON.stringify({ status: target.status, assigned: target.assigned_user_id, due: target.due_at, appointment: target.appointment }), before,
-    'Không đổi trạng thái, người xử lý, hạn hay lịch hẹn ký LS đã báo');
-  assert.ok(st.events.some((e) => e.item_id === 'SUP_1' && e.type === 'HEN_BO_SUNG'), 'Có sự kiện trong nhật ký');
-  assert.ok(st.inbox.some((n) => n.user_id === officer.user_id && n.item_id === 'SUP_1' && n.event === 'HEN_BO_SUNG'), 'Báo cán bộ đang giữ hồ sơ');
-  as(officer);
-  LS.screens.detail('SUP_1');
-  assert.ok(dialog.includes('Hẹn bổ sung') && dialog.includes('Khách hẹn lại sau khi đổi ngày'), 'LS xem được lịch hẹn bổ sung trong chi tiết');
-  assert.equal(D.label('HEN_BO_SUNG'), 'Hẹn bổ sung');
-  assert.ok(D.NOTIFY_EVENTS && D.NOTIFY_EVENTS.HEN_BO_SUNG, 'Có nhãn cho tin trong app');
+  assert.equal(D.label('HEN_BO_SUNG'), 'Hẹn bổ sung', 'Nhật ký cũ vẫn có nhãn');
+  void target;
   st.items.length = 0;
 }
 
@@ -213,43 +199,14 @@ let NOW = '2026-10-07T03:00:00.000Z';
 sctx.stamp_ = () => NOW;
 sctx.markPlanDirty_ = () => {};
 
-assert.ok(vm.runInContext('API_WRITE_', sctx).includes('addSupplementAppointment'), 'Là lệnh ghi có op_id chống ghi trùng');
-assert.ok(vm.runInContext('Object.keys(apiFunctions_())', sctx).includes('addSupplementAppointment'));
-assert.ok(Array.from(schema.SCHEMA.WorkItems).includes('supplement_json'), 'Cột supplement_json có trong SCHEMA');
-assert.match(read('Code.gs'), /hasColumns_\('WorkItems'[^)]*'supplement_json'/, 'Kho cũ được bổ sung cột');
-assert.match(read('Code.gs'), /supplement_json: old\.supplement_json \|\| ''/, 'Chuyển kỳ giữ hẹn bổ sung');
-assert.match(read('js/gas-api.js'), /supplement: json\(i\.supplement_json, null\)/);
-assert.match(read('js/gas-api.js'), /addSupplementAppointment: function[^}]*write\('addSupplementAppointment'/);
-
-const when = '2026-10-12T02:30:00.000Z';
-actor = { user_id: 'LS1', role: 'CAN_BO_LS', unit_id: 'U9', is_active: true };
-assert.match(fail(() => sctx.addSupplementAppointment('I1', when, '', 3)), /QLKH/, 'Cán bộ LS không hẹn bổ sung');
-actor = { user_id: 'P2', role: 'PHONG_PGD', unit_id: 'U1', is_active: true };
-assert.match(fail(() => sctx.addSupplementAppointment('I1', when, '', 3)), /tạo đề nghị/, 'Người khác cùng phòng không phải người tạo');
-actor = { user_id: 'P1', role: 'PHONG_PGD', unit_id: 'U2', is_active: true };
-assert.match(fail(() => sctx.addSupplementAppointment('I1', when, '', 3)), /tạo đề nghị/, 'Phòng khác không được');
-actor = { user_id: 'P1', role: 'PHONG_PGD', unit_id: 'U1', is_active: true };
-assert.match(fail(() => sctx.addSupplementAppointment('I1', 'mai', '', 3)), /không hợp lệ/);
-assert.match(fail(() => sctx.addSupplementAppointment('I1', when, 'x'.repeat(301), 3)), /300/);
-assert.match(fail(() => sctx.addSupplementAppointment('I1', when, '', 2)), /cập nhật/, 'Phiên bản cũ');
-assert.match(fail(() => sctx.addSupplementAppointment('NOPE', when, '', 3)), /Không tìm thấy/);
-db.WorkItems[0].status = 'CHO_PHAN_CONG'; db.WorkItems[0].assigned_user_id = '';
-assert.match(fail(() => sctx.addSupplementAppointment('I1', when, '', 3)), /đã giao/, 'Chưa giao cán bộ thì chưa hẹn bổ sung');
-db.WorkItems[0].status = 'DANG_THUC_HIEN'; db.WorkItems[0].assigned_user_id = 'LS1';
-assert.equal(db.Events.length, 0, 'Lỗi thì không ghi gì');
-const ok = sctx.addSupplementAppointment('I1', when, 'Khách hẹn lại', 3);
-assert.equal(ok.version, 4);
-const row = db.WorkItems[0];
-assert.deepEqual([row.status, row.assigned_user_id, row.due_at, row.appointment_json], ['DANG_THUC_HIEN', 'LS1', '2026-10-09T10:00:00.000Z', '{"at":"x"}'], 'Không đổi trạng thái, người xử lý, hạn, lịch hẹn ký');
-assert.deepEqual(JSON.parse(row.supplement_json), { at: when, note: 'Khách hẹn lại', by: 'P1', created_at: NOW });
-assert.equal(db.Events.filter((e) => e.type === 'HEN_BO_SUNG').length, 1);
-assert.equal(db.Inbox.length, 1);
-assert.deepEqual([db.Inbox[0].user_id, db.Inbox[0].item_id, db.Inbox[0].event], ['LS1', 'I1', 'HEN_BO_SUNG']);
-NOW = '2026-10-07T04:00:00.000Z';
-sctx.addSupplementAppointment('I1', '2026-10-13T02:30:00.000Z', '', 4);
-const second = db.Events.filter((e) => e.type === 'HEN_BO_SUNG')[1];
-assert.equal(JSON.parse(second.before_json).at, when, 'Lần sau ghi lại giá trị cũ trong nhật ký');
-assert.equal(JSON.parse(row.supplement_json).at, '2026-10-13T02:30:00.000Z', 'Chỉ giữ lịch hẹn bổ sung mới nhất trên hồ sơ');
+assert.ok(!vm.runInContext('API_WRITE_', sctx).includes('addSupplementAppointment'), 'Hẹn bổ sung đã gỡ khỏi các lệnh ghi');
+assert.ok(!vm.runInContext('Object.keys(apiFunctions_())', sctx).includes('addSupplementAppointment'), 'Không còn gọi được từ trình duyệt');
+assert.equal(typeof sctx.addSupplementAppointment, 'undefined', 'Máy chủ không còn hàm ghi hẹn bổ sung');
+assert.ok(Array.from(schema.SCHEMA.WorkItems).includes('supplement_json'), 'Cột supplement_json giữ lại cho dữ liệu cũ');
+assert.match(read('Code.gs'), /hasColumns_\('WorkItems'[^)]*'supplement_json'/, 'Kho cũ vẫn có cột');
+assert.match(read('Code.gs'), /supplement_json: old\.supplement_json \|\| ''/, 'Chuyển kỳ giữ hẹn bổ sung cũ');
+assert.match(read('js/gas-api.js'), /supplement: json\(i\.supplement_json, null\)/, 'Giao diện vẫn đọc được hẹn bổ sung cũ');
+assert.ok(!/addSupplementAppointment/.test(read('js/gas-api.js')), 'Trình duyệt không còn lệnh gọi');
 
 /* ================= Báo cáo giờ: làm thêm ngoài giờ ================= */
 // Thứ Tư 07/10/2026, lịch 07:30–11:30, 13:30–18:00 (mặc định).

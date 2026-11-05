@@ -12,7 +12,7 @@ const db={WorkItems:[],Requests:[],Events:[],CatalogOptions:[],Settings:[],Units
 const tx={rows:n=>db[n]||[],find:(n,k,v)=>{const object=(db[n]||[]).find(r=>r[k]===v);return object?{object}:null;},
   append:(n,row)=>(db[n]||=([])).push({...row}),write:(found,fields)=>Object.assign(found.object,fields)};
 tx.scan=(n,fn)=>tx.rows(n).forEach(o=>fn(c=>o[c]===undefined?'':o[c]));tx.select=(n,idCol,match)=>tx.rows(n).filter(o=>match(c=>o[c]===undefined?'':o[c])).map(o=>tx.find(n,idCol,o[idCol]));
-ctx.DataRepository={getAll:n=>db[n]||[],find:(n,k,v)=>tx.find(n,k,v)?.object,tx:fn=>fn(tx),tailWhere:()=>({rows:[]}),sheetReads:()=>0};
+ctx.DataRepository={scanSnapshot:(n,fn)=>{const r=(db[n]||[]);r.forEach(o=>fn(c=>o[c]===undefined?"":o[c]));return r.length;}, getAll:n=>db[n]||[],find:(n,k,v)=>tx.find(n,k,v)?.object,tx:fn=>fn(tx),tailWhere:()=>({rows:[]}),sheetReads:()=>0};
 ctx.requireActor_=()=>actor;ctx.currentUser_=()=>actor;
 ctx.stamp_=()=> '2026-10-05T10:00:00+07:00';ctx.id_=()=> 'ID'+(++serial);
 ctx.activePlan_=()=>({period_id:'P',month_key:'2026-10',start_date:'2026-10-01',end_date:'2026-10-31'});
@@ -108,3 +108,25 @@ assert.match(nativeOnlyBox.innerHTML,/value="2026-10-07" data-role="request-week
 assert.match(read('js/screens.js'),/data-request-native-date/,'Resend date input is connected to the shared weekday chooser');
 assert.match(read('js/screens.js'),/data-min-date=/,'Resend chooser marks earlier dates as unavailable');
 console.log('Weekday chooser: today default, single date per row, week switching and manual date synchronization passed.');
+
+const appSource=read('js/app.js');
+const nativeDateDisplaySync=appSource.indexOf("if (t.hasAttribute('data-date-native-for'))");
+const requestDateSync=appSource.indexOf("if (t.type === 'date' && (t.hasAttribute('data-request-native-date')");
+assert.ok(nativeDateDisplaySync>=0 && requestDateSync>=0 && nativeDateDisplaySync<requestDateSync,
+  'Native calendar changes update the visible date before request-specific handling returns');
+assert.match(appSource,/display\.value\s*=\s*!t\.value\s*\?\s*''\s*:/,
+  'Clearing a native date leaves the visible date field blank');
+assert.match(read('js/screens.js'),/class="row-item resend-date-row" data-request-date-context/,
+  'Resend controls use their own responsive layout instead of unused request-row columns');
+const styles=read('css/styles.css');
+const resendLayout=/\.row-item\.resend-date-row\s*\{([^}]*)\}/.exec(styles);
+assert.ok(resendLayout,'Resend date layout has a dedicated rule');
+assert.match(resendLayout[1],/grid-template-columns:\s*minmax\(12rem,\s*0\.75fr\)\s+minmax\(0,\s*1\.25fr\)/,
+  'Resend date input and weekday chooser share the available dialog width');
+assert.match(styles,/\.request-week-head\s*\{[^}]*flex-wrap:\s*wrap/s,
+  'Week selector heading wraps as a row instead of squeezing its label vertically');
+assert.match(styles,/\.request-week-choice:has\(input:disabled\)\s*\{[^}]*border-style:\s*dashed/s,
+  'Unavailable past weekdays are visibly distinct');
+assert.match(styles,/@media \(max-width: 560px\)\s*\{[^}]*\.row-item\.resend-date-row\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s,
+  'Resend date controls stack on narrow screens');
+console.log('Resend date UI: native picker sync, full-width weekday chooser, past-day state and mobile stacking are covered.');

@@ -336,14 +336,20 @@ LS.screens = (function () {
   }
 
   function priorityTags(customer) {
+    // Cờ VIP và Gấp dùng chip chữ đậm, nền nhạt và màu riêng để dễ nhận ra cạnh tên khách hàng.
     // Nhãn viết tắt (cột 3) chỉ hiện trên thẻ mobile để tên khách và cờ ưu tiên gọn một dòng.
-    var labels = { VIP: ['VIP', 'gold', 'VIP'], XU_LY_GAP: ['Xử lý gấp', 'danger', 'Gấp'] };
+    var labels = { VIP: ['VIP', 'vip', 'VIP'], XU_LY_GAP: ['Xử lý gấp', 'urgent', 'Gấp'] };
     return priorityFlags(customer).map(function (x) {
       var l = labels[x];
       if (!l) return '';
-      return '<span class="tag tag-' + l[1] + '" title="' + U.attr(l[0]) + '"><span class="tag-full">' + U.esc(l[0]) +
+      return '<span class="priority-flag priority-flag-' + l[1] + '" title="' + U.attr(l[0]) + '"><span class="tag-full">' + U.esc(l[0]) +
         '</span><span class="tag-short" aria-hidden="true">' + U.esc(l[2]) + '</span></span>';
     }).join(' ');
+  }
+
+  /** Nhãn "Ưu tiên LS" (cờ Kiểm soát đánh dấu): chữ đậm màu riêng, cùng phong cách cờ ưu tiên khách hàng. */
+  function priorityLsTag() {
+    return '<span class="priority-flag priority-flag-ls">Ưu tiên LS</span>';
   }
 
   function priorityRowClass(item) {
@@ -1806,6 +1812,7 @@ LS.screens = (function () {
       if (u.role === 'PHONG_PGD' && (!r || r.unit_id !== u.unit_id)) return false;
       if (['CAN_BO_SUNG', 'CHUA_GIAO_HO_SO'].indexOf(item.status) !== -1 && tr.to === 'CHO_PHAN_CONG' && !requestedByMe(item)) return false;
       if (u.role === 'PHONG_PGD' && tr.to === 'TAM_DUNG' && !requestedByMe(item)) return false;
+      if (u.role === 'PHONG_PGD' && item.status === 'TAM_DUNG' && !requestedByMe(item)) return false;
       // Loại việc cần khách ký thì phải đi qua bước hẹn; cờ này trước đây gắn vào
       // `tr.skipIfAppointment` — một thuộc tính không transition nào khai báo, nên
       // luật "không cho hoàn thành thẳng" chưa bao giờ chạy.
@@ -2326,7 +2333,7 @@ LS.screens = (function () {
         return '<div class="t2">' + U.fmtDate(item.occurrence_date) + '</div>' +
           (dayRank === 0 ? '<span class="day-flag is-today">Hôm nay</span>' : dayRank === 1 ? '<span class="day-flag">T+1</span>' : '');
       case 'status':
-        return ui.statusTag(item.status) + (LSTiming.workState(item) ? '<div>'+ui.tag({ACTIVE:'Đang làm',QUEUED:'Chờ bắt đầu',WAITING:'Chờ làm tiếp'}[LSTiming.workState(item)],'info')+'</div>' : '') + (item.is_priority ? '<div style="margin-top:.25rem">' + ui.tag('Ưu tiên LS', 'danger') + '</div>' : '');
+        return ui.statusTag(item.status) + (LSTiming.workState(item) ? '<div>'+ui.tag({ACTIVE:'Đang làm',QUEUED:'Chờ bắt đầu',WAITING:'Chờ làm tiếp'}[LSTiming.workState(item)],'info')+'</div>' : '') + (item.is_priority ? '<div style="margin-top:.25rem">' + priorityLsTag() + '</div>' : '');
       case 'staff':
         return item.assigned_user_id
           ? '<div class="t2">' + U.esc(userName(item.assigned_user_id)) + '</div>' + progressCell(item)
@@ -2913,13 +2920,6 @@ LS.screens = (function () {
     U.save(); ui.closeDialog(); LS.app.render(); ui.toast('Đã đổi hạn xử lý.', 'ok');
   }
 
-  /** Phòng/PGD tạo đề nghị ghi thêm lịch hẹn khi hồ sơ đã giao LS mà ngày bị dời. Không bắt buộc, chỉ mở trong chi tiết. */
-  function canSupplement(item) {
-    var u = me(), r = reqOf(item);
-    return !!(u && u.role === 'PHONG_PGD' && r && r.unit_id === u.unit_id && requestedByMe(item) && !item.syncing && !item.carried_to_item_id &&
-      item.assigned_user_id && D.STATUS[item.status] && D.STATUS[item.status].open);
-  }
-
   function supplementSection(i) {
     var s = i.supplement;
     if (!s || !s.at) return '';
@@ -2928,43 +2928,6 @@ LS.screens = (function () {
       ['Ghi chú', s.note || '—'],
       ['Ghi bởi', (userName(s.by) || s.by || '—') + (s.created_at ? ' · ' + U.fmtDT(s.created_at) : '')]
     ]) + '</div>';
-  }
-
-  function openSupplement(id) {
-    var i = U.byId(st().items, 'item_id', id);
-    if (!i || !canSupplement(i)) { ui.toast('Không hẹn bổ sung được cho việc này.', 'err'); return; }
-    var old = i.supplement && i.supplement.at ? new Date(new Date(i.supplement.at).getTime() + 7 * 3600000).toISOString().slice(0, 16) : '';
-    var day = /^\d{4}-\d{2}-\d{2}$/.test(String(i.occurrence_date || '').substring(0, 10)) ? String(i.occurrence_date).substring(0, 10) + 'T08:00' : '';
-    ui.openDialog('Hẹn bổ sung', '<form data-form="supplement" data-id="' + U.attr(id) + '" data-version="' + U.attr(i.version) + '">' +
-      ui.field('Ngày giờ hẹn', ui.input('at', old || day, { type: 'datetime-local', required: true })) +
-      ui.field('Ghi chú', ui.textarea('note', i.supplement && i.supplement.note || '', { placeholder: 'Không bắt buộc' })) +
-      ui.formEnd('Lưu hẹn bổ sung') + '</form>', { sub: itemRef(i) + ' · ' + productLabel(i) });
-  }
-
-  function submitSupplement(form) {
-    var i = U.byId(st().items, 'item_id', form.getAttribute('data-id'));
-    if (!i || !canSupplement(i) || form.getAttribute('data-waiting')) return;
-    var data = new FormData(form), raw = String(data.get('at') || ''), note = String(data.get('note') || '').trim();
-    var when = raw ? new Date(raw + '+07:00') : null;
-    if (!when || !isFinite(when.getTime())) { ui.toast('Chọn ngày giờ hẹn bổ sung.', 'err'); return; }
-    if (note.length > 300) { ui.toast('Ghi chú tối đa 300 ký tự.', 'err'); return; }
-    var expectedVersion = Number(form.getAttribute('data-version'));
-    form.setAttribute('data-waiting', '1');
-    function applied(version, createdAt) {
-      i.supplement = { at: when.toISOString(), note: note, by: st().session, created_at: createdAt || U.now() };
-      i.version = version;
-    }
-    if (U.isGas()) {
-      LS.api.addSupplementAppointment(i.item_id, when.toISOString(), note, expectedVersion).then(function (result) {
-        applied(Number(result.version) || expectedVersion + 1, result.updated_at);
-        ui.closeDialog(); LS.app.render(); ui.toast('Đã lưu hẹn bổ sung.', 'ok');
-      }).catch(function (e) { form.removeAttribute('data-waiting'); ui.toast(e.message || 'Không lưu được hẹn bổ sung.', 'err'); });
-      return;
-    }
-    applied(expectedVersion + 1);
-    logEvent(i.item_id, 'HEN_BO_SUNG', 'Hẹn bổ sung ' + U.fmtDT(when.toISOString()) + (note ? ' — ' + note : ''));
-    st().inbox.unshift({ id: U.uid('NTF'), user_id: i.assigned_user_id, item_id: i.item_id, event: 'HEN_BO_SUNG', at: U.now(), read: false });
-    U.save(); ui.closeDialog(); LS.app.render(); ui.toast('Đã lưu hẹn bổ sung.', 'ok');
   }
 
   function submitTimes(form) {
@@ -4236,7 +4199,7 @@ LS.screens = (function () {
         ['Trạng thái', ui.statusTag(i.status), true],
         ['Cán bộ xử lý', userName(i.assigned_user_id) || 'Chưa giao'],
         ['Tiến độ làm việc', {ACTIVE:'Đang làm',QUEUED:'Chờ bắt đầu',WAITING:'Chờ làm tiếp'}[LSTiming.workState(i)] || D.label(i.status)],
-        ['Ưu tiên xử lý', i.is_priority ? ui.tag('Ưu tiên LS', 'danger') : 'Không', true],
+        ['Ưu tiên xử lý', i.is_priority ? priorityLsTag() : 'Không', true],
         ['Từ LS nhận đến hoàn thành', receiptClock(i), true],
         ['Giờ xử lý', processingClock(i), true],
         ['Hoàn thành', i.completed_at ? U.fmtDT(i.completed_at) : '—']
@@ -4299,7 +4262,6 @@ LS.screens = (function () {
       (canCorrectTimes(i) ? ui.btn('Ghi / sửa giờ LS nhận đủ', { act:'edit-times', data:' data-id="' + U.attr(i.item_id) + '"', icon:'clock' }) : '') +
       (canEditResultFlags(i) ? ui.btn('Sửa ghi nhận kết quả', { act: 'edit-result-flags', data: ' data-id="' + U.attr(i.item_id) + '"', icon: 'check' }) : '') +
       (canEdit(i) ? ui.btn('Sửa thông tin', { act: 'edit-item', data: ' data-id="' + U.attr(i.item_id) + '" aria-keyshortcuts="E"', icon: 'pencil', title: 'Phím E' }) : '') +
-      (canSupplement(i) ? ui.btn('Hẹn bổ sung', { act: 'supplement', data: ' data-id="' + U.attr(i.item_id) + '"', icon: 'calendar' }) : '') +
       acts.map(function (a, n) {
         return n < 9 ? ui.btn(a.label, {
           kind: a.primary ? 'primary' : 'line', act: 'flow', title: 'Phím ' + (n + 1),
@@ -4420,8 +4382,10 @@ LS.screens = (function () {
     var i = U.byId(st().items, 'item_id', itemId);
     if (!i || !canTickStep(i) || D.stepKeys(i, wtOf(i)).indexOf(key) === -1) { refreshStepsBox(itemId); return; }
     var current = D.resultCredit(i)[key];
-    var quantityKey = !!D.stepQuantityLabel(key), requestedQuantity = Number(quantity);
-    if (checked && quantityKey && (!isFinite(requestedQuantity) || requestedQuantity < 1 || Math.floor(requestedQuantity) !== requestedQuantity)) {
+    var quantityKey = !!D.stepQuantityLabel(key);
+    var quantityGiven = quantity !== undefined && quantity !== null && quantity !== '';
+    var requestedQuantity = quantityGiven ? Number(quantity) : Math.max(1, Math.floor(Number(current && current.quantity) || 1));
+    if (checked && quantityKey && quantityGiven && (!isFinite(requestedQuantity) || requestedQuantity < 1 || Math.floor(requestedQuantity) !== requestedQuantity)) {
       ui.toast('Số lượng phải là số nguyên lớn hơn 0.', 'err'); refreshStepsBox(itemId); return;
     }
     var alreadyDone = !!(current && current.user_id);
@@ -4930,7 +4894,7 @@ LS.screens = (function () {
     if (choosingResendDate) {
       var resendWeekName = 'resend_weekday_' + (++requestWeekSequence);
       body += '<div style="margin-top:1rem">' +
-        '<div class="row-item" data-request-date-context>' +
+        '<div class="row-item resend-date-row" data-request-date-context>' +
         ui.field('Ngày KH đề nghị gửi lại', ui.input('occurrence_date', '', { type: 'date', required: true, min: requestToday(), nativeAttrs: ' data-request-native-date' })) +
         '<div class="request-weekdays" data-min-date="' + U.attr(requestToday()) + '" data-request-weekdays="' + resendWeekName + '">' + requestWeekChoices(requestWeekStart(requestToday()), '', resendWeekName, requestToday()) + '</div></div></div>';
     }
@@ -5139,6 +5103,8 @@ LS.screens = (function () {
         : 'Không thể thực hiện thao tác này khi hồ sơ đang ở trạng thái ' + currentLabel + '.', 'err');
       return;
     }
+    // Phòng/PGD tiếp tục hồ sơ do mình tạm dừng: LS chưa nhận hồ sơ thì về bước đã giao (khớp transitionItem).
+    if (me().role === 'PHONG_PGD' && i.status === 'TAM_DUNG' && to === 'DANG_THUC_HIEN' && !i.dossier_received_at) to = 'DA_PHAN_CONG';
 
     var d = new FormData(form);
     var wt = wtOf(i), r = reqOf(i);
@@ -5171,7 +5137,7 @@ LS.screens = (function () {
       stepList.filter(function (s) { return s.done || newSteps.indexOf(s.key) !== -1; }).forEach(function (s) {
         if (!D.stepQuantityLabel(s.key)) return;
         var submittedQuantity = d.get('step_qty_' + s.key);
-        var quantity = Number(submittedQuantity === null && s.done ? s.quantity : submittedQuantity);
+        var quantity = Number(submittedQuantity === null || submittedQuantity === '' ? (s.done ? s.quantity : 1) : submittedQuantity);
         if (!isFinite(quantity) || quantity < 1 || Math.floor(quantity) !== quantity) {
           stepQuantityError = D.stepQuantityLabel(s.key) + ' phải là số nguyên lớn hơn 0.';
           return;
@@ -6090,7 +6056,7 @@ LS.screens = (function () {
     previewActivitySend:previewActivitySend,
     loadTimingAudit:loadTimingAudit,fixAuditedTimes:fixAuditedTimes,confirmOwner:confirmOwner,submitOwner:submitOwner,
     timeReport:timeReport,runTimeReport:runTimeReport,exportTimeReport:exportTimeReport,editTimes:editTimes,submitTimes:submitTimes,
-    changeDueDate:changeDueDate,submitDueDate:submitDueDate,openSupplement:openSupplement,submitSupplement:submitSupplement,
+    changeDueDate:changeDueDate,submitDueDate:submitDueDate,
     work: work, room: room, roomBoard: roomBoard, queue: queue, mine: mine, team: team, runTeamView: runTeamView, personalDashboard: personalDashboard, board: board, staffWorkDetail: staffWorkDetail, assignmentStaffWorkPreview: assignmentStaffWorkPreview, periods: periods, audit: audit,
     report: report, exportReport: exportReport, refreshReport: refreshReport, setReportFilter: setReportFilter,
     staffAbsenceDialog: staffAbsenceDialog, staffAbsenceEditDialog: staffAbsenceEditDialog, saveStaffAbsence: saveStaffAbsence,

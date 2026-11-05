@@ -57,7 +57,7 @@ function fixture() {
     tailWhere: () => ({ rows: [] })
   };
 t.scan=(n,fn)=>t.rows(n).forEach(o=>fn(c=>o[c]===undefined?'':o[c]));t.select=(n,idCol,match)=>t.rows(n).filter(o=>match(c=>o[c]===undefined?'':o[c])).map(o=>t.find(n,idCol,o[idCol]));
-  ctx.DataRepository = { tx: fn => fn(t), getAll: name => t.rows(name), find: (name, key, value) => t.find(name, key, value)?.object || null };
+  ctx.DataRepository = { tx: fn => fn(t), scanSnapshot:(n,fn)=>{const r=t.rows(n);r.forEach(o=>fn(c=>o[c]===undefined?"":o[c]));return r.length;}, getAll: name => t.rows(name), find: (name, key, value) => t.find(name, key, value)?.object || null };
   ctx.requireActor_ = () => db.Users[0];
   function item(extra = {}) {
     const row = Object.assign({ item_id: 'I' + (db.WorkItems.length + 1), period_id: 'SEP', request_id: 'R1', work_type_code: 'A', product_name: 'Synthetic product', occurrence_date: '2026-09-30', status: 'DANG_THUC_HIEN', assigned_user_id: 'LS1', version: 1, checklist_json: '[]', dossier_received_at: '2026-09-30T01:00:00.000Z', processing_started_at: '2026-09-30T01:00:00.000Z', processing_sessions_json: '[{"user_id":"LS1","work_type_code":"A","start":"2026-09-30T01:00:00.000Z","end":""}]', sla_pause_log_json: '[]' }, extra);
@@ -138,6 +138,9 @@ check('A02 cross-table writes use one atomic Sheets batch', () => {
 
 check('A03 retries a pending monthly handoff after activation', () => {
   const { ctx, db, item } = fixture(); item();
+  // Đồng hồ cố định ở ngày kỳ OCT: sang tháng sau, hàm kích hoạt tự mở thêm kỳ mới và carry nhiều lần hơn.
+  ctx.localBusinessDate_ = () => '2026-10-01';
+  ctx.monthKey_ = () => '2026-10';
   let attempts = 0;
   ctx.carryOpenWorkToPlan_ = () => { attempts++; if (attempts === 1) throw new Error('injected carry failure'); };
   assert.throws(() => ctx.activateDueMonthlyPlans_(false), /injected carry failure/);

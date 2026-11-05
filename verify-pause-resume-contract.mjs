@@ -37,6 +37,14 @@ test('cán bộ LS bấm tiếp tục để làm lại', () => {
   assert.match(resume.label, /Tiếp tục/);
 });
 
+test('QLKH tạo đề nghị cũng bấm tiếp tục được; kiểm soát/quản lý thì không', () => {
+  const resume = step('TAM_DUNG', 'DANG_THUC_HIEN');
+  assert.ok(resume.roles.includes('PHONG_PGD'), 'Phòng/PGD phải được tiếp tục hồ sơ đã tạm dừng');
+  assert.ok(!resume.roles.includes('KS_LS') && !resume.roles.includes('QUAN_LY_LS'), 'Kiểm soát/quản lý chỉ đổi người hoặc hủy');
+  assert.equal(resume.reason, 'free', 'tiếp tục vẫn cần lý do');
+  assert.match(read('Code.gs'), /TAM_DUNG: \{\s*DANG_THUC_HIEN: \['CAN_BO_LS', 'PHONG_PGD'\]/, 'Máy chủ cho Phòng/PGD tiếp tục');
+});
+
 test('không điểm tạm dừng nào đòi lý do', () => {
   Object.keys(D.FLOW).forEach((from) => {
     (D.FLOW[from] || []).filter((s) => s.to === 'TAM_DUNG').forEach((s) => {

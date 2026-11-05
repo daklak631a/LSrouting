@@ -77,7 +77,7 @@ function checkResultCounting(html) {
 }
 function checkRecentAdjustments(html) {
   for (const marker of ['var OTHER_WORK_TYPES = [', 'function openOtherWork()', 'function openEndGlobalPause(operationId)',
-    'function openSupplement(id)', 'function overtime(start, end, c)',
+    'function overtime(start, end, c)',
     'spans = subtract(spans, [[at(key, c.breakFrom), at(key, c.breakTo)]], end)', 'data-act="board-khac"']) {
     assert.ok(html.includes(marker), 'Recent adjustments absent from live bundle: ' + marker);
   }

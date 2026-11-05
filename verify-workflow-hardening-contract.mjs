@@ -38,7 +38,7 @@ const t = {
   tailWhere: (n, limit, match) => { const all = (db[n] || []).filter((r) => !match || match(r)); return { rows: all.slice(-(limit || all.length)).reverse(), scanned: all.length, exhausted: true, nextBeforeRow: 1 }; }
 };
 t.scan=(n,fn)=>t.rows(n).forEach(o=>fn(c=>o[c]===undefined?'':o[c]));t.select=(n,idCol,match)=>t.rows(n).filter(o=>match(c=>o[c]===undefined?'':o[c])).map(o=>t.find(n,idCol,o[idCol]));
-ctx.DataRepository = { tx: (fn) => fn(t) };
+ctx.DataRepository = { tx: (fn) => fn(t), scanSnapshot:(n,fn)=>{const r=t.rows(n);r.forEach(o=>fn(c=>o[c]===undefined?"":o[c]));return r.length;} };
 ctx.syncMonthlyPlanWorkbook_ = () => {};
 ctx.Notifications = { queue: () => 0 };
 ctx.localBusinessDate_ = () => '2026-09-22';
@@ -219,6 +219,46 @@ ok('requester can return it to today queue without a reason', err(() => todayRes
   const notHandedOverResend = flow.CHUA_GIAO_HO_SO.find((step) => step.to === 'CHO_PHAN_CONG');
   ok('not-handed-over UI returns only through the requester, with no reason field', notHandedOverResend && JSON.stringify(Array.from(notHandedOverResend.roles)) === '["PHONG_PGD"]' && !notHandedOverResend.reason);
   ok('client flow was read', steps > 20);
+}
+
+// 14. QLKH tiếp tục hồ sơ do chính mình tạm dừng, về đúng cán bộ LS đang giữ
+{
+  const [LS1, , KS, PG, PG2] = db.Users;
+  let queued = 0;
+  ctx.Notifications = { queue: () => { queued++; return 0; } };
+  const held = (extra) => item(Object.assign({ status: 'DANG_THUC_HIEN', assigned_user_id: 'LS1', execution_state: 'ACTIVE',
+    dossier_received_at: new Date(Date.now() - 2 * H).toISOString(), processing_started_at: new Date(Date.now() - 2 * H).toISOString(),
+    due_at: new Date(Date.now() + 2 * H).toISOString() }, extra));
+
+  actor = PG; const a = held();
+  ctx.transitionItem(a.item_id, 'TAM_DUNG', {});
+  ok('requester can pause own dossier', a.status === 'TAM_DUNG');
+  actor = PG2;
+  ok('another officer of the same unit cannot resume it', /tạo đề nghị này mới được tiếp tục/.test(err(() => ctx.transitionItem(a.item_id, 'DANG_THUC_HIEN', { reason: 'x' }))));
+  actor = KS;
+  ok('control still cannot resume a paused dossier', /không được thực hiện/.test(err(() => ctx.transitionItem(a.item_id, 'DANG_THUC_HIEN', { reason: 'x' }))));
+  actor = PG;
+  ok('requester must give a reason to resume', /lý do/.test(err(() => ctx.transitionItem(a.item_id, 'DANG_THUC_HIEN', {}))));
+  ok('requester cannot use the paused dossier for other steps', /chỉ được tiếp tục/.test(err(() => ctx.transitionItem(a.item_id, 'HOAN_THANH_LS', { reason: 'x' }))));
+  a.sla_paused_at = new Date(Date.now() - H).toISOString();
+  queued = 0;
+  const resumed = ctx.transitionItem(a.item_id, 'DANG_THUC_HIEN', { reason: 'khách đã đủ hồ sơ' });
+  ok('requester resume returns the dossier to the same LS officer', a.status === 'DANG_THUC_HIEN' && a.assigned_user_id === 'LS1' && resumed.status === 'DANG_THUC_HIEN');
+  ok('requester resume queues the dossier for the officer instead of starting it', a.execution_state === 'QUEUED');
+  ok('requester resume restarts the SLA clock', a.sla_paused_at === '');
+  ok('officer is told, no customer notification is queued', db.Inbox.some((n) => n.user_id === 'LS1' && n.item_id === a.item_id && n.event === 'QLKH_TIEP_TUC') && queued === 0);
+
+  actor = LS1; const b = held();
+  ctx.transitionItem(b.item_id, 'TAM_DUNG', {});
+  actor = PG;
+  ok('requester cannot resume a pause made by the LS officer', /do cán bộ LS tạm dừng/.test(err(() => ctx.transitionItem(b.item_id, 'DANG_THUC_HIEN', { reason: 'x' }))));
+  ok('officer resumes own pause as before', (actor = LS1, err(() => ctx.transitionItem(b.item_id, 'DANG_THUC_HIEN', { reason: 'x' })) === ''));
+
+  actor = PG; const c = held({ status: 'DA_PHAN_CONG', execution_state: '', dossier_received_at: '', processing_started_at: '', due_at: '' });
+  ctx.transitionItem(c.item_id, 'TAM_DUNG', {});
+  ctx.transitionItem(c.item_id, 'DANG_THUC_HIEN', { reason: 'tiếp tục' });
+  ok('before LS receipt the dossier goes back to the assigned step, not to processing', c.status === 'DA_PHAN_CONG' && c.assigned_user_id === 'LS1' && !c.dossier_received_at);
+  ok('that return is not a new assignment', !db.Inbox.some((n) => n.item_id === c.item_id && ['DA_PHAN_CONG', 'DOI_NGUOI'].indexOf(n.event) !== -1) && queued === 0);
 }
 
 if (fails) throw new Error(fails + ' kiểm tra quy trình không đạt.');

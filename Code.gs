@@ -89,7 +89,25 @@ function connectFirefoxExtension() {
 
 /** `waiting` drives the total badge; `notify_waiting` contains today's occurrence dates only. */
 function assignmentQueueSignal_() {
-  var plan = activePlan_(), pending = {}, occurringToday = {}, today = localBusinessDate_();
+  var plan = activePlan_(), today = localBusinessDate_(), queueCache = null, queueCacheKey = '';
+  try {
+    if (typeof CacheService !== 'undefined') {
+      queueCache = CacheService.getScriptCache();
+      var generation = DataRepository.generation('WorkItems');
+      if (queueCache && generation) {
+        queueCacheKey = 'LS_QUEUE_SIGNAL_V1_' + encodeURIComponent(plan.period_id) + '_' + today + '_' + generation;
+        var cached = queueCache.get(queueCacheKey);
+        if (cached) {
+          var signal = JSON.parse(cached);
+          if (signal.period_id === plan.period_id && signal.notification_day === today) {
+            signal.checked_at = Date.now();
+            return signal;
+          }
+        }
+      }
+    }
+  } catch (ignoreQueueCache) { queueCacheKey = ''; }
+  var pending = {}, occurringToday = {};
   DataRepository.getAll('WorkItems').forEach(function (i) {
     if (i.period_id !== plan.period_id || i.carried_to_item_id || i.assigned_user_id ||
         ['CHO_PHAN_CONG', 'CHO_HOAN_THIEN', 'CHO_TIEP_NHAN'].indexOf(i.status) === -1) return;
@@ -107,8 +125,15 @@ function assignmentQueueSignal_() {
     return Object.keys(source).sort().map(function (key) { return { key: key, stamp: source[key].sort().join('|') }; });
   }
   var waiting = rows_(pending), notifyWaiting = rows_(occurringToday);
-  return { period_id: plan.period_id, count: waiting.length, waiting: waiting, notify_waiting: notifyWaiting,
+  var result = { period_id: plan.period_id, count: waiting.length, waiting: waiting, notify_waiting: notifyWaiting,
     notification_day: today, checked_at: Date.now() };
+  if (queueCache && queueCacheKey) {
+    try {
+      var encoded = JSON.stringify(result);
+      if (encoded.length <= 90000) queueCache.put(queueCacheKey, encoded, 75);
+    } catch (ignoreQueueCacheWrite) {}
+  }
+  return result;
 }
 
 /** Ngày nghiệp vụ là ngày lịch, không đổi theo múi giờ hay thời điểm phân công. */
@@ -187,10 +212,11 @@ var FLOW_SERVER = {
     DANG_THUC_HIEN: ['KS_LS', 'QUAN_LY_LS'],
     HUY: ['KS_LS', 'QUAN_LY_LS']
   },
-  // Cán bộ LS đang giữ hồ sơ được tạm dừng/tiếp tục; Phòng/PGD tạo đề nghị chỉ được tạm dừng hồ sơ của mình.
+  // Cán bộ LS đang giữ hồ sơ được tạm dừng/tiếp tục; Phòng/PGD tạo đề nghị được tạm dừng hồ sơ của mình và
+  // tiếp tục hồ sơ do chính mình tạm dừng (transitionItem kiểm người tạm dừng).
   // Kiểm soát/quản lý chỉ đổi người hoặc hủy hồ sơ đang dừng.
   TAM_DUNG: {
-    DANG_THUC_HIEN: ['CAN_BO_LS'],
+    DANG_THUC_HIEN: ['CAN_BO_LS', 'PHONG_PGD'],
     DA_PHAN_CONG: ['KS_LS', 'QUAN_LY_LS'],
     HUY: ['KS_LS', 'QUAN_LY_LS']
   },
@@ -573,7 +599,7 @@ var API_WRITE_ = ['createNextMonthlyPlan', 'createRequest', 'transitionItem', 'f
   'confirmDossierReceipt', 'saveChecklist', 'recordWorkStep', 'saveResultFlags', 'saveWorkPlan', 'saveStaffPlan', 'closeStaffPlan', 'addLinkedItem', 'proposeRevision',
   'resolveRevision', 'adminSaveCatalog', 'adminImportUsers', 'adminSaveSettings', 'adminSaveDelivery',
   'adminSaveUpdateNotice', 'adminRunOutbox', 'confirmLegacySessionOwner', 'correctItemTimes', 'rebuildPeriodSummaries',
-  'adminTestChannel', 'changeOutbox', 'changeOwnPassword', 'adminResetUserPassword', 'adminDeleteUser', 'markInboxRead', 'recordOtherWork', 'cancelOtherWork', 'addSupplementAppointment', 'requestCancel'];
+  'adminTestChannel', 'changeOutbox', 'changeOwnPassword', 'adminResetUserPassword', 'adminDeleteUser', 'markInboxRead', 'recordOtherWork', 'cancelOtherWork', 'requestCancel'];
 
 function apiFunctions_() {
   return {
@@ -588,7 +614,7 @@ function apiFunctions_() {
     confirmLegacySessionOwner: confirmLegacySessionOwner, correctItemTimes: correctItemTimes,
     rebuildPeriodSummaries: rebuildPeriodSummaries, adminTestChannel: adminTestChannel, changeOutbox: changeOutbox,
     changeOwnPassword: changeOwnPassword, adminResetUserPassword: adminResetUserPassword, adminDeleteUser: adminDeleteUser, markInboxRead: markInboxRead,
-    requestCancel: requestCancel, recordOtherWork: recordOtherWork, cancelOtherWork: cancelOtherWork, addSupplementAppointment: addSupplementAppointment
+    requestCancel: requestCancel, recordOtherWork: recordOtherWork, cancelOtherWork: cancelOtherWork
   };
 }
 
@@ -1859,50 +1885,6 @@ function rescheduleItem(itemId, dueAt, reason, expectedVersion) {
     });
     return Object.assign({ ok: true, period_id: item.period_id }, fields);
   }, ITEM_WARM_);
-  markPlanDirty_(result.period_id, true);
-  return result;
-}
-
-/**
- * Phòng/PGD (người tạo đề nghị) ghi thêm lịch hẹn khi đã đổi ngày phát sinh sau lúc LS báo khách ký. Không bắt buộc:
- * không đổi trạng thái, hạn, người xử lý hay lịch hẹn ký LS đã báo; chỉ lưu lịch hẹn bổ sung mới nhất và báo cán bộ đang giữ hồ sơ.
- */
-function addSupplementAppointment(itemId, at, note, expectedVersion) {
-  var u = requireActor_();
-  if (u.role !== 'PHONG_PGD') throw new Error('Chỉ cán bộ QLKH tạo đề nghị mới được hẹn bổ sung.');
-  var when = String(at || '').trim();
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(when)) throw new Error('Ngày giờ hẹn bổ sung không hợp lệ.');
-  var date = new Date(when);
-  if (!isFinite(date.getTime())) throw new Error('Ngày giờ hẹn bổ sung không hợp lệ.');
-  var text = String(note || '').trim();
-  if (text.length > 300) throw new Error('Ghi chú hẹn bổ sung tối đa 300 ký tự.');
-  var result = DataRepository.tx(function (t) {
-    var found = t.find('WorkItems', 'item_id', itemId);
-    if (!found) throw new Error('Không tìm thấy việc.');
-    var item = found.object;
-    assertCurrentWorkItem_(item);
-    if (OPEN_STATUS.indexOf(item.status) === -1 || !item.assigned_user_id) {
-      throw new Error('Chỉ hẹn bổ sung cho hồ sơ đang mở đã giao cán bộ LS.');
-    }
-    if (expectedVersion === undefined || Number(expectedVersion) !== Number(item.version)) {
-      throw new Error('Việc đã được cập nhật. Tải lại trước khi lưu.');
-    }
-    var req = t.find('Requests', 'request_id', item.request_id);
-    if (!req || req.object.unit_id !== u.unit_id || String(req.object.requestor_id || req.object.created_by || '') !== String(u.user_id)) {
-      throw new Error('Chỉ cán bộ QLKH tạo đề nghị này mới được hẹn bổ sung.');
-    }
-    var ts = stamp_(), previous = item.supplement_json || '';
-    var entry = { at: date.toISOString(), note: text, by: u.user_id, created_at: ts };
-    var fields = { supplement_json: JSON.stringify(entry), version: Number(item.version) + 1, updated_at: ts };
-    t.write(found, fields);
-    t.append('Events', {
-      event_id: id_('EVT'), item_id: itemId, type: 'HEN_BO_SUNG', by: u.user_id, at: ts,
-      reason: 'Hẹn bổ sung ' + Utilities.formatDate(date, BUSINESS_TIME_ZONE_, 'HH:mm dd/MM/yyyy') + (text ? ' — ' + text : ''),
-      before_json: previous, after_json: fields.supplement_json
-    });
-    inboxNotify_(t, item.assigned_user_id, itemId, 'HEN_BO_SUNG');
-    return Object.assign({ ok: true, period_id: item.period_id }, fields);
-  }, NOTIFY_WARM_);
   markPlanDirty_(result.period_id, true);
   return result;
 }
@@ -3297,28 +3279,63 @@ function getBootstrap() {
 
 /* ---------------------------- Tạo yêu cầu ---------------------------- */
 
-/**
- * STT kế tiếp của đơn vị trong kỳ. Quét Requests + WorkItems chỉ một lần mỗi
- * giao dịch rồi đếm tiếp: trước đây mỗi dòng việc lại chuyển toàn bộ hai bảng
- * thành đối tượng, trong lúc giữ khóa chung.
- */
-function nextSourceStt_(t, unitId, periodId) {
+/** Chụp mức STT hiện tại trước khi lấy khóa; giao dịch chỉ đối chiếu phần đuôi vừa phát sinh. */
+function sourceSttSnapshot_(unitId, periodId) {
+  var unit = String(unitId || ''), period = String(periodId || '');
+  var requestIds = Object.create(null);
+  var requestCount = DataRepository.scanSnapshot('Requests', function (get) {
+    if (String(get('unit_id') || '') === unit && (!period || String(get('period_id') || '') === period)) {
+      requestIds[String(get('request_id') || '')] = true;
+    }
+  });
+  var prefix = String(unitId || 'DONVI') + '_', max = 0;
+  var workItemCount = DataRepository.scanSnapshot('WorkItems', function (get) {
+    if (!requestIds[String(get('request_id') || '')] || (period && String(get('period_id') || '') !== period)) return;
+    var ref = String(get('source_stt') || '');
+    if (ref.indexOf(prefix) !== 0) return;
+    var n = Number(ref.substring(prefix.length));
+    if (n > max) max = n;
+  });
+  return { unitId: unit, periodId: period, requestCount: requestCount, workItemCount: workItemCount,
+    requestIds: requestIds, max: max };
+}
+
+/** STT kế tiếp: quét dữ liệu cũ ngoài khóa, rồi thêm các dòng mới được đồng bộ trong khóa. */
+function nextSourceStt_(t, unitId, periodId, seed) {
   var prefix = String(unitId || 'DONVI') + '_';
   var memoKey = prefix + '|' + (periodId || '');
   if (!t._stt) t._stt = {};
   if (t._stt[memoKey] === undefined) {
-    // Chỉ dùng cột không đổi sau khi tạo (mã yêu cầu, đơn vị, kỳ, STT): quét bản đã đọc + phần đuôi mới thêm,
-    // không đọc lại trọn hai bảng lớn nhất trong khóa cho mỗi lần tạo việc.
-    var reqUnits = {};
-    t.scan('Requests', function (get) { reqUnits[get('request_id')] = get('unit_id'); });
     var max = 0;
-    t.scan('WorkItems', function (get) {
-      if (reqUnits[get('request_id')] !== unitId || (periodId && get('period_id') !== periodId)) return;
-      var ref = String(get('source_stt') || '');
-      if (ref.indexOf(prefix) !== 0) return;
-      var n = Number(ref.substring(prefix.length));
-      if (n > max) max = n;
-    });
+    var canScanTail = seed && String(seed.unitId || '') === String(unitId || '') &&
+      String(seed.periodId || '') === String(periodId || '') && typeof t.scanFrom === 'function';
+    if (canScanTail) {
+      max = Number(seed.max) || 0;
+      var requestIds = Object.assign(Object.create(null), seed.requestIds || {});
+      t.scanFrom('Requests', seed.requestCount, function (get) {
+        if (String(get('unit_id') || '') === String(unitId || '') &&
+            (!periodId || String(get('period_id') || '') === String(periodId))) {
+          requestIds[String(get('request_id') || '')] = true;
+        }
+      });
+      t.scanFrom('WorkItems', seed.workItemCount, function (get) {
+        if (!requestIds[String(get('request_id') || '')] || (periodId && String(get('period_id') || '') !== String(periodId))) return;
+        var ref = String(get('source_stt') || '');
+        if (ref.indexOf(prefix) !== 0) return;
+        var n = Number(ref.substring(prefix.length));
+        if (n > max) max = n;
+      });
+    } else {
+      var reqUnits = Object.create(null);
+      t.scan('Requests', function (get) { reqUnits[get('request_id')] = get('unit_id'); });
+      t.scan('WorkItems', function (get) {
+        if (reqUnits[get('request_id')] !== unitId || (periodId && get('period_id') !== periodId)) return;
+        var ref = String(get('source_stt') || '');
+        if (ref.indexOf(prefix) !== 0) return;
+        var n = Number(ref.substring(prefix.length));
+        if (n > max) max = n;
+      });
+    }
     t._stt[memoKey] = max;
   }
   t._stt[memoKey] += 1;
@@ -3416,6 +3433,7 @@ function createRequest(payload) {
   });
 
   var activePlan = activePlan_();
+  var sourceSttSeed = sourceSttSnapshot_(unitId, activePlan.period_id);
   var ts = stamp_();
   var operationId = String(REQUEST_ && REQUEST_.op_id || '');
   var requestId = operationId ? requestIdForOperation_(u.user_id, operationId) : id_('REQ');
@@ -3524,7 +3542,7 @@ function createRequest(payload) {
       ids.push(itemId);
       var typeChecklist = [];
       try { typeChecklist = JSON.parse(types[it.work_type_code].checklist_json || '[]'); } catch (ignoreChecklist) { typeChecklist = []; }
-      var sourceStt = nextSourceStt_(t, unitId, activePlan.period_id);
+      var sourceStt = nextSourceStt_(t, unitId, activePlan.period_id, sourceSttSeed);
       var unit = t.find('Units', 'unit_id', unitId);
       // Việc chính và việc kèm TSĐB mới về cùng một cán bộ: theo quy tắc của việc chính, không có thì theo quy tắc của việc kèm.
       var pairType = it.collateral_mode === 'MOI' ? types[COLLATERAL_NEW_WORK_TYPE_] : null;
@@ -3588,7 +3606,7 @@ function createRequest(payload) {
           parent_item_id: itemId, request_id: requestId, work_type_code: COLLATERAL_NEW_WORK_TYPE_,
           product_name: collateralType.display_name || COLLATERAL_NEW_WORK_TYPE_, collateral_mode: 'MOI',
           requested_mortgage_contract_count: it.requested_mortgage_contract_count,
-          occurrence_date: it.occurrence_date, source_stt: nextSourceStt_(t, unitId, activePlan.period_id),
+          occurrence_date: it.occurrence_date, source_stt: nextSourceStt_(t, unitId, activePlan.period_id, sourceSttSeed),
           source_tab: unit ? (unit.object.source_tab || unit.object.name || unitId) : unitId,
           status: childAuto ? 'DA_PHAN_CONG' : 'CHO_PHAN_CONG', assigned_user_id: childAuto ? childAuto.user.user_id : '', assigned_by: childAuto ? u.user_id : '', submitted_at: ts,
           dossier_received_at: '', dossier_received_by: '', timing_source: 'NEW', first_assigned_at: childAuto ? ts : '', processing_sessions_json: '[]', sla_pause_log_json: '[]',
@@ -3678,7 +3696,7 @@ var HANDOVER_PART_LABELS_ = { HD_TIN_DUNG: 'HĐ tín dụng', HD_THE_CHAP: 'HĐ 
 
 /** Nhãn ô tick của việc TSĐB; khớp COLLATERAL_STEP_LABELS ở js/domain.js. */
 var COLLATERAL_STEP_LABELS_ = { HD_TIN_DUNG: 'Đã soạn xong HĐ tín dụng', HD_THE_CHAP: 'Đã soạn xong HĐ thế chấp', NHAP_KHO: 'Đã nhập kho TSĐB', XUAT_KHO: 'Đã xuất kho TSĐB' };
-var STEP_QUANTITY_KEYS_ = { HD_TIN_DUNG: true, HD_THE_CHAP: true, XUAT_KHO: true };
+var STEP_QUANTITY_KEYS_ = { HD_TIN_DUNG: true, HD_THE_CHAP: true, NHAP_KHO: true, XUAT_KHO: true };
 /** Phần làm trong kho: chỉ tick được sau khi đã soạn xong HĐ thế chấp (nếu việc có soạn HĐ thế chấp). */
 var WAREHOUSE_STEP_KEYS_ = ['NHAP_KHO', 'XUAT_KHO'];
 
@@ -4027,7 +4045,9 @@ function transitionItem(itemId, to, opts) {
   if (to !== 'HOAN_THANH_LS' && stepsTicked.length) throw new Error('Chỉ được tick phần việc khi hoàn thành việc.');
   if (to !== 'HOAN_THANH_LS' && opts.step_quantities && Object.keys(opts.step_quantities).length) throw new Error('Chỉ được ghi số lượng phần việc khi hoàn thành việc.');
 
+  var requestedTo = to;
   var result = DataRepository.tx(function (t) {
+    to = requestedTo;
     var found = t.find('WorkItems', 'item_id', itemId);
     if (!found) throw new Error('Không tìm thấy việc ' + itemId + '.');
     var item = found.object;
@@ -4041,7 +4061,15 @@ function transitionItem(itemId, to, opts) {
       throw new Error('Việc đã được người khác cập nhật. Tải lại trước khi lưu.');
     }
 
-    var allowed = (FLOW_SERVER[item.status] || {})[to];
+    // Phòng/PGD tiếp tục hồ sơ do chính mình tạm dừng: về đúng cán bộ LS đang giữ, không giao lại.
+    // LS chưa nhận hồ sơ thì hồ sơ quay về bước đã giao (không tính là LS đã nhận); đã nhận thì vào hàng chờ làm của LS.
+    var requesterResume = item.status === 'TAM_DUNG' && u.role === 'PHONG_PGD';
+    if (requesterResume) {
+      if (to !== 'DANG_THUC_HIEN' && to !== 'DA_PHAN_CONG') throw new Error('Phòng/PGD chỉ được tiếp tục hồ sơ đã tạm dừng.');
+      to = item.dossier_received_at ? 'DANG_THUC_HIEN' : 'DA_PHAN_CONG';
+    }
+
+    var allowed = requesterResume ? ['PHONG_PGD'] : (FLOW_SERVER[item.status] || {})[to];
     // Hủy là thao tác trực tiếp của cán bộ đang giữ hồ sơ hoặc Phòng/PGD sở hữu hồ sơ;
     // không tạo đề nghị chờ KS/Quản lý duyệt.
     if (to === 'HUY' && OPEN_STATUS.indexOf(item.status) !== -1 &&
@@ -4076,6 +4104,18 @@ function transitionItem(itemId, to, opts) {
     if (to === 'TAM_DUNG' && u.role === 'PHONG_PGD' &&
         (!req || String(req.object.requestor_id || req.object.created_by || '') !== String(u.user_id))) {
       throw new Error('Chỉ cán bộ QLKH tạo đề nghị này mới được tạm dừng.');
+    }
+    if (requesterResume) {
+      if (!item.assigned_user_id) throw new Error('Hồ sơ chưa có cán bộ LS giữ; liên hệ Kiểm soát.');
+      if (!req || String(req.object.requestor_id || req.object.created_by || '') !== String(u.user_id)) {
+        throw new Error('Chỉ cán bộ QLKH tạo đề nghị này mới được tiếp tục.');
+      }
+      var lastPause = t.tailWhere('Events', 1, function (e) {
+        return e.item_id === itemId && e.type === 'TAM_DUNG';
+      }, { maxScan: 20000 }).rows[0];
+      if (!lastPause || String(lastPause.by || '') !== String(u.user_id)) {
+        throw new Error('Hồ sơ này do cán bộ LS tạm dừng; chờ cán bộ LS tiếp tục.');
+      }
     }
 
     var reason = String(opts.reason || '').trim();
@@ -4115,7 +4155,7 @@ function transitionItem(itemId, to, opts) {
       throw new Error('Chưa tích đủ các nhóm việc; hãy ghi nhận từng phần trước khi hoàn thành toàn bộ hồ sơ.');
     }
 
-    if (to === 'DA_PHAN_CONG') {
+    if (to === 'DA_PHAN_CONG' && !requesterResume) {
       var staff = t.find('Users', 'user_id', opts.assignee_id);
       if (!userAvailableForAssignment_(staff && staff.object, ts)) {
         if (staff && userOff_(staff.object, ts)) {
@@ -4309,6 +4349,11 @@ function transitionItem(itemId, to, opts) {
       event = 'DOI_NGUOI';
     }
     if (linkedAuto) event = NOTIFY_ON.DA_PHAN_CONG;
+    if (requesterResume) {
+      // Không phải giao việc: chỉ báo cán bộ LS đang giữ hồ sơ biết hồ sơ đã được mở lại.
+      event = null;
+      inboxNotify_(t, item.assigned_user_id, itemId, 'QLKH_TIEP_TUC');
+    }
     if (event && notificationMode !== 'NONE') {
       var merged = {};
       Object.keys(item).forEach(function (k) { merged[k] = item[k]; });
@@ -4786,6 +4831,9 @@ var LINKABLE_STATUS_ = ['DA_PHAN_CONG', 'DANG_THUC_HIEN', 'DA_SOAN_XONG', 'DANG_
 function addLinkedItem(parentId, workTypeCode) {
   var u = requireActor_();
   if (['CAN_BO_LS', 'KS_LS', 'QUAN_LY_LS'].indexOf(u.role) === -1) throw new Error('Vai trò không được thêm việc kèm.');
+  var seedParent = DataRepository.find('WorkItems', 'item_id', parentId);
+  var seedRequest = seedParent ? DataRepository.find('Requests', 'request_id', seedParent.request_id) : null;
+  var sourceSttSeed = seedParent ? sourceSttSnapshot_(seedRequest ? seedRequest.unit_id : '', seedParent.period_id) : null;
   var result = DataRepository.tx(function (t) {
     var found = t.find('WorkItems', 'item_id', parentId);
     if (!found) throw new Error('Không tìm thấy việc ' + parentId + '.');
@@ -4818,7 +4866,7 @@ function addLinkedItem(parentId, workTypeCode) {
       parent_item_id: parentId, request_id: parent.request_id,
       work_type_code: workTypeCode, product_name: wt.object.display_name || workTypeCode, collateral_mode: workTypeCode === COLLATERAL_NEW_WORK_TYPE_ ? 'MOI' : 'NONE',
       occurrence_date: parent.occurrence_date || '',
-      source_stt: nextSourceStt_(t, unitId, parent.period_id),
+      source_stt: nextSourceStt_(t, unitId, parent.period_id, sourceSttSeed),
       source_tab: unit ? (unit.object.source_tab || unit.object.name || unitId) : (parent.source_tab || unitId),
       status: receiveNow ? 'DANG_THUC_HIEN' : 'DA_PHAN_CONG', assigned_user_id: parent.assigned_user_id, assigned_by: u.user_id,
       submitted_at: ts, accepted_at: parent.accepted_at || '', assigned_at: ts,

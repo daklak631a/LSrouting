@@ -50,7 +50,7 @@ chạy nền: hộp thoại đóng ngay, màn hình đổi ngay, không còn dò
 bận hoặc kéo dài quá 8 giây; chỉ khi máy chủ từ chối mới hoàn tác và báo lỗi.
 Version 68: hộp thoại Giao kế hoạch ghi rõ nhãn "Tồn ·" cho các dòng hồ sơ tồn; bộ hướng dẫn sử dụng (docx, html nhúng iframe, pptx) trong `docs/huong-dan/` cập nhật theo giao diện mới.
 Version 69: bảng Toàn bộ hồ sơ phòng và các danh sách LS có cột Cán bộ đề nghị; hồ sơ cũ dùng tên người tạo làm dự phòng.
-Các cập nhật dưới đây đã có trong bản hiện hành: Tạm dừng / Tiếp tục xử lý chỉ cán bộ LS bấm (KS/QL chỉ còn Đổi người, Hủy với hồ sơ đang dừng).
+Các cập nhật dưới đây đã có trong bản hiện hành: Tạm dừng / Tiếp tục xử lý do cán bộ LS bấm; QLKH tạo đề nghị tạm dừng được hồ sơ của mình và chỉ tiếp tục được hồ sơ do chính mình tạm dừng (về đúng cán bộ LS đang giữ, chưa nhận hồ sơ thì về bước đã giao; KS/QL chỉ còn Đổi người, Hủy với hồ sơ đang dừng). Hẹn bổ sung (ghi chú của QLKH sau khi giao) đã gỡ, lịch hẹn bổ sung cũ vẫn xem được.
 Đổi người giữa chừng: KS/QL tick phần cán bộ cũ đã làm xong (HĐ tín dụng / HĐ thế chấp / Rlos), phần đó tính vào bảng ngày cho cán bộ cũ
 theo ngày bàn giao, người nhận chỉ tính phần còn lại (cột mới `result_credit_json`, `RUNTIME_SCHEMA_VERSION_` = `runtime_v56_result_credit`).
 Chuyển tháng: sang tháng mà chưa ai tạo kỳ thì hệ thống tự mở kỳ tháng hiện tại (hồ sơ từ ngày 1 không còn rơi vào tháng trước);

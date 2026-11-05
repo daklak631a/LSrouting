@@ -53,11 +53,11 @@ assert.deepEqual(Array.from(step('DANG_HEN_KH', 'HOAN_THANH_LS').roles), ['CAN_B
 assert.equal(D.STATUS.HOAN_THANH_LS.open, false);
 assert.deepEqual(Array.from(D.PRE_ASSIGN).sort(), ['CHO_HOAN_THIEN', 'CHO_PHAN_CONG', 'CHO_TIEP_NHAN']);
 
-// 4. Phòng/PGD gửi lại sau bổ sung và được tạm dừng đề nghị của mình; LS tiếp tục xử lý.
+// 4. Phòng/PGD gửi lại sau bổ sung, tạm dừng đề nghị của mình và tiếp tục hồ sơ do mình tạm dừng.
 const pgdSteps = [];
 Object.keys(D.FLOW).forEach((from) => D.FLOW[from].forEach((s) => { if (s.roles.includes('PHONG_PGD')) pgdSteps.push(`${from}>${s.to}`); }));
 assert.deepEqual(Array.from(pgdSteps).filter((x) => !x.endsWith('>HUY')).sort(), [
-  'CAN_BO_SUNG>CHO_PHAN_CONG','CHUA_GIAO_HO_SO>CHO_PHAN_CONG','DANG_HEN_KH>TAM_DUNG','DANG_THUC_HIEN>TAM_DUNG','DA_PHAN_CONG>TAM_DUNG'
+  'CAN_BO_SUNG>CHO_PHAN_CONG','CHUA_GIAO_HO_SO>CHO_PHAN_CONG','DANG_HEN_KH>TAM_DUNG','DANG_THUC_HIEN>TAM_DUNG','DA_PHAN_CONG>TAM_DUNG','TAM_DUNG>DANG_THUC_HIEN'
 ]);
 
 // 5. Giao diện không còn nút bàn giao / trình duyệt.
@@ -92,7 +92,7 @@ const t = {
   append: (n, row) => (db[n] = db[n] || []).push(row),
   tailWhere: (n, limit, match) => { const all = (db[n] || []).filter((r) => !match || match(r)); return { rows: all.slice(-(limit || all.length)).reverse(), scanned: all.length, exhausted: true, nextBeforeRow: 1 }; }
 };
-ctx.DataRepository = { tx: (fn) => fn(t), getAll: (n) => db[n] || [], find: (n, k, v) => { const f = t.find(n, k, v); return f ? f.object : null; } };
+ctx.DataRepository = { tx: (fn) => fn(t), scanSnapshot:(n,fn)=>{const r=(db[n]||[]);r.forEach(o=>fn(c=>o[c]===undefined?"":o[c]));return r.length;}, getAll: (n) => db[n] || [], find: (n, k, v) => { const f = t.find(n, k, v); return f ? f.object : null; } };
 ctx.syncMonthlyPlanWorkbook_ = () => {};
 ctx.Notifications = { queue: () => 0 };
 ctx.activePlan_ = () => ({ period_id: 'P1' });

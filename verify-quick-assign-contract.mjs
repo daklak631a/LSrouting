@@ -206,7 +206,7 @@ const t = {
   write: (f, fields) => Object.assign(f.object, fields),
   append: (n, row) => (db[n] = db[n] || []).push(row)
 };
-sctx.DataRepository = { tx: (fn) => fn(t), getAll: (n) => db[n] || [], find: (n, k, v) => { const f = t.find(n, k, v); return f ? f.object : null; } };
+sctx.DataRepository = { tx: (fn) => fn(t), scanSnapshot:(n,fn)=>{const r=(db[n]||[]);r.forEach(o=>fn(c=>o[c]===undefined?"":o[c]));return r.length;}, getAll: (n) => db[n] || [], find: (n, k, v) => { const f = t.find(n, k, v); return f ? f.object : null; } };
 sctx.syncMonthlyPlanWorkbook_ = () => {};
 sctx.markPlanDirty_ = () => {};
 sctx.Notifications = { queue: () => 0 };

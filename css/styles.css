@@ -697,24 +697,33 @@ table.t td.fit { width: 1%; white-space: nowrap; }
 .tid { font-variant-numeric: tabular-nums; font-size: 0.84rem; color: var(--ink-3); }
 
 .customer-main { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
-.priority-tags { display: inline-flex; align-items: center; gap: 0.25rem; }
+.priority-tags { display: inline-flex; align-items: center; gap: 0.5rem; }
+/* VIP dùng chip xanh lam, Gấp dùng chip đỏ để dễ nhận ra ngay cạnh tên khách hàng. */
+.priority-flag { font-weight: 700; font-size: 0.8rem; letter-spacing: 0.01em; white-space: nowrap; line-height: 1.2; }
+.priority-flag-vip,
+.priority-flag-urgent {
+  display: inline-flex; align-items: center;
+  padding: 0.16rem 0.48rem;
+  border: 1px solid;
+  border-radius: 5px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+.priority-flag-vip { color: var(--info); background: var(--info-bg); border-color: var(--info-line); }
+.priority-flag-urgent { color: var(--danger); background: var(--danger-bg); border-color: var(--danger-line); }
+.priority-flag-ls { color: var(--brand-800); }
 .contact-stack { display: flex; flex-direction: column; gap: 0.12rem; }
 .contact-link { display: flex; align-items: center; gap: 0.3rem; color: var(--ink-2); font-size: 0.76rem; text-decoration: none; white-space: nowrap; }
 .contact-link:hover { color: var(--brand-800); text-decoration: underline; }
 .contact-label { color: var(--ink-4); font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 
-/* Ưu tiên phải đọc được bằng cả nền, vạch màu và chữ đậm. */
-/* Hàng chờ: dòng hôm nay chỉ phủ nền rất nhạt để tách với T+1 và việc cũ, không lấn màu ưu tiên. */
+/* Ưu tiên đọc bằng vạch màu bên trái + chữ đậm có màu; không tô nền cả dòng để danh sách bớt rối. */
+/* Hàng chờ: dòng hôm nay chỉ phủ nền rất nhạt để tách với T+1 và việc cũ. */
 table.t tbody tr.row-today td { background: #f5fbfa; }
-table.t tbody tr.priority-vip td { background: #fffaea; }
 table.t tbody tr.priority-vip td:first-child { box-shadow: inset 4px 0 0 var(--gold-700); }
-table.t tbody tr.priority-urgent td { background: #fff6f5; }
 table.t tbody tr.priority-urgent td:first-child { box-shadow: inset 4px 0 0 var(--danger); }
-table.t tbody tr.priority-important td { background: #f4f9fd; }
 table.t tbody tr.priority-important td:first-child { box-shadow: inset 4px 0 0 var(--info); }
-table.t tbody tr.priority-vip:hover td { background: #fff3cf; }
-table.t tbody tr.priority-urgent:hover td { background: #ffeceb; }
-table.t tbody tr.priority-important:hover td { background: #e8f2fa; }
 
 .flow-context { align-items: center; gap: 0.55rem; }
 .flow-context > .flow-overview { display: flex; align-items: center; gap: 0.7rem; flex: 1 1 auto; min-width: 0; }
@@ -1111,12 +1120,26 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 .request-details-line:has(> [data-role="collateral-mode-field"][hidden]) > [data-role="request-quantity-fields"] { grid-column: 1 / -1; }
 .request-details-line:has(> [data-role="request-quantity-fields"][hidden]) > [data-role="collateral-mode-field"] { grid-column: 1 / -1; }
 .request-occurrence-date { max-width: 15rem; }
+.row-item.resend-date-row {
+  grid-template-columns: minmax(12rem, 0.75fr) minmax(0, 1.25fr);
+  align-items: start;
+  gap: 0.75rem 1rem;
+}
+.row-item.resend-date-row > .f { margin: 0; }
+.row-item.resend-date-row .date-input-wrap { width: 100%; }
+.row-item.resend-date-row .request-weekdays {
+  border-top: 0; border-left: 1px solid var(--line);
+  padding: 0.125rem 0 0.125rem 1rem;
+}
 .request-weekdays { min-width: 0; border-top: 1px solid var(--line); padding-top: 0.625rem; }
-.request-week-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; font-size: 0.8125rem; color: var(--ink-3); }
-.request-week-head .select { width: auto; max-width: 190px; min-height: 34px; padding-block: 0.25rem; }
+.request-week-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; font-size: 0.8125rem; color: var(--ink-3); }
+.request-week-head > span { flex: 1 1 9rem; min-width: 9rem; white-space: nowrap; }
+.request-week-head .select { flex: 0 1 11rem; width: auto; max-width: 11rem; min-width: 8rem; min-height: 34px; padding-block: 0.25rem; }
 .request-week-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.375rem; }
-.request-week-choice { display: flex; align-items: center; justify-content: center; gap: 0.375rem; padding: 0.5rem 0.25rem; border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; background: var(--surface); }
+.request-week-choice { display: flex; align-items: center; justify-content: center; gap: 0.375rem; min-height: 52px; padding: 0.5rem 0.25rem; border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; background: var(--surface); }
 .request-week-choice:has(input:checked) { border-color: var(--brand-600); background: var(--brand-50); }
+.request-week-choice:has(input:disabled) { border-style: dashed; background: var(--surface-2); color: var(--ink-4); cursor: not-allowed; }
+.request-week-choice:has(input:disabled) small { color: inherit; }
 .request-week-choice:focus-within { outline: 2px solid var(--brand-600); outline-offset: 2px; }
 .request-week-choice input { margin: 0; flex: none; accent-color: var(--brand-600); }
 .request-week-choice span { display: flex; flex-direction: column; gap: 0.125rem; text-align: center; }
@@ -1125,6 +1148,14 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
 @media (max-width: 480px) {
   .request-week-choice { flex-direction: column; gap: 0.25rem; }
   .row-item .request-weekdays { margin-top: 0.25rem; }
+}
+
+@media (max-width: 560px) {
+  .row-item.resend-date-row { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+  .row-item.resend-date-row .request-weekdays {
+    border-left: 0; border-top: 1px solid var(--line);
+    padding: 0.625rem 0 0; margin-top: 0;
+  }
 }
 
 /* Mẫu gửi LS trên điện thoại: gom các trường để một hồ sơ một việc cùng nút gửi
@@ -1162,7 +1193,7 @@ tr.flag-warn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
   .request-entry-form .request-occurrence-date { max-width: 15rem; }
   .request-entry-form .row-item .input,
   .request-entry-form .row-item .select { min-height: 38px; font-size: 0.9rem; }
-  .request-entry-form .row-item .date-picker-trigger { min-width: 34px; min-height: 38px; }
+  .request-entry-form .row-item .date-picker-trigger { min-width: 44px; min-height: 44px; }
   .request-entry-form .request-weekdays { padding-top: 0.35rem; margin-top: 0; }
   .request-entry-form .request-week-head { margin-bottom: 0.25rem; font-size: 0.72rem; }
   .request-entry-form .request-week-head .select { min-height: 32px; }
@@ -1771,9 +1802,9 @@ kbd { display: inline-block; min-width: 1.5em; padding: 0.08rem 0.4rem; border: 
   /* Nền/vạch của ô desktop phải nhường cho dòng; các lớp :not() ở trên có độ
      đặc hiệu rất cao nên buộc dùng !important trong phạm vi mobile. */
   table.t tbody tr > td { background: transparent !important; box-shadow: none !important; }
-  table.t tbody tr.priority-important { background: #eef5fb; box-shadow: inset 4px 0 0 var(--info); }
-  table.t tbody tr.priority-vip { background: #fff8dc; box-shadow: inset 4px 0 0 var(--gold-700); }
-  table.t tbody tr.priority-urgent { background: #fff2f1; box-shadow: inset 4px 0 0 var(--danger); }
+  table.t tbody tr.priority-important { box-shadow: inset 4px 0 0 var(--info); }
+  table.t tbody tr.priority-vip { box-shadow: inset 4px 0 0 var(--gold-700); }
+  table.t tbody tr.priority-urgent { box-shadow: inset 4px 0 0 var(--danger); }
   table.t tbody tr.flag-warn { box-shadow: inset 4px 0 0 var(--warn); }
   table.t tbody tr.flag { box-shadow: inset 4px 0 0 var(--danger); }
   table.t tbody tr[data-row]:focus { background: var(--brand-50); }
@@ -1796,7 +1827,8 @@ kbd { display: inline-block; min-width: 1.5em; padding: 0.08rem 0.4rem; border: 
   table.t.mobile-record-table td[data-label="Cán bộ"] { align-self: center; }
   table.t.mobile-record-table .customer-main { flex-wrap: wrap; column-gap: 0.35rem; }
   table.t.mobile-record-table .customer-main .t1 { overflow-wrap: anywhere; }
-  table.t.mobile-record-table .priority-tags .tag { padding: 0.05rem 0.35rem; font-size: 0.72rem; }
+  table.t.mobile-record-table .priority-tags .priority-flag-vip,
+  table.t.mobile-record-table .priority-tags .priority-flag-urgent { padding: 0.16rem 0.42rem; }
   /* Có nhiều nút (vd. "Đổi người" + xem) thì xuống một hàng riêng, căn phải,
      để dòng cán bộ không bị ép ngắn; chỉ có nút xem thì nằm bên phải như cũ. */
   table.t.mobile-record-table td:last-child:has(.act-row > :nth-child(2)) { grid-column: 1 / -1; grid-row: auto; justify-self: end; }
@@ -1981,7 +2013,7 @@ kbd { display: inline-block; min-width: 1.5em; padding: 0.08rem 0.4rem; border: 
   .report-filters:not(:has(.f)) { grid-template-columns: minmax(0, 1fr); gap: 0.3rem; }
   /* Menu Quản trị và chip ưu tiên: vùng chạm / cỡ chữ đủ cho ngón tay. */
   .admin-nav button { min-height: 40px; }
-  .admin-nav .pill, table.t.mobile-record-table .priority-tags .tag { font-size: 0.75rem; }
+  .admin-nav .pill { font-size: 0.75rem; }
 
   /* Chữ tối thiểu 12px, vùng chạm tối thiểu 40px. */
   .metric-k, .view .strip .metric-k, .metric-sub, table.t th, .viz-cap, .viz-xl, .section-title, .kv dt { font-size: 0.75rem; }

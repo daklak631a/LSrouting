@@ -28,9 +28,15 @@ jobs:
             exit 1
           fi
 
+      # outputs/ không nằm trong git; các contract Firefox đọc gói .xpi do bước dựng này sinh ra.
+      - name: Dựng gói Firefox
+        run: node build-firefox-extension.mjs
+
+      # verify-gas-release-health.mjs gọi web app đang chạy và cần số phiên bản, chạy tay sau mỗi lần deploy.
       - name: Chạy toàn bộ contract
         run: |
           for f in verify-*.mjs; do
+            [ "$f" = "verify-gas-release-health.mjs" ] && continue
             echo "--- $f"
             node "$f"
           done

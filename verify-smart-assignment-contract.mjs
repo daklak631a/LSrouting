@@ -32,5 +32,8 @@ staff[1].availability_status='OFF';staff[1].off_from=today;staff[1].off_to=today
 assert.ok(!dialog.includes('value="'+staff[1].user_id+'"'),'Không gợi ý người nghỉ phép');
 st.staffPlans=[{...ctx.LSPlanning.period('month',today),lines:staff.map(u=>({user_id:u.user_id,targets:{HD_TIN_DUNG:20}}))}];
 LS.screens.setFilter('board','plan','1');
+// Ghim bảng kết quả vào một ngày làm việc để chỉ tiêu ngày không bằng null khi chạy test đúng cuối tuần.
+const _wd=new Date(today+'T00:00:00');const _g=_wd.getDay();if(_g===6)_wd.setDate(_wd.getDate()+2);else if(_g===0)_wd.setDate(_wd.getDate()+1);
+LS.screens.setFilter('board','anchor',LS.localDate(_wd));
 assert.match(LS.screens.board(),/dm-person-plan/,'Bảng kết quả phải hiện kế hoạch riêng từng cán bộ');
 console.log('Smart assignment: live queue, single assignment, accumulating batch load, linked group and leave passed.');

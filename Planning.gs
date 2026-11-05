@@ -406,7 +406,8 @@ var STATUS={"CHO_PHAN_CONG":{"label":"Chờ phân công","tone":"warn","open":tr
     HD_THE_CHAP: 'Đã soạn xong HĐ thế chấp', NHAP_KHO: 'Đã nhập kho TSĐB', XUAT_KHO: 'Đã xuất kho TSĐB'
   };
   var STEP_QUANTITY_LABELS = {
-    HD_TIN_DUNG: 'Số lượng HĐ tín dụng', HD_THE_CHAP: 'Số lượng HĐ thế chấp', XUAT_KHO: 'Số lượng tài sản xuất'
+    HD_TIN_DUNG: 'Số lượng HĐ tín dụng', HD_THE_CHAP: 'Số lượng HĐ thế chấp',
+    NHAP_KHO: 'Số lượng tài sản nhập', XUAT_KHO: 'Số lượng tài sản xuất'
   };
 
   function stepQuantityLabel(key) { return STEP_QUANTITY_LABELS[key] || ''; }
@@ -461,7 +462,7 @@ var STATUS={"CHO_PHAN_CONG":{"label":"Chờ phân công","tone":"warn","open":tr
     return stepKeys(item, wt).map(function (k) {
       var c = credit[k] || {};
       return { key: k, label: COLLATERAL_STEP_LABELS[k], user_id: c.user_id || '', at: c.at || '', by: c.by || '', done: !!c.user_id,
-        quantity: Math.max(1, Math.floor(Number(c.user_id ? c.quantity : (k === 'HD_THE_CHAP' ? item.requested_mortgage_contract_count : item.requested_export_folder_count)) || 1)) };
+        quantity: Math.max(1, Math.floor(Number(c.user_id ? c.quantity : (k === 'HD_THE_CHAP' ? item.requested_mortgage_contract_count : k === 'XUAT_KHO' ? item.requested_export_folder_count : 1)) || 1)) };
     });
   }
 
