@@ -29,7 +29,8 @@ const db = {
     { user_id: 'PG', role: 'PHONG_PGD', unit_id: 'U1', is_active: true, full_name: 'PGD' }
   ],
   Requests: [{ request_id: 'R1', unit_id: 'U1', customer_name: 'Khách A', cif: '00123' }],
-  WorkItems: [], Events: [], Inbox: [], CanceledItems: []
+  WorkItems: [], Events: [], Inbox: [], CanceledItems: [],
+  Reasons: [{ code: 'HUY_TRUNG', group_name: 'HUY', label: 'Trùng hồ sơ đã gửi', is_active: true }]
 };
 const t = {
   rows: (n) => db[n] || [],
@@ -83,6 +84,7 @@ assert.match(err(() => ctx.requestCancel(i.item_id, 'lần hai', 2)), /đã hủ
 // 3. Phòng/PGD hủy trực tiếp trong phạm vi; giữ tương thích đề nghị hủy cũ.
 as('PG');
 i = item({ status: 'DA_PHAN_CONG', assigned_user_id: 'LS1' });
+assert.match(err(() => ctx.requestCancel(i.item_id, 'Trùng hồ sơ — khách báo thêm', 1)), /lý do hủy trong danh sách/);
 ctx.requestCancel(i.item_id, 'Trùng hồ sơ đã gửi', 1);
 assert.equal(i.status,'HUY');
 assert.ok(!db.Inbox.some(n=>n.item_id===i.item_id && ['KS','QL'].includes(n.user_id)));

@@ -595,7 +595,7 @@ function logoutUser() {
 
 /* ------------------------- Cổng gọi duy nhất từ trình duyệt ------------------------- */
 
-var API_WRITE_ = ['createNextMonthlyPlan', 'createRequest', 'transitionItem', 'focusWorkItem', 'startGlobalPause', 'endGlobalPause', 'rescheduleItem', 'claimUpdateNotice', 'assignWorkItemsBatch', 'saveStaffAbsence',
+var API_WRITE_ = ['createNextMonthlyPlan', 'createRequest', 'transitionItem', 'focusWorkItem', 'startGlobalPause', 'endGlobalPause', 'rescheduleItem', 'claimUpdateNotice', 'assignWorkItemsBatch', 'saveStaffAbsence', 'handoverStaffWork',
   'confirmDossierReceipt', 'saveChecklist', 'recordWorkStep', 'saveResultFlags', 'saveWorkPlan', 'saveStaffPlan', 'closeStaffPlan', 'addLinkedItem', 'proposeRevision',
   'resolveRevision', 'adminSaveCatalog', 'adminImportUsers', 'adminSaveSettings', 'adminSaveDelivery',
   'adminSaveUpdateNotice', 'adminRunOutbox', 'confirmLegacySessionOwner', 'correctItemTimes', 'rebuildPeriodSummaries',
@@ -606,7 +606,7 @@ function apiFunctions_() {
     authenticateUser: authenticateUser, logoutUser: logoutUser, getBootstrap: getBootstrap, connectFirefoxExtension: connectFirefoxExtension,
     getReport: getReport, getTimeReport: getTimeReport, getTeamAssignments: getTeamAssignments, getRecentCustomerAssignees: getRecentCustomerAssignees, getTimingAudit: getTimingAudit, getItemActivity: getItemActivity, getAuditLog: getAuditLog, getConfigLog: getConfigLog,
     createNextMonthlyPlan: createNextMonthlyPlan, createRequest: createRequest, transitionItem: transitionItem,
-    assignWorkItemsBatch: assignWorkItemsBatch, focusWorkItem: focusWorkItem, startGlobalPause: startGlobalPause, endGlobalPause: endGlobalPause, rescheduleItem: rescheduleItem, claimUpdateNotice: claimUpdateNotice, saveStaffAbsence: saveStaffAbsence,
+    assignWorkItemsBatch: assignWorkItemsBatch, focusWorkItem: focusWorkItem, startGlobalPause: startGlobalPause, endGlobalPause: endGlobalPause, rescheduleItem: rescheduleItem, claimUpdateNotice: claimUpdateNotice, saveStaffAbsence: saveStaffAbsence, handoverStaffWork: handoverStaffWork,
     confirmDossierReceipt: confirmDossierReceipt, saveChecklist: saveChecklist, recordWorkStep: recordWorkStep, saveResultFlags: saveResultFlags, saveWorkPlan: saveWorkPlan, saveStaffPlan: saveStaffPlan, closeStaffPlan: closeStaffPlan, getWorkPlanning: getWorkPlanning, addLinkedItem: addLinkedItem,
     proposeRevision: proposeRevision, resolveRevision: resolveRevision, adminSaveCatalog: adminSaveCatalog,
     adminImportUsers: adminImportUsers, adminSaveSettings: adminSaveSettings, adminSaveDelivery: adminSaveDelivery,
@@ -1731,6 +1731,11 @@ function autoReturnTick() { requireAdmin_(); return autoReturnTick_(); }
 function autoReturnTick_() {
   var r = autoReturnStaleAssignments_();
   Logger.log('Tự trả QLKH việc chưa tiếp nhận: ' + JSON.stringify(r));
+  try {
+    Logger.log('Khép phiên làm bỏ quên: ' + JSON.stringify(closeStaleSessions_()));
+  } catch (err) {
+    log_('Không khép được phiên làm bỏ quên: ' + err);
+  }
   return r;
 }
 
@@ -4119,6 +4124,18 @@ function transitionItem(itemId, to, opts) {
     }
 
     var reason = String(opts.reason || '').trim();
+    // Hồ sơ đã giao cho LS: Phòng/PGD không ghi thêm chữ nào vào hồ sơ. Tạm dừng/Tiếp tục dùng câu cố định,
+    // Hủy chỉ nhận đúng một lý do trong danh mục.
+    if (u.role === 'PHONG_PGD' && item.assigned_user_id) {
+      if (requesterResume) reason = 'QLKH tiếp tục hồ sơ.';
+      else if (to === 'TAM_DUNG') reason = 'QLKH tạm dừng hồ sơ.';
+      else if (to === 'HUY') {
+        var allowedCancel = t.rows('Reasons').some(function (r) {
+          return String(r.group_name || '') === 'HUY' && truthy_(r.is_active) && String(r.label || '').trim() === reason;
+        });
+        if (!allowedCancel) throw new Error('Hồ sơ đã giao cho LS: chọn lý do hủy trong danh sách, Phòng/PGD không ghi chú thêm.');
+      }
+    }
     if (reasonRequired_(item.status, to) && !reason) throw new Error('Thao tác này bắt buộc ghi lý do.');
 
     var ts = stamp_();
@@ -5325,6 +5342,105 @@ function handoverOpenWork_(t, oldUserId, replacementUserId, actorId, openItems, 
 }
 
 /**
+ * Kiểm soát/Quản lý LS bàn giao việc đang mở của một cán bộ LS (thường là người đang nghỉ) cho cán bộ khác.
+ * rows = [{ item_id, assignee_id }]: mỗi hồ sơ chọn được người nhận riêng. Giữ trạng thái, hạn SLA và phần kết quả đã ghi;
+ * người nhận vào hàng chờ làm, phiên làm đang chạy của người cũ được khép cùng lúc.
+ */
+function handoverStaffWork(fromUserId, rows) {
+  var u = requireActor_();
+  if (['KS_LS', 'QUAN_LY_LS'].indexOf(u.role) === -1) throw new Error('Chỉ Kiểm soát LS hoặc Quản lý LS được bàn giao việc.');
+  fromUserId = String(fromUserId || '').trim();
+  if (!fromUserId) throw new Error('Chọn cán bộ LS cần bàn giao.');
+  if (!Array.isArray(rows) || !rows.length) throw new Error('Chọn ít nhất một hồ sơ để bàn giao.');
+  if (rows.length > 200) throw new Error('Mỗi lần chỉ bàn giao tối đa 200 hồ sơ.');
+
+  var result = DataRepository.tx(function (t) {
+    var from = t.find('Users', 'user_id', fromUserId);
+    if (!from || String(from.object.role || '').trim().toUpperCase() !== 'CAN_BO_LS') throw new Error('Người bàn giao phải là cán bộ LS.');
+    var fromName = from.object.full_name || fromUserId;
+    var seen = {}, byTarget = {}, periodIds = {}, ids = [];
+    rows.forEach(function (row) {
+      var itemId = String(row && row.item_id || '').trim();
+      var assigneeId = String(row && row.assignee_id || '').trim();
+      if (!itemId || !assigneeId) throw new Error('Mỗi hồ sơ bàn giao phải có người nhận.');
+      if (seen[itemId]) throw new Error('Một hồ sơ chỉ xuất hiện một lần trong lần bàn giao.');
+      seen[itemId] = true;
+      if (assigneeId === fromUserId) throw new Error('Người nhận phải khác người bàn giao.');
+      var found = t.find('WorkItems', 'item_id', itemId);
+      if (!found) throw new Error('Không tìm thấy việc ' + itemId + '.');
+      var item = found.object;
+      assertCurrentWorkItem_(item);
+      if (item.assigned_user_id !== fromUserId || OPEN_STATUS.indexOf(item.status) === -1) {
+        throw new Error('Hồ sơ ' + (item.source_stt || itemId) + ' không còn do ' + fromName + ' giữ. Tải lại danh sách.');
+      }
+      (byTarget[assigneeId] = byTarget[assigneeId] || []).push(item);
+      periodIds[item.period_id] = true;
+      ids.push(itemId);
+    });
+    var moved = 0;
+    Object.keys(byTarget).forEach(function (assigneeId) {
+      moved += handoverOpenWork_(t, fromUserId, assigneeId, u.user_id, byTarget[assigneeId], 'Bàn giao do ' + fromName + ' nghỉ phép.');
+    });
+    return {
+      ok: true, count: moved, period_ids: Object.keys(periodIds),
+      items: ids.map(function (id) {
+        var now = t.find('WorkItems', 'item_id', id).object;
+        return { item_id: id, assigned_user_id: now.assigned_user_id, assigned_by: now.assigned_by, assigned_at: now.assigned_at,
+          execution_state: now.execution_state || '', execution_changed_at: now.execution_changed_at || '',
+          processing_sessions: LSTiming.array(now, 'processing_sessions'), version: Number(now.version) };
+      })
+    };
+  }, NOTIFY_WARM_);
+  (result.period_ids || []).forEach(function (periodId) { markPlanDirty_(periodId, true); });
+  return result;
+}
+
+/**
+ * Phiên làm bị bỏ quên: cán bộ bấm Làm ngay rồi không tạm dừng hay hoàn thành, phiên cứ chạy sang các ngày sau
+ * và cộng giờ tác nghiệp kể cả những ngày người đó nghỉ. Phiên bắt đầu từ ngày trước được khép lúc đóng cửa của ngày bắt đầu
+ * (phần ngoài lịch tính theo luật giờ làm thêm); phiên của người đang nghỉ được khép ngay. Hồ sơ về hàng chờ làm, SLA không đổi.
+ */
+function closeStaleSessions_() {
+  var today = localBusinessDate_();
+  var periodIds = {};
+  var result = DataRepository.tx(function (t) {
+    var ts = stamp_(), cal = LSTiming.calendar(timingCalendar_(t)), users = {}, closed = 0;
+    t.rows('Users').forEach(function (x) { users[x.user_id] = x; });
+    t.rows('WorkItems').filter(function (i) {
+      return !i.carried_to_item_id && LSTiming.workState(i) === 'ACTIVE';
+    }).forEach(function (item) {
+      var list = LSTiming.array(item, 'processing_sessions'), last = list[list.length - 1];
+      if (!last || last.end) return;
+      var startDay = localBusinessDate_(last.start);
+      var absent = userOff_(users[item.assigned_user_id], ts);
+      if (startDay >= today && !absent) return;
+      var endIso = ts;
+      if (startDay < today) {
+        var close = new Date(startDay + 'T' + cal.close + ':00+07:00').toISOString();
+        endIso = new Date(close).getTime() > new Date(last.start).getTime() ? close : new Date(last.start).toISOString();
+      }
+      var found = t.find('WorkItems', 'item_id', item.item_id);
+      if (!found) return;
+      last.end = endIso;
+      var fields = { execution_state: 'WAITING', execution_changed_at: ts, updated_at: ts, version: Number(item.version) + 1,
+        processing_sessions_json: JSON.stringify(list) };
+      var pauses = nextPauseLog_(item, 'DA_PHAN_CONG', ts);
+      if (pauses !== null) fields.pause_log_json = pauses;
+      t.write(found, fields);
+      t.append('Events', { event_id: id_('EVT'), item_id: item.item_id, type: 'TU_DUNG_PHIEN', by: 'SYSTEM', at: ts,
+        reason: absent && startDay >= today ? 'Cán bộ đang nghỉ — hệ thống khép phiên làm đang chạy.'
+          : 'Phiên làm từ ngày ' + startDay + ' không được tạm dừng — hệ thống khép lúc đóng cửa ngày đó. Bấm Làm tiếp khi làm lại.',
+        before_json: JSON.stringify({ execution_state: 'ACTIVE' }), after_json: JSON.stringify(fields) });
+      periodIds[item.period_id] = true;
+      closed += 1;
+    });
+    return { closed: closed };
+  }, ITEM_WARM_);
+  Object.keys(periodIds).forEach(function (periodId) { markPlanDirty_(periodId, true); });
+  return result;
+}
+
+/**
  * Các loại việc một quy tắc phân công nhanh áp dụng: `work_type_codes`, hoặc mã đơn của quy tắc cũ
  * (`work_type_code` / cột code). Rỗng nghĩa là mọi sản phẩm. Khớp ruleWorkTypeCodes ở js/domain.js.
  */
@@ -5950,7 +6066,7 @@ function saveStaffAbsence(userId, values) {
   var reason = String(values.off_reason || '').trim();
   if (reason.length > 160) throw new Error('Lý do nghỉ tối đa 160 ký tự.');
 
-  return DataRepository.tx(function (t) {
+  var saved = DataRepository.tx(function (t) {
     var target = t.find('Users', 'user_id', targetId);
     if (!target || String(target.object.role || '').trim().toUpperCase() !== 'CAN_BO_LS' || !truthy_(target.object.is_active)) {
       throw new Error('Chỉ cấu hình được cán bộ LS đang hoạt động.');
@@ -5976,6 +6092,11 @@ function saveStaffAbsence(userId, values) {
     return { ok: true, user_id: targetId, full_name: target.object.full_name || targetId,
       availability_status: fields.availability_status, off_from: from, off_to: to, off_reason: fields.off_reason };
   }, { append: ['Inbox'] });
+  // Lịch nghỉ có hiệu lực hôm nay: phiên làm đang chạy của người đó không được tiếp tục cộng giờ.
+  if (from) {
+    try { closeStaleSessions_(); } catch (err) { log_('Không khép được phiên làm của người nghỉ: ' + err); }
+  }
+  return saved;
 }
 
 /* Biến bị cấm theo kênh — cùng một bảng với Notifications.gs và js/domain.js. */

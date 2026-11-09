@@ -85,7 +85,7 @@ LS.domain = (function () {
   var PRE_ASSIGN = ['CHO_PHAN_CONG', 'CHO_HOAN_THIEN', 'CHO_TIEP_NHAN'];
 
   var EVENT_LABEL = {
-    CHO_LAM_TIEP:'Chờ làm tiếp', BAT_DAU_LAM:'Bắt đầu làm', LAM_TIEP:'Làm tiếp',
+    TU_DUNG_PHIEN:'Hệ thống khép phiên làm bỏ quên', CHO_LAM_TIEP:'Chờ làm tiếp', BAT_DAU_LAM:'Bắt đầu làm', LAM_TIEP:'Làm tiếp',
     TAM_DUNG_TOAN_BO:'Tạm dừng đồng hồ hồ sơ', TIEP_TUC_TOAN_BO:'Tiếp tục đồng hồ hồ sơ',
     TAM_DUNG_TOAN_BO_BAT_DAU:'Bắt đầu tác nghiệp khác', TAM_DUNG_TOAN_BO_KET_THUC:'Kết thúc tác nghiệp khác',
     SUA_THOI_GIAN: 'Sửa thời gian nhận / hoàn thành', DOI_HAN_XU_LY: 'Đổi hạn xử lý',

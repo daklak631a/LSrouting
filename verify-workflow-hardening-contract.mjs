@@ -238,11 +238,11 @@ ok('requester can return it to today queue without a reason', err(() => todayRes
   actor = KS;
   ok('control still cannot resume a paused dossier', /không được thực hiện/.test(err(() => ctx.transitionItem(a.item_id, 'DANG_THUC_HIEN', { reason: 'x' }))));
   actor = PG;
-  ok('requester must give a reason to resume', /lý do/.test(err(() => ctx.transitionItem(a.item_id, 'DANG_THUC_HIEN', {}))));
   ok('requester cannot use the paused dossier for other steps', /chỉ được tiếp tục/.test(err(() => ctx.transitionItem(a.item_id, 'HOAN_THANH_LS', { reason: 'x' }))));
   a.sla_paused_at = new Date(Date.now() - H).toISOString();
   queued = 0;
-  const resumed = ctx.transitionItem(a.item_id, 'DANG_THUC_HIEN', { reason: 'khách đã đủ hồ sơ' });
+  const resumed = ctx.transitionItem(a.item_id, 'DANG_THUC_HIEN', { reason: 'ghi chú tự do của QLKH' });
+  ok('requester resume keeps no free-text note on an assigned dossier', db.Events.some((e) => e.item_id === a.item_id && e.type === 'DANG_THUC_HIEN' && /QLKH tiếp tục hồ sơ/.test(e.reason) && !/tự do/.test(e.reason)));
   ok('requester resume returns the dossier to the same LS officer', a.status === 'DANG_THUC_HIEN' && a.assigned_user_id === 'LS1' && resumed.status === 'DANG_THUC_HIEN');
   ok('requester resume queues the dossier for the officer instead of starting it', a.execution_state === 'QUEUED');
   ok('requester resume restarts the SLA clock', a.sla_paused_at === '');

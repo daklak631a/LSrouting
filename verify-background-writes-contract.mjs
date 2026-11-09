@@ -171,12 +171,14 @@ S_check: {
   const pgd = st.users.find((u) => u.role === 'PHONG_PGD');
   const onUnit = mk('BG_3', 'DANG_THUC_HIEN');
   st.requests.find((r) => r.request_id === onUnit.request_id).unit_id = pgd.unit_id;
+  st.reasons = (st.reasons || []).concat([{ code: 'HUY_TEST', group: 'HUY', label: 'Khách rút yêu cầu', active: true }]);
   calls.length = 0; closed.length = 0;
-  S.submitCancelRequest({ _fields: { item_id: onUnit.item_id, version: String(onUnit.version), reason: 'Khách rút yêu cầu' }, getAttribute: () => null, setAttribute() {}, removeAttribute() {} });
+  S.submitCancelRequest({ _fields: { item_id: onUnit.item_id, version: String(onUnit.version), reason_code: 'HUY_TEST', reason: 'ghi chú tự do bị bỏ qua' }, getAttribute: () => null, setAttribute() {}, removeAttribute() {} });
   assert.equal(onUnit.status, 'HUY', 'Hủy trực tiếp hiện ngay');
   assert.equal(onUnit.pending, null, 'Hủy không tạo đề nghị chờ KS/QL');
   assert.equal(closed.length, 1);
   assert.equal(calls[0].name, 'requestCancel');
+  assert.equal(calls[0].args[1], 'Khách rút yêu cầu', 'Hồ sơ đã giao: chỉ gửi nhãn lý do trong danh mục, không kèm chữ tự do');
   assert.equal(calls[0].args[2], 5, 'Gửi kèm phiên bản lúc mở hộp thoại');
   calls[0].reject(new Error('Việc đã được cập nhật.'));
   await settle();

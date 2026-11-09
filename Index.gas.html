@@ -2787,7 +2787,7 @@ LS.domain = (function () {
   var PRE_ASSIGN = ['CHO_PHAN_CONG', 'CHO_HOAN_THIEN', 'CHO_TIEP_NHAN'];
 
   var EVENT_LABEL = {
-    CHO_LAM_TIEP:'Chờ làm tiếp', BAT_DAU_LAM:'Bắt đầu làm', LAM_TIEP:'Làm tiếp',
+    TU_DUNG_PHIEN:'Hệ thống khép phiên làm bỏ quên', CHO_LAM_TIEP:'Chờ làm tiếp', BAT_DAU_LAM:'Bắt đầu làm', LAM_TIEP:'Làm tiếp',
     TAM_DUNG_TOAN_BO:'Tạm dừng đồng hồ hồ sơ', TIEP_TUC_TOAN_BO:'Tiếp tục đồng hồ hồ sơ',
     TAM_DUNG_TOAN_BO_BAT_DAU:'Bắt đầu tác nghiệp khác', TAM_DUNG_TOAN_BO_KET_THUC:'Kết thúc tác nghiệp khác',
     SUA_THOI_GIAN: 'Sửa thời gian nhận / hoàn thành', DOI_HAN_XU_LY: 'Đổi hạn xử lý',
@@ -5377,6 +5377,7 @@ LS.api = (function () {
     saveStaffPlan: function (values) { return write('saveStaffPlan', values); },
     closeStaffPlan: function (planId, version) { return write('closeStaffPlan', planId, version); },
     saveStaffAbsence: function (userId, values) { return write('saveStaffAbsence', userId, values || {}); },
+    handoverStaffWork: function (fromUserId, rows) { return write('handoverStaffWork', fromUserId, rows || []); },
     saveDelivery: function (kind, code, data) { return write('adminSaveDelivery', kind, code, data); },
     runOutbox: function () { return write('adminRunOutbox'); },
     getReport: function (opts) { return read('getReport', opts); },
@@ -6823,19 +6824,121 @@ LS.screens = (function () {
     if (!canManageStaffAbsence()) { ui.toast('Chỉ Kiểm soát LS hoặc Quản lý LS được cấu hình nghỉ phép.', 'err'); return; }
     var staff = st().users.filter(function (u) { return u.role === 'CAN_BO_LS' && u.active; })
       .sort(function (a, b) { return String(a.full_name || '').localeCompare(String(b.full_name || ''), 'vi'); });
+    // Người đang nghỉ hôm nay lên đầu, kèm số việc còn giữ để Kiểm soát bàn giao.
+    staff.sort(function (a, b) { return (D.userAvailable(a) ? 1 : 0) - (D.userAvailable(b) ? 1 : 0); });
     var rows = staff.map(function (u) {
       var configured = String(u.availability_status || '').toUpperCase() === 'OFF' && (u.off_from || u.off_to);
       var dates = configured ? U.fmtDate(u.off_from) + ' → ' + U.fmtDate(u.off_to) : 'Chưa cài';
+      var held = openHeldBy(u.user_id).length;
       return { cells: [
         '<div class="t1">' + U.esc(u.full_name) + '</div><div class="t2">' + U.esc(unitName(u.unit_id)) + '</div>',
-        configured ? '<span class="tid">' + U.esc(dates) + '</span>' : '<span class="t2">' + dates + '</span>',
-        '<button type="button" class="btn btn-line btn-sm" data-act="staff-absence-edit" data-id="' + U.attr(u.user_id) + '">Cài lịch</button>'
+        configured ? '<span class="tid">' + U.esc(dates) + '</span>' + (D.userAvailable(u) ? '' : ' ' + ui.tag('Đang nghỉ', 'warn')) : '<span class="t2">' + dates + '</span>',
+        '<span class="tid">' + held + '</span>',
+        '<button type="button" class="btn btn-line btn-sm" data-act="staff-absence-edit" data-id="' + U.attr(u.user_id) + '">Cài lịch</button> ' +
+          '<button type="button" class="btn btn-line btn-sm" data-act="staff-handover" data-id="' + U.attr(u.user_id) + '"' + (held ? '' : ' disabled') + '>Bàn giao việc</button>'
       ] };
     });
     ui.openDialog('Nghỉ phép cán bộ LS',
-      ui.table([{ label: 'Cán bộ LS' }, { label: 'Khoảng nghỉ' }, { label: '' }], rows,
+      ui.table([{ label: 'Cán bộ LS' }, { label: 'Khoảng nghỉ' }, { label: 'Đang giữ', cls: 'num' }, { label: '' }], rows,
         { icon: 'users', title: 'Chưa có cán bộ LS đang hoạt động', text: '' }),
       { size: 'lg' });
+  }
+
+  /** Việc còn mở đang đứng tên một cán bộ LS (không tính bản đã chuyển kỳ). */
+  function openHeldBy(userId) {
+    return st().items.filter(function (i) {
+      return i.assigned_user_id === userId && !i.carried_to_item_id && D.STATUS[i.status] && D.STATUS[i.status].open;
+    });
+  }
+
+  /** Danh mục bàn giao của một cán bộ LS: Kiểm soát tick hồ sơ và chọn cán bộ nhận cho từng hồ sơ hoặc cả lô. */
+  function staffHandoverDialog(userId) {
+    if (!canManageStaffAbsence()) { ui.toast('Chỉ Kiểm soát LS hoặc Quản lý LS được bàn giao việc.', 'err'); return; }
+    var from = U.byId(st().users, 'user_id', userId);
+    if (!from || from.role !== 'CAN_BO_LS') { ui.toast('Không tìm thấy cán bộ LS.', 'err'); return; }
+    var held = openHeldBy(userId).sort(function (a, b) { return String(a.occurrence_date || '').localeCompare(String(b.occurrence_date || '')); });
+    var receivers = staffList().filter(function (x) { return x.user_id !== userId; });
+    if (!held.length) { ui.toast(from.full_name + ' không còn việc đang mở.', 'warn'); return; }
+    if (!receivers.length) { ui.toast('Chưa có cán bộ LS nào đang làm việc để nhận bàn giao.', 'err'); return; }
+    var options = receivers.map(function (x) { return [x.user_id, x.full_name + ' (' + staffLoad(x.user_id).open + ' đang mở)']; });
+    var rows = held.map(function (i) {
+      var r = reqOf(i);
+      return { cells: [
+        '<input type="checkbox" class="pick-box" name="pick" value="' + U.attr(i.item_id) + '" checked aria-label="Chọn ' + U.attr(itemRef(i)) + '">',
+        '<span class="tid">' + U.esc(itemRef(i)) + '</span>',
+        '<div class="t1">' + U.esc(r && r.customer && r.customer.name || '—') + '</div><div class="t2">' + U.esc(productLabel(i)) + '</div>',
+        '<span class="tid">' + U.esc(U.fmtDate(i.occurrence_date)) + '</span>',
+        ui.tag(D.label(i.status), D.tone(i.status)),
+        ui.select('to_' + i.item_id, options, '', { blank: 'Chọn người nhận' })
+      ] };
+    });
+    ui.openDialog('Bàn giao việc của ' + from.full_name,
+      '<form data-form="staff-handover">' +
+      '<input type="hidden" name="user_id" value="' + U.attr(userId) + '">' +
+      '<div class="f-row">' +
+      ui.field('Giao các hồ sơ đã tick cho', ui.select('bulk_to', options, '', { blank: 'Chọn người nhận' })) +
+      '<div class="f"><label>&nbsp;</label>' + ui.btn('Áp dụng', { kind: 'line', act: 'handover-bulk' }) + '</div>' +
+      '</div>' +
+      '<label class="chan-check"><input type="checkbox" data-act="handover-pick-all" checked><span>Chọn tất cả (' + held.length + ' hồ sơ)</span></label>' +
+      ui.table([{ label: '', cls: 'fit pick-col' }, { label: 'Mã' }, { label: 'Khách / sản phẩm' }, { label: 'Ngày' }, { label: 'Trạng thái' }, { label: 'Người nhận' }], rows) +
+      ui.formEnd('Bàn giao hồ sơ đã tick') + '</form>',
+      { size: 'lg', sub: held.length + ' việc đang mở' });
+  }
+
+  function handoverPickAll(el) {
+    var form = el.closest('form');
+    if (!form) return;
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="pick"]'), function (box) { box.checked = el.checked; });
+  }
+
+  function handoverBulk(el) {
+    var form = el.closest('form');
+    if (!form) return;
+    var to = form.querySelector('[name="bulk_to"]');
+    if (!to || !to.value) { ui.toast('Chọn người nhận chung trước.', 'err'); return; }
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="pick"]:checked'), function (box) {
+      var select = form.querySelector('[name="to_' + box.value.replace(/["\\]/g, '') + '"]');
+      if (select) select.value = to.value;
+    });
+  }
+
+  function submitStaffHandover(form) {
+    if (!canManageStaffAbsence() || form.getAttribute('data-waiting')) return;
+    var d = new FormData(form), fromId = String(d.get('user_id') || ''), rows = [], missing = 0;
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="pick"]:checked'), function (box) {
+      var to = String(d.get('to_' + box.value) || '');
+      if (!to) missing += 1; else rows.push({ item_id: box.value, assignee_id: to });
+    });
+    if (!rows.length && !missing) { ui.toast('Tick ít nhất một hồ sơ để bàn giao.', 'err'); return; }
+    if (missing) { ui.toast(missing + ' hồ sơ đã tick chưa chọn người nhận.', 'err'); return; }
+    var from = U.byId(st().users, 'user_id', fromId);
+    if (!from) return;
+    var snapshots = rows.map(function (row) { return snapshotItem(U.byId(st().items, 'item_id', row.item_id)); }), ts = U.now();
+    function applyRows() {
+      rows.forEach(function (row) {
+        var item = U.byId(st().items, 'item_id', row.item_id);
+        if (!item) return;
+        item.assigned_user_id = row.assignee_id; item.assigned_by = st().session; item.assigned_at = ts;
+        item.version = Number(item.version || 0) + 1;
+        if (D.CLOCK_RUNNING.indexOf(item.status) !== -1) { item.execution_state = 'QUEUED'; item.execution_changed_at = ts; }
+        if (!U.isGas()) logEvent(item.item_id, 'DOI_NGUOI', 'Bàn giao do ' + from.full_name + ' nghỉ phép · giao ' + userName(row.assignee_id));
+      });
+    }
+    applyRows();
+    ui.closeDialog(); LS.app.render();
+    ui.toast('Đã bàn giao ' + rows.length + ' hồ sơ.', 'ok');
+    if (!U.isGas()) { U.save(); return; }
+    LS.app.background(LS.api.handoverStaffWork(fromId, rows), {
+      label: 'Bàn giao việc',
+      onOk: function (result) {
+        (result && result.items || []).forEach(function (remote) {
+          var live = U.byId(st().items, 'item_id', remote.item_id);
+          if (live) Object.keys(remote).forEach(function (key) { live[key] = remote[key]; });
+        });
+        LS.app.render();
+      },
+      rollback: function () { snapshots.forEach(restoreItem); }
+    });
   }
 
   function staffAbsenceEditDialog(userId) {
@@ -7810,6 +7913,12 @@ LS.screens = (function () {
     return actions;
   }
 
+  /** Phòng/PGD thao tác trên hồ sơ đã giao cho LS: không được nhập ghi chú tự do vào hồ sơ. */
+  function requesterLocked(item) {
+    var u = me();
+    return !!(u && u.role === 'PHONG_PGD' && item && item.assigned_user_id);
+  }
+
   function canEdit(item) {
     var u = me();
     if (!u || item.status === 'HUY' || item.status === 'HOAN_THANH_LS') return false;
@@ -7849,8 +7958,10 @@ LS.screens = (function () {
       '<form data-form="cancel-request">' +
       '<input type="hidden" name="item_id" value="' + U.attr(i.item_id) + '">' +
       '<input type="hidden" name="version" value="' + U.attr(i.version) + '">' +
-      ui.field('Lý do', ui.select('reason_code', list.map(function (x) { return [x.code, x.label]; }), '', { blank: 'Lý do khác…' })) +
-      ui.field('Diễn giải thêm', ui.textarea('reason', '', { placeholder: 'Ví dụ: tạo nhầm, khách không còn nhu cầu…' }), 'bắt buộc nếu chọn lý do khác') +
+      (requesterLocked(i)
+        ? ui.field('Lý do', ui.select('reason_code', list.map(function (x) { return [x.code, x.label]; }), '', { blank: 'Chọn lý do', attrs: ' required' }))
+        : ui.field('Lý do', ui.select('reason_code', list.map(function (x) { return [x.code, x.label]; }), '', { blank: 'Lý do khác…' })) +
+          ui.field('Diễn giải thêm', ui.textarea('reason', '', { placeholder: 'Ví dụ: tạo nhầm, khách không còn nhu cầu…' }), 'bắt buộc nếu chọn lý do khác')) +
       ui.formEnd('Hủy việc', { danger: true }) + '</form>',
       { sub: itemRef(i) + ' · ' + productLabel(i) });
   }
@@ -7858,7 +7969,7 @@ LS.screens = (function () {
   function submitCancelRequest(form) {
     var d = new FormData(form), itemId = String(d.get('item_id') || ''), i = U.byId(st().items, 'item_id', itemId);
     if (!i) return;
-    var code = String(d.get('reason_code') || ''), note = String(d.get('reason') || '').trim();
+    var code = String(d.get('reason_code') || ''), note = requesterLocked(i) ? '' : String(d.get('reason') || '').trim();
     var pickedReason = code ? U.byId(st().reasons, 'code', code) : null;
     if (!pickedReason && !note) { ui.toast('Chọn lý do hoặc ghi diễn giải.', 'err'); return; }
     var reason = (pickedReason ? pickedReason.label : '') + (note ? (pickedReason ? ' — ' : '') + note : '');
@@ -10956,7 +11067,14 @@ LS.screens = (function () {
       body += '</div>';
     }
 
-    if (tr.reason && tr.reason !== 'free') {
+    if (requesterLocked(i)) {
+      // Hồ sơ đã giao cho LS: Phòng/PGD chỉ chọn lý do trong danh sách, không nhập chữ.
+      if (tr.reason && tr.reason !== 'free') {
+        var fixedList = st().reasons.filter(function (x) { return x.group === tr.reason && x.active; });
+        body += '<div style="margin-top:1rem">' +
+          ui.field('Lý do', ui.select('reason_code', fixedList.map(function (x) { return [x.code, x.label]; }), '', { blank: 'Chọn lý do', attrs: ' required' })) + '</div>';
+      }
+    } else if (tr.reason && tr.reason !== 'free') {
       var list = st().reasons.filter(function (x) { return x.group === tr.reason && x.active; });
       body += '<div style="margin-top:1rem">' +
         ui.field('Lý do', ui.select('reason_code', list.map(function (x) { return [x.code, x.label]; }), '', { blank: 'Lý do khác…' })) +
@@ -11138,13 +11256,25 @@ LS.screens = (function () {
       }
     }
 
-    if (tr.reason && tr.reason !== 'free') {
-      var code = String(d.get('reason_code') || '');
-      var picked = code ? U.byId(st().reasons, 'code', code) : null;
-      if (!picked && !reason) { ui.toast('Chọn lý do hoặc ghi diễn giải.', 'err'); return; }
-      reason = (picked ? picked.label : '') + (reason ? (picked ? ' — ' : '') + reason : '');
+    if (requesterLocked(i)) {
+      // Khớp máy chủ: Tạm dừng/Tiếp tục dùng câu cố định, Hủy chỉ mang đúng nhãn lý do trong danh mục.
+      reason = '';
+      if (to === 'TAM_DUNG') reason = 'QLKH tạm dừng hồ sơ.';
+      else if (i.status === 'TAM_DUNG') reason = 'QLKH tiếp tục hồ sơ.';
+      else if (to === 'HUY') {
+        var lockedPick = U.byId(st().reasons, 'code', String(d.get('reason_code') || ''));
+        if (!lockedPick) { ui.toast('Chọn lý do hủy trong danh sách.', 'err'); return; }
+        reason = lockedPick.label;
+      }
+    } else {
+      if (tr.reason && tr.reason !== 'free') {
+        var code = String(d.get('reason_code') || '');
+        var picked = code ? U.byId(st().reasons, 'code', code) : null;
+        if (!picked && !reason) { ui.toast('Chọn lý do hoặc ghi diễn giải.', 'err'); return; }
+        reason = (picked ? picked.label : '') + (reason ? (picked ? ' — ' : '') + reason : '');
+      }
+      if (tr.reason === 'free' && !reason) { ui.toast('Thao tác này bắt buộc ghi lý do.', 'err'); return; }
     }
-    if (tr.reason === 'free' && !reason) { ui.toast('Thao tác này bắt buộc ghi lý do.', 'err'); return; }
 
     var assigneeId = '';
     if (tr.assignee) {
@@ -12039,6 +12169,7 @@ LS.screens = (function () {
     work: work, room: room, roomBoard: roomBoard, queue: queue, mine: mine, team: team, runTeamView: runTeamView, personalDashboard: personalDashboard, board: board, staffWorkDetail: staffWorkDetail, assignmentStaffWorkPreview: assignmentStaffWorkPreview, periods: periods, audit: audit,
     report: report, exportReport: exportReport, refreshReport: refreshReport, setReportFilter: setReportFilter,
     staffAbsenceDialog: staffAbsenceDialog, staffAbsenceEditDialog: staffAbsenceEditDialog, saveStaffAbsence: saveStaffAbsence,
+    staffHandoverDialog: staffHandoverDialog, handoverPickAll: handoverPickAll, handoverBulk: handoverBulk, submitStaffHandover: submitStaffHandover,
     myAbsenceDialog: myAbsenceDialog, saveMyAbsence: saveMyAbsence,
     headerSummary: headerSummary, refreshClocks: refreshClocks, focusBar:focusBar, startWork:startWork,
     openGlobalPause:openGlobalPause, submitGlobalPause:submitGlobalPause, endGlobalPause:endGlobalPause,
@@ -15110,6 +15241,9 @@ LS.app = (function () {
     'plan-edit': S.planDialog,
     'staff-absence': S.staffAbsenceDialog,
     'staff-absence-edit': function (el) { S.staffAbsenceEditDialog(el.getAttribute('data-id')); },
+    'staff-handover': function (el) { S.staffHandoverDialog(el.getAttribute('data-id')); },
+    'handover-pick-all': function (el) { S.handoverPickAll(el); },
+    'handover-bulk': function (el) { S.handoverBulk(el); },
     'my-absence': S.myAbsenceDialog,
     'board-tab': function (el) { S.setFilter('board', 'tab', el.getAttribute('data-tab') || 'report'); render(); },
     'sort-column': function (el) { S.toggleSort(el.getAttribute('data-screen') || current, el.getAttribute('data-sort') || 'date'); render(); },
@@ -15228,6 +15362,7 @@ LS.app = (function () {
     'result-flags': S.submitResultFlags,
     'work-plan': S.submitPlan,
     'staff-absence': S.saveStaffAbsence,
+    'staff-handover': S.submitStaffHandover,
     'my-absence': S.saveMyAbsence,
     'time-report': S.runTimeReport,
     'team-view': S.runTeamView,

@@ -402,6 +402,7 @@ LS.api = (function () {
     saveStaffPlan: function (values) { return write('saveStaffPlan', values); },
     closeStaffPlan: function (planId, version) { return write('closeStaffPlan', planId, version); },
     saveStaffAbsence: function (userId, values) { return write('saveStaffAbsence', userId, values || {}); },
+    handoverStaffWork: function (fromUserId, rows) { return write('handoverStaffWork', fromUserId, rows || []); },
     saveDelivery: function (kind, code, data) { return write('adminSaveDelivery', kind, code, data); },
     runOutbox: function () { return write('adminRunOutbox'); },
     getReport: function (opts) { return read('getReport', opts); },
